@@ -1,0 +1,574 @@
+{
+	"info": {
+		"_postman_id": "e-commerce-api-collection",
+		"name": "Özgür Mutfak E-Commerce API",
+		"description": "E-ticaret backend API'si için Postman collection. Bu collection register, login, logout ve products endpointlerini içerir.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "postman-collection-v2.1.0"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"description": "Kullanıcı kimlik doğrulama endpointleri",
+			"item": [
+				{
+					"name": "Register - Yeni Kullanıcı Kaydı",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Test: Response status code should be 200 or 201",
+									"pm.test(\"Status code is 200 or 201\", function () {",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+									"});",
+									"",
+									"// Test: Response should have token",
+									"pm.test(\"Response has token\", function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson.data).to.have.property('token');",
+									"});",
+									"",
+									"// Save token to environment variable",
+									"if (pm.response.code === 200 || pm.response.code === 201) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.data && responseJson.data.token) {",
+									"        pm.environment.set(\"auth_token\", responseJson.data.token);",
+									"        console.log(\"Token saved to environment:\", responseJson.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"register"
+							]
+						},
+						"description": "Yeni kullanıcı kaydı oluşturur.\n\n**Gerekli Alanlar:**\n- email: Geçerli email adresi (unique olmalı)\n- password: Şifre (minimum 6 karakter önerilir)\n- first_name: Ad\n- last_name: Soyad\n\n**Başarılı Response:**\n- Status: 200/201\n- JWT Token döner\n- Kullanıcı bilgileri döner\n\n**Hata Durumları:**\n- 400: Geçersiz veri (eksik alan, duplicate email)\n- 500: Sunucu hatası"
+					},
+					"response": [
+						{
+							"name": "Başarılı Kayıt",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/register",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"register"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Hesap başarıyla oluşturuldu\",\n    \"data\": {\n        \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n        \"user\": {\n            \"id\": 1,\n            \"email\": \"john.doe@example.com\",\n            \"first_name\": \"John\",\n            \"last_name\": \"Doe\",\n            \"role\": \"customer\"\n        }\n    }\n}"
+						},
+						{
+							"name": "Duplicate Email Error",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"existing@example.com\",\n    \"password\": \"password123\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/register",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"register"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": \"bu email adresi zaten kullanımda\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Login - Giriş Yap",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Test: Response status code should be 200",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"// Test: Response should have token",
+									"pm.test(\"Response has token\", function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson.data).to.have.property('token');",
+									"});",
+									"",
+									"// Save token to environment variable",
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.data && responseJson.data.token) {",
+									"        pm.environment.set(\"auth_token\", responseJson.data.token);",
+									"        console.log(\"Login successful, token saved:\", responseJson.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Mevcut kullanıcının sisteme giriş yapmasını sağlar.\n\n**Gerekli Alanlar:**\n- email: Kayıtlı email adresi\n- password: Kullanıcının şifresi\n\n**Başarılı Response:**\n- Status: 200\n- JWT Token döner\n- Kullanıcı bilgileri döner\n\n**Hata Durumları:**\n- 401: Geçersiz email veya şifre\n- 400: Eksik veri\n- 500: Sunucu hatası"
+					},
+					"response": [
+						{
+							"name": "Başarılı Giriş",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/login",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"login"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Başarıyla giriş yapıldı\",\n    \"data\": {\n        \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n        \"user\": {\n            \"id\": 1,\n            \"email\": \"john.doe@example.com\",\n            \"first_name\": \"John\",\n            \"last_name\": \"Doe\",\n            \"role\": \"customer\"\n        }\n    }\n}"
+						},
+						{
+							"name": "Geçersiz Kimlik Bilgileri",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"wrongpassword\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/login",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"login"
+									]
+								}
+							},
+							"status": "Unauthorized",
+							"code": 401,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": \"email veya şifre hatalı\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Logout - Çıkış Yap",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Test: Response status code should be 200",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"// Test: Response should have success message",
+									"pm.test(\"Response has success message\", function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('message');",
+									"});",
+									"",
+									"// Clear token from environment after logout",
+									"if (pm.response.code === 200) {",
+									"    pm.environment.unset(\"auth_token\");",
+									"    console.log(\"Logout successful, token cleared from environment\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text",
+								"description": "JWT token from login/register"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"logout"
+							]
+						},
+						"description": "Kullanıcının sistemden çıkış yapmasını sağlar.\n\n**Gerekli Headers:**\n- Authorization: Bearer {JWT_TOKEN}\n\n**Body:** Boş (gerek yok)\n\n**Başarılı Response:**\n- Status: 200\n- Başarı mesajı döner\n\n**Hata Durumları:**\n- 401: Geçersiz veya eksik token\n- 500: Sunucu hatası\n\n**Not:** Bu endpoint'i kullanmadan önce login veya register endpoint'lerinden token almanız gerekir."
+					},
+					"response": [
+						{
+							"name": "Başarılı Çıkış",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": ""
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/logout",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"logout"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Başarıyla çıkış yapıldı\"\n}"
+						},
+						{
+							"name": "Unauthorized - Geçersiz Token",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer invalid_token"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": ""
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/auth/logout",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"auth",
+										"logout"
+									]
+								}
+							},
+							"status": "Unauthorized",
+							"code": 401,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"error\": \"Geçersiz token\"\n}"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Products",
+			"description": "Ürün yönetimi endpointleri",
+			"item": [
+				{
+					"name": "Get All Products - Tüm Ürünleri Getir",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Test: Response status code should be 200",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"// Test: Response should have message",
+									"pm.test(\"Response has message\", function () {",
+									"    const responseJson = pm.response.json();",
+									"    pm.expect(responseJson).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text",
+								"description": "JWT token (optional for products endpoint)",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products"
+							]
+						},
+						"description": "Tüm ürünlerin listesini getirir.\n\n**Authentication:** Gerekli değil (şu an için)\n\n**Query Parameters:** Henüz desteklenmiyor\n- limit: Sayfa başına ürün sayısı (gelecekte)\n- offset: Başlangıç noktası (gelecekte)\n- category: Kategori filtrelemesi (gelecekte)\n\n**Başarılı Response:**\n- Status: 200\n- Ürün listesi döner (şu an için placeholder message)\n\n**Hata Durumları:**\n- 500: Sunucu hatası\n\n**Not:** Bu endpoint şu an development aşamasında ve placeholder response döndürüyor."
+					},
+					"response": [
+						{
+							"name": "Ürünler Listesi (Placeholder)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/products",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"products"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Get products endpoint - henüz implement edilmedi\"\n}"
+						}
+					]
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Bu script her request öncesi çalışır",
+					"// Gerekirse global değişkenler burada set edilebilir"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Bu script her response sonrası çalışır",
+					"// Global test case'ler burada yazılabilir"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3001",
+			"type": "string",
+			"description": "API base URL"
+		}
+	]
+}
