@@ -86,17 +86,102 @@ go run cmd/main.go
 docker exec -it ecommerce_db psql -U postgres -d ecommerce_db -f /migrations/001_initial_schema.sql
 ```
 
-### Test Etme
+## 🧪 Test Etme
 
+### Test Çalıştırma Seçenekleri
+
+#### 1. Make ile Test Çalıştırma (Önerilen)
 ```bash
-# Unit testleri çalıştır
-go test ./...
+# Tüm testleri çalıştır
+make test
 
-# API testlerini çalıştır
-.\scripts\windows\test-api.ps1
+# Sadece unit testleri
+make test-unit
 
+# Integration testleri
+make test-integration
+
+# Coverage raporu ile
+make test-coverage
+
+# Race condition testleri
+make test-race
+
+# Benchmark testleri
+make test-bench
+
+# Docker ile testleri çalıştır
+make test-docker
+```
+
+#### 2. Go ile Direkt Test Çalıştırma
+```bash
+# Tüm testleri çalıştır
+go test -v ./...
+
+# Sadece model testleri
+go test -v ./internal/model/...
+
+# Coverage ile
+go test -v ./... -coverprofile=coverage.out
+go tool cover -html=coverage.out -o coverage.html
+
+# Race condition testi
+go test -race -v ./internal/service/...
+
+# Benchmark testleri
+go test -bench=. -benchmem ./internal/api/handler/...
+```
+
+#### 3. Script ile Test Çalıştırma
+```bash
+# Linux/Mac
+./scripts/run-tests.sh
+
+# Windows PowerShell
+.\scripts\windows\run-tests.ps1 -Coverage -Race -Bench
+
+# Docker ile
+./scripts/docker/run-tests.sh
+```
+
+#### 4. CI/CD Test Çalıştırma
+```bash
+# CI için optimize edilmiş testler
+make test-ci
+
+# Test sonuçlarını temizle
+make test-clean
+```
+
+### Test Kategorileri
+
+| Test Türü | Açıklama | Dosya Yolu |
+|-----------|----------|------------|
+| **Model Tests** | Veri modellerinin JSON serialization testleri | `internal/model/*_test.go` |
+| **Service Tests** | İş mantığı katmanı testleri | `internal/service/*_test.go` |
+| **Handler Tests** | HTTP handler testleri | `internal/api/handler/*_test.go` |
+| **Integration Tests** | End-to-end API testleri | `tests/integration_test.go` |
+
+### Test Sonuçları
+
+Test sonuçları `test-results/` klasöründe saklanır:
+- `coverage.html` - Coverage raporu
+- `*-test.log` - Test logları
+- `benchmark.log` - Benchmark sonuçları
+- `race-test.log` - Race condition test sonuçları
+
+### Postman Collection Kullanma
+```bash
 # Postman collection'ını kullan
 # tests/postman_collection.json dosyasını Postman'e import edin
+# tests/postman_environment.json dosyasını environment olarak ekleyin
+```
+
+### HTTP Test Dosyası
+```bash
+# VSCode REST Client ile
+# tests/api-test.http dosyasını VSCode'da açın
 ```
 
 ## 📊 API Endpoints

@@ -1,0 +1,84 @@
+# Test Configuration for Özgür Mutfak API
+# This file contains test configuration and commands
+
+# Test Commands
+test:
+  unit: "go test -v ./internal/..."
+  integration: "go test -v ./tests/..."
+  all: "go test -v ./..."
+  coverage: "go test -v ./... -coverprofile=test-results/coverage.out"
+  race: "go test -race -v ./..."
+  bench: "go test -bench=. -benchmem ./..."
+  
+# Test Patterns
+patterns:
+  model: "./internal/model/..."
+  service: "./internal/service/..."
+  handler: "./internal/api/handler/..."
+  integration: "./tests/..."
+  
+# Coverage Settings
+coverage:
+  threshold: 70
+  ignore:
+    - "*.pb.go"
+    - "mock*.go"
+    - "*_test.go"
+    - "cmd/main.go"
+    
+# Test Environment
+environment:
+  GO_ENV: "test"
+  GIN_MODE: "test"
+  DATABASE_URL: "postgres://test:test@localhost:5432/test_db"
+  
+# Test Database
+database:
+  name: "test_ecommerce_db"
+  user: "test_user"
+  password: "test_password"
+  host: "localhost"
+  port: "5432"
+  
+# Parallel Test Settings
+parallel:
+  enabled: true
+  count: 4
+  
+# Timeout Settings
+timeout:
+  unit: "30s"
+  integration: "2m"
+  overall: "10m"
+  
+# Test Output
+output:
+  format: "verbose"
+  directory: "test-results"
+  coverage_html: "test-results/coverage.html"
+  
+# CI/CD Integration
+ci:
+  junit_report: "test-results/junit.xml"
+  coverage_report: "test-results/coverage.xml"
+  
+# Test Categories
+categories:
+  smoke: "TestIntegration_*"
+  unit: "Test*_*"
+  integration: "TestIntegration_*"
+  benchmark: "Benchmark*"
+  
+# Mock Settings
+mocks:
+  generate: true
+  directory: "mocks"
+  interfaces:
+    - "UserService"
+    - "ProductService"
+    - "CartService"
+    - "OrderService"
+    - "UserRepository"
+    - "ProductRepository"
+    - "CartRepository"
+    - "OrderRepository"

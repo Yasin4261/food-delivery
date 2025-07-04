@@ -53,3 +53,19 @@ config/config.prod.yaml
 # Temporary files
 /tmp/
 /temp/
+
+# Windows specific files
+NUL
+CON
+PRN
+AUX
+*.tmp
+
+# Mac specific
+.AppleDouble
+.LSOverride
+
+# Test results and coverage
+test-results/
+coverage.html
+*.log
