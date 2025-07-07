@@ -1,64 +1,28 @@
 {
 	"info": {
-		"_postman_id": "e-commerce-api-collection",
-		"name": "Özgür Mutfak E-Commerce API",
-		"description": "E-ticaret backend API'si için Postman collection. Bu collection register, login, logout ve products endpointlerini içerir.",
+		"_postman_id": "home-cooked-meals-api",
+		"name": "Ev Yemekleri API - Home Cooked Meals Marketplace",
+		"description": "Complete API collection for the home-cooked meals marketplace platform",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "postman-collection-v2.1.0"
+		"_exporter_id": "home-cooked-meals"
 	},
 	"item": [
 		{
 			"name": "Authentication",
-			"description": "Kullanıcı kimlik doğrulama endpointleri",
 			"item": [
 				{
-					"name": "Register - Yeni Kullanıcı Kaydı",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Test: Response status code should be 200 or 201",
-									"pm.test(\"Status code is 200 or 201\", function () {",
-									"    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
-									"});",
-									"",
-									"// Test: Response should have token",
-									"pm.test(\"Response has token\", function () {",
-									"    const responseJson = pm.response.json();",
-									"    pm.expect(responseJson.data).to.have.property('token');",
-									"});",
-									"",
-									"// Save token to environment variable",
-									"if (pm.response.code === 200 || pm.response.code === 201) {",
-									"    const responseJson = pm.response.json();",
-									"    if (responseJson.data && responseJson.data.token) {",
-									"        pm.environment.set(\"auth_token\", responseJson.data.token);",
-									"        console.log(\"Token saved to environment:\", responseJson.data.token);",
-									"    }",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
+					"name": "Register User",
 					"request": {
 						"method": "POST",
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json",
-								"type": "text"
+								"value": "application/json"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
+							"raw": "{\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"email\": \"john@example.com\",\n    \"password\": \"password123\",\n    \"phone\": \"+905551234567\",\n    \"role\": \"customer\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/auth/register",
@@ -71,115 +35,19 @@
 								"auth",
 								"register"
 							]
-						},
-						"description": "Yeni kullanıcı kaydı oluşturur.\n\n**Gerekli Alanlar:**\n- email: Geçerli email adresi (unique olmalı)\n- password: Şifre (minimum 6 karakter önerilir)\n- first_name: Ad\n- last_name: Soyad\n\n**Başarılı Response:**\n- Status: 200/201\n- JWT Token döner\n- Kullanıcı bilgileri döner\n\n**Hata Durumları:**\n- 400: Geçersiz veri (eksik alan, duplicate email)\n- 500: Sunucu hatası"
-					},
-					"response": [
-						{
-							"name": "Başarılı Kayıt",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/v1/auth/register",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"v1",
-										"auth",
-										"register"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"message\": \"Hesap başarıyla oluşturuldu\",\n    \"data\": {\n        \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n        \"user\": {\n            \"id\": 1,\n            \"email\": \"john.doe@example.com\",\n            \"first_name\": \"John\",\n            \"last_name\": \"Doe\",\n            \"role\": \"customer\"\n        }\n    }\n}"
-						},
-						{
-							"name": "Duplicate Email Error",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"email\": \"existing@example.com\",\n    \"password\": \"password123\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/v1/auth/register",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"v1",
-										"auth",
-										"register"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"error\": \"bu email adresi zaten kullanımda\"\n}"
 						}
-					]
+					}
 				},
 				{
-					"name": "Login - Giriş Yap",
+					"name": "Login User",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"// Test: Response status code should be 200",
-									"pm.test(\"Status code is 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"// Test: Response should have token",
-									"pm.test(\"Response has token\", function () {",
-									"    const responseJson = pm.response.json();",
-									"    pm.expect(responseJson.data).to.have.property('token');",
-									"});",
-									"",
-									"// Save token to environment variable",
-									"if (pm.response.code === 200) {",
-									"    const responseJson = pm.response.json();",
-									"    if (responseJson.data && responseJson.data.token) {",
-									"        pm.environment.set(\"auth_token\", responseJson.data.token);",
-									"        console.log(\"Login successful, token saved:\", responseJson.data.token);",
-									"    }",
+									"var jsonData = pm.response.json();",
+									"if (jsonData.token) {",
+									"    pm.environment.set('auth_token', jsonData.token);",
 									"}"
 								],
 								"type": "text/javascript"
@@ -191,18 +59,12 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json",
-								"type": "text"
+								"value": "application/json"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
+							"raw": "{\n    \"email\": \"john@example.com\",\n    \"password\": \"password123\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/auth/login",
@@ -215,142 +77,19 @@
 								"auth",
 								"login"
 							]
-						},
-						"description": "Mevcut kullanıcının sisteme giriş yapmasını sağlar.\n\n**Gerekli Alanlar:**\n- email: Kayıtlı email adresi\n- password: Kullanıcının şifresi\n\n**Başarılı Response:**\n- Status: 200\n- JWT Token döner\n- Kullanıcı bilgileri döner\n\n**Hata Durumları:**\n- 401: Geçersiz email veya şifre\n- 400: Eksik veri\n- 500: Sunucu hatası"
-					},
-					"response": [
-						{
-							"name": "Başarılı Giriş",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"password123\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/v1/auth/login",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"v1",
-										"auth",
-										"login"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"message\": \"Başarıyla giriş yapıldı\",\n    \"data\": {\n        \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n        \"user\": {\n            \"id\": 1,\n            \"email\": \"john.doe@example.com\",\n            \"first_name\": \"John\",\n            \"last_name\": \"Doe\",\n            \"role\": \"customer\"\n        }\n    }\n}"
-						},
-						{
-							"name": "Geçersiz Kimlik Bilgileri",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"email\": \"john.doe@example.com\",\n    \"password\": \"wrongpassword\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/v1/auth/login",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"v1",
-										"auth",
-										"login"
-									]
-								}
-							},
-							"status": "Unauthorized",
-							"code": 401,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"error\": \"email veya şifre hatalı\"\n}"
 						}
-					]
+					}
 				},
 				{
-					"name": "Logout - Çıkış Yap",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Test: Response status code should be 200",
-									"pm.test(\"Status code is 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"// Test: Response should have success message",
-									"pm.test(\"Response has success message\", function () {",
-									"    const responseJson = pm.response.json();",
-									"    pm.expect(responseJson).to.have.property('message');",
-									"});",
-									"",
-									"// Clear token from environment after logout",
-									"if (pm.response.code === 200) {",
-									"    pm.environment.unset(\"auth_token\");",
-									"    console.log(\"Logout successful, token cleared from environment\");",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
+					"name": "Logout User",
 					"request": {
 						"method": "POST",
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{auth_token}}",
-								"type": "text",
-								"description": "JWT token from login/register"
-							},
-							{
-								"key": "Content-Type",
-								"value": "application/json",
-								"type": "text"
+								"value": "Bearer {{auth_token}}"
 							}
 						],
-						"body": {
-							"mode": "raw",
-							"raw": "",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
 						"url": {
 							"raw": "{{base_url}}/api/v1/auth/logout",
 							"host": [
@@ -362,181 +101,992 @@
 								"auth",
 								"logout"
 							]
-						},
-						"description": "Kullanıcının sistemden çıkış yapmasını sağlar.\n\n**Gerekli Headers:**\n- Authorization: Bearer {JWT_TOKEN}\n\n**Body:** Boş (gerek yok)\n\n**Başarılı Response:**\n- Status: 200\n- Başarı mesajı döner\n\n**Hata Durumları:**\n- 401: Geçersiz veya eksik token\n- 500: Sunucu hatası\n\n**Not:** Bu endpoint'i kullanmadan önce login veya register endpoint'lerinden token almanız gerekir."
-					},
-					"response": [
-						{
-							"name": "Başarılı Çıkış",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": ""
-								},
-								"url": {
-									"raw": "{{base_url}}/api/v1/auth/logout",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"v1",
-										"auth",
-										"logout"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"message\": \"Başarıyla çıkış yapıldı\"\n}"
-						},
-						{
-							"name": "Unauthorized - Geçersiz Token",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer invalid_token"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": ""
-								},
-								"url": {
-									"raw": "{{base_url}}/api/v1/auth/logout",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"v1",
-										"auth",
-										"logout"
-									]
-								}
-							},
-							"status": "Unauthorized",
-							"code": 401,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"error\": \"Geçersiz token\"\n}"
 						}
-					]
+					}
 				}
 			]
 		},
 		{
-			"name": "Products",
-			"description": "Ürün yönetimi endpointleri",
+			"name": "User Profile",
 			"item": [
 				{
-					"name": "Get All Products - Tüm Ürünleri Getir",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Test: Response status code should be 200",
-									"pm.test(\"Status code is 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"// Test: Response should have message",
-									"pm.test(\"Response has message\", function () {",
-									"    const responseJson = pm.response.json();",
-									"    pm.expect(responseJson).to.have.property('message');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
+					"name": "Get Profile",
 					"request": {
 						"method": "GET",
 						"header": [
 							{
 								"key": "Authorization",
-								"value": "Bearer {{auth_token}}",
-								"type": "text",
-								"description": "JWT token (optional for products endpoint)",
-								"disabled": true
+								"value": "Bearer {{auth_token}}"
 							}
 						],
 						"url": {
-							"raw": "{{base_url}}/api/v1/products",
+							"raw": "{{base_url}}/api/v1/profile",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
 								"v1",
-								"products"
+								"profile"
 							]
-						},
-						"description": "Tüm ürünlerin listesini getirir.\n\n**Authentication:** Gerekli değil (şu an için)\n\n**Query Parameters:** Henüz desteklenmiyor\n- limit: Sayfa başına ürün sayısı (gelecekte)\n- offset: Başlangıç noktası (gelecekte)\n- category: Kategori filtrelemesi (gelecekte)\n\n**Başarılı Response:**\n- Status: 200\n- Ürün listesi döner (şu an için placeholder message)\n\n**Hata Durumları:**\n- 500: Sunucu hatası\n\n**Not:** Bu endpoint şu an development aşamasında ve placeholder response döndürüyor."
-					},
-					"response": [
-						{
-							"name": "Ürünler Listesi (Placeholder)",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/v1/products",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"v1",
-										"products"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n    \"message\": \"Get products endpoint - henüz implement edilmedi\"\n}"
 						}
-					]
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"John Doe Updated\",\n    \"phone\": \"+905551234568\",\n    \"address\": \"Ankara, Turkey\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"profile"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Meals (Public)",
+			"item": [
+				{
+					"name": "Get All Meals",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/meals?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"meals"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Meal by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/meals/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"meals",
+								"1"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Chefs (Public)",
+			"item": [
+				{
+					"name": "Get All Chefs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/chefs?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chefs"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Chef by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/chefs/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chefs",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Chef's Meals",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/chefs/1/meals",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chefs",
+								"1",
+								"meals"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Cart Management",
+			"item": [
+				{
+					"name": "Get Cart",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/cart",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"cart"
+							]
+						}
+					}
+				},
+				{
+					"name": "Add to Cart",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"meal_id\": 1,\n    \"quantity\": 2\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/cart/items",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"cart",
+								"items"
+							]
+						}
+					}
+				},
+				{
+					"name": "Remove from Cart",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/cart/items/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"cart",
+								"items",
+								"1"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Order Management",
+			"item": [
+				{
+					"name": "Get Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/orders",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"orders"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Order",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"delivery_address\": \"Istanbul, Turkey\",\n    \"payment_method\": \"credit_card\",\n    \"notes\": \"Please deliver after 6 PM\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/orders",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"orders"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Order by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/orders/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"orders",
+								"1"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Chef Operations",
+			"item": [
+				{
+					"name": "Get Chef Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"profile"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Chef Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"bio\": \"Experienced home chef specializing in Turkish cuisine\",\n    \"specialties\": \"Turkish, Mediterranean, Vegetarian\",\n    \"experience_years\": 5,\n    \"kitchen_images\": [\"kitchen1.jpg\", \"kitchen2.jpg\"],\n    \"certifications\": [\"Food Safety Certificate\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"profile"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Chef Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"bio\": \"Updated bio for experienced home chef\",\n    \"specialties\": \"Turkish, Mediterranean, Vegetarian, Vegan\",\n    \"experience_years\": 6\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/profile",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"profile"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get My Meals",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/meals",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"meals"
+							]
+						}
+					}
+				},
+				{
+					"name": "Create Meal",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Homemade Döner Kebab\",\n    \"description\": \"Authentic Turkish döner kebab made with fresh ingredients\",\n    \"price\": 25.50,\n    \"category\": \"Turkish\",\n    \"ingredients\": [\"Lamb\", \"Onion\", \"Tomato\", \"Lettuce\", \"Yogurt\"],\n    \"allergens\": [\"Dairy\"],\n    \"portion_size\": \"1 serving\",\n    \"preparation_time\": 30,\n    \"spice_level\": \"Medium\",\n    \"images\": [\"doner1.jpg\", \"doner2.jpg\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/meals",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"meals"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Meal",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Premium Homemade Döner Kebab\",\n    \"description\": \"Premium authentic Turkish döner kebab with extra ingredients\",\n    \"price\": 30.00\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/meals/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"meals",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Meal",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/meals/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"meals",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "Toggle Meal Availability",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/meals/1/toggle",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"meals",
+								"1",
+								"toggle"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Chef Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/orders",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"orders"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Order Status",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{chef_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"preparing\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/chef/orders/1/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"chef",
+								"orders",
+								"1",
+								"status"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin Operations",
+			"item": [
+				{
+					"name": "Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/dashboard",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"dashboard"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/users?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/users/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"users",
+								"1"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get All Chefs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/chefs?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"chefs"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Pending Chefs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/chefs/pending",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"chefs",
+								"pending"
+							]
+						}
+					}
+				},
+				{
+					"name": "Verify Chef",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"verified\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/chefs/1/verify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"chefs",
+								"1",
+								"verify"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get All Orders",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/orders?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"orders"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Order Status (Admin)",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"cancelled\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/orders/1/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"orders",
+								"1",
+								"status"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get All Meals (Admin)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/meals?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"meals"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Approve Meal",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"approved\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/meals/1/approve",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"meals",
+								"1",
+								"approve"
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Meal (Admin)",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/admin/meals/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"admin",
+								"meals",
+								"1"
+							]
+						}
+					}
 				}
 			]
 		}
@@ -547,8 +1097,7 @@
 			"script": {
 				"type": "text/javascript",
 				"exec": [
-					"// Bu script her request öncesi çalışır",
-					"// Gerekirse global değişkenler burada set edilebilir"
+					""
 				]
 			}
 		},
@@ -557,8 +1106,7 @@
 			"script": {
 				"type": "text/javascript",
 				"exec": [
-					"// Bu script her response sonrası çalışır",
-					"// Global test case'ler burada yazılabilir"
+					""
 				]
 			}
 		}
@@ -566,9 +1114,8 @@
 	"variable": [
 		{
 			"key": "base_url",
-			"value": "http://localhost:3001",
-			"type": "string",
-			"description": "API base URL"
+			"value": "{{base_url}}",
+			"type": "string"
 		}
 	]
 }
