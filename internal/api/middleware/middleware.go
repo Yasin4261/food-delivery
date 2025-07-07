@@ -109,3 +109,28 @@ func AdminRequired() gin.HandlerFunc {
 		c.Next()
 	})
 }
+
+// RoleRequired middleware - Belirtilen rol kontrolü
+func RoleRequired(requiredRole string) gin.HandlerFunc {
+	return gin.HandlerFunc(func(c *gin.Context) {
+		// Kullanıcı rolünü kontrol et
+		userRole, exists := c.Get("user_role")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Yetkilendirme bilgisi bulunamadı",
+			})
+			c.Abort()
+			return
+		}
+
+		if userRole != requiredRole {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": fmt.Sprintf("Bu işlem için %s yetkisi gerekli", requiredRole),
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	})
+}

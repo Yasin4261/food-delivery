@@ -12,7 +12,6 @@ func TestCart(t *testing.T) {
 	cart := Cart{
 		ID:        1,
 		UserID:    1,
-		Total:     59.98,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -30,8 +29,8 @@ func TestCart(t *testing.T) {
 	if unmarshalledCart.UserID != cart.UserID {
 		t.Errorf("Expected user ID %d, got %d", cart.UserID, unmarshalledCart.UserID)
 	}
-	if unmarshalledCart.Total != cart.Total {
-		t.Errorf("Expected total %.2f, got %.2f", cart.Total, unmarshalledCart.Total)
+	if unmarshalledCart.ID != cart.ID {
+		t.Errorf("Expected ID %d, got %d", cart.ID, unmarshalledCart.ID)
 	}
 }
 
@@ -39,13 +38,14 @@ func TestCart(t *testing.T) {
 func TestCartItem(t *testing.T) {
 	now := time.Now()
 	cartItem := CartItem{
-		ID:        1,
-		CartID:    1,
-		ProductID: 1,
-		Quantity:  2,
-		Price:     29.99,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:           1,
+		CartID:       1,
+		ProductID:    1,
+		Quantity:     2,
+		ProductPrice: 29.99,
+		ProductName:  "Test Product",
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	jsonData, err := json.Marshal(cartItem)
@@ -64,8 +64,8 @@ func TestCartItem(t *testing.T) {
 	if unmarshalledItem.Quantity != cartItem.Quantity {
 		t.Errorf("Expected quantity %d, got %d", cartItem.Quantity, unmarshalledItem.Quantity)
 	}
-	if unmarshalledItem.Price != cartItem.Price {
-		t.Errorf("Expected price %.2f, got %.2f", cartItem.Price, unmarshalledItem.Price)
+	if unmarshalledItem.ProductPrice != cartItem.ProductPrice {
+		t.Errorf("Expected price %.2f, got %.2f", cartItem.ProductPrice, unmarshalledItem.ProductPrice)
 	}
 }
 

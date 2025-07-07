@@ -11,9 +11,9 @@ Dockerfile
 docker-compose.yml
 .dockerignore
 
-# Scripts
+# Scripts (except for test builds)
 *.bat
-scripts/
+# scripts/
 
 # IDE
 .vscode/

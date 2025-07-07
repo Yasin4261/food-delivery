@@ -4,13 +4,16 @@ import (
 	"time"
 )
 
-// Admin dashboard statistics
+// Admin dashboard statistics (Ev yemekleri platformu için)
 type DashboardStats struct {
 	TotalUsers     int     `json:"total_users"`
+	TotalChefs     int     `json:"total_chefs"`
+	TotalCustomers int     `json:"total_customers"`
 	TotalOrders    int     `json:"total_orders"`
-	TotalProducts  int     `json:"total_products"`
+	TotalMeals     int     `json:"total_meals"`
 	TotalRevenue   float64 `json:"total_revenue"`
 	PendingOrders  int     `json:"pending_orders"`
+	ActiveChefs    int     `json:"active_chefs"`
 	LastUpdated    time.Time `json:"last_updated"`
 }
 
@@ -63,4 +66,24 @@ type JWTClaims struct {
 	UserID uint   `json:"user_id"`
 	Email  string `json:"email"`
 	Role   string `json:"role"`
+}
+
+// APIResponse - Standart API response yapısı (test'lerle uyumluluk için)
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   string      `json:"error,omitempty"`
+}
+
+// SearchFilter - Genel arama filtresi
+type SearchFilter struct {
+	Query    string  `json:"query"`
+	Category string  `json:"category"`
+	MinPrice float64 `json:"min_price"`
+	MaxPrice float64 `json:"max_price"`
+	SortBy   string  `json:"sort_by"`   // price, name, rating, date
+	SortDir  string  `json:"sort_dir"`  // asc, desc
+	Page     int     `json:"page"`
+	Limit    int     `json:"limit"`
 }

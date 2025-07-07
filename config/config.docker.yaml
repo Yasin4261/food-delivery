@@ -7,7 +7,7 @@ database:
   port: 5432
   username: "postgres"
   password: "password"
-  database: "ecommerce_db"
+  database: "ecommerce"
   ssl_mode: "disable"
 
 jwt:

@@ -4,13 +4,14 @@ import (
 	"ecommerce/internal/service"
 )
 
-// HandlerDependencies - handler bağımlılıkları
+// HandlerDependencies - handler bağımlılıkları (Ev yemekleri platformu için)
 type HandlerDependencies struct {
-	UserService    *service.UserService
-	ProductService *service.ProductService
-	CartService    *service.CartService
-	OrderService   *service.OrderService
-	AdminService   *service.AdminService
+	UserService  *service.UserService
+	ChefService  *service.ChefService
+	MealService  *service.MealService
+	CartService  *service.CartService
+	OrderService *service.OrderService
+	AdminService *service.AdminService
 }
 
 var deps *HandlerDependencies

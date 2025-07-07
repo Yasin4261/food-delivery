@@ -5,7 +5,7 @@ services:
     container_name: ecommerce_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ecommerce_db
+      POSTGRES_DB: ecommerce
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     ports:
@@ -38,7 +38,7 @@ services:
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASSWORD=password
-      - DB_NAME=ecommerce_db
+      - DB_NAME=ecommerce
     networks:
       - ecommerce_network
     volumes:

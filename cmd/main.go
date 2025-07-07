@@ -52,24 +52,27 @@ func main() {
 
 	// Repository'leri oluştur
 	userRepo := repository.NewUserRepository(db)
-	productRepo := repository.NewProductRepository(db)
+	chefRepo := repository.NewChefRepository(db)
+	mealRepo := repository.NewMealRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
 	cartRepo := repository.NewCartRepository(db)
 
 	// Service'leri oluştur
 	userService := service.NewUserService(userRepo, jwtManager)
-	productService := service.NewProductService(productRepo)
-	orderService := service.NewOrderService(orderRepo, productRepo, cartRepo)
-	cartService := service.NewCartService(cartRepo, productRepo)
-	adminService := service.NewAdminService(userRepo, orderRepo, productRepo)
+	chefService := service.NewChefService(chefRepo, userRepo)
+	mealService := service.NewMealService(mealRepo, chefRepo)
+	orderService := service.NewOrderService(orderRepo, mealRepo, cartRepo)
+	cartService := service.NewCartService(cartRepo, mealRepo)
+	adminService := service.NewAdminService(userRepo, chefRepo, mealRepo, orderRepo)
 
 	// Handler bağımlılıklarını ayarla
 	handler.SetDependencies(&handler.HandlerDependencies{
-		UserService:    userService,
-		ProductService: productService,
-		OrderService:   orderService,
-		CartService:    cartService,
-		AdminService:   adminService,
+		UserService:  userService,
+		ChefService:  chefService,
+		MealService:  mealService,
+		OrderService: orderService,
+		CartService:  cartService,
+		AdminService: adminService,
 	})
 
 	// Gin router oluşturma

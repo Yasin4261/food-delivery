@@ -17,13 +17,13 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 
 func (r *UserRepository) Create(user *model.User) error {
 	query := `
-		INSERT INTO users (email, password, first_name, last_name, role, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (email, password, first_name, last_name, phone, role, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id`
 	
 	now := time.Now()
 	err := r.db.QueryRow(query, user.Email, user.Password, user.FirstName, 
-		user.LastName, user.Role, now, now).Scan(&user.ID)
+		user.LastName, user.Phone, user.Role, user.IsActive, now, now).Scan(&user.ID)
 	
 	if err != nil {
 		return err
@@ -37,13 +37,13 @@ func (r *UserRepository) Create(user *model.User) error {
 func (r *UserRepository) GetByEmail(email string) (*model.User, error) {
 	user := &model.User{}
 	query := `
-		SELECT id, email, password, first_name, last_name, role, created_at, updated_at
+		SELECT id, email, password, first_name, last_name, phone, role, is_active, created_at, updated_at
 		FROM users 
 		WHERE email = $1`
 	
 	err := r.db.QueryRow(query, email).Scan(
 		&user.ID, &user.Email, &user.Password, &user.FirstName,
-		&user.LastName, &user.Role, &user.CreatedAt, &user.UpdatedAt,
+		&user.LastName, &user.Phone, &user.Role, &user.IsActive, &user.CreatedAt, &user.UpdatedAt,
 	)
 	
 	if err != nil {
@@ -59,13 +59,13 @@ func (r *UserRepository) GetByEmail(email string) (*model.User, error) {
 func (r *UserRepository) GetByID(id uint) (*model.User, error) {
 	user := &model.User{}
 	query := `
-		SELECT id, email, password, first_name, last_name, role, created_at, updated_at
+		SELECT id, email, password, first_name, last_name, phone, role, is_active, created_at, updated_at
 		FROM users 
 		WHERE id = $1`
 	
 	err := r.db.QueryRow(query, id).Scan(
 		&user.ID, &user.Email, &user.Password, &user.FirstName,
-		&user.LastName, &user.Role, &user.CreatedAt, &user.UpdatedAt,
+		&user.LastName, &user.Phone, &user.Role, &user.IsActive, &user.CreatedAt, &user.UpdatedAt,
 	)
 	
 	if err != nil {
@@ -109,11 +109,11 @@ func (r *UserRepository) GetAll() ([]model.User, error) {
 func (r *UserRepository) Update(user *model.User) error {
 	query := `
 		UPDATE users 
-		SET first_name = $1, last_name = $2, role = $3, updated_at = $4
-		WHERE id = $5`
+		SET first_name = $1, last_name = $2, phone = $3, role = $4, is_active = $5, updated_at = $6
+		WHERE id = $7`
 	
 	user.UpdatedAt = time.Now()
-	_, err := r.db.Exec(query, user.FirstName, user.LastName, user.Role, user.UpdatedAt, user.ID)
+	_, err := r.db.Exec(query, user.FirstName, user.LastName, user.Phone, user.Role, user.IsActive, user.UpdatedAt, user.ID)
 	return err
 }
 

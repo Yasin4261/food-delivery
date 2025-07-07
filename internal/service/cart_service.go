@@ -8,14 +8,14 @@ import (
 
 // CartService - sepet iş mantığı
 type CartService struct {
-	cartRepo    *repository.CartRepository
-	productRepo *repository.ProductRepository
+	cartRepo *repository.CartRepository
+	mealRepo *repository.MealRepository
 }
 
-func NewCartService(cartRepo *repository.CartRepository, productRepo *repository.ProductRepository) *CartService {
+func NewCartService(cartRepo *repository.CartRepository, mealRepo *repository.MealRepository) *CartService {
 	return &CartService{
-		cartRepo:    cartRepo,
-		productRepo: productRepo,
+		cartRepo: cartRepo,
+		mealRepo: mealRepo,
 	}
 }
 
@@ -48,22 +48,22 @@ func (s *CartService) AddItem(userID uint, req *model.AddToCartRequest) error {
 	if userID == 0 {
 		return errors.New("geçersiz kullanıcı ID")
 	}
-	if req.ProductID == 0 {
-		return errors.New("geçersiz ürün ID")
+	if req.MealID == 0 {
+		return errors.New("geçersiz yemek ID")
 	}
 	if req.Quantity <= 0 {
 		return errors.New("miktar 0'dan büyük olmalıdır")
 	}
 	
-	// Ürün kontrolü
-	product, err := s.productRepo.GetByID(req.ProductID)
+	// Yemek kontrolü
+	meal, err := s.mealRepo.GetByID(req.MealID)
 	if err != nil {
 		return err
 	}
-	if product == nil {
-		return errors.New("ürün bulunamadı")
+	if meal == nil {
+		return errors.New("yemek bulunamadı")
 	}
-	if product.Stock < req.Quantity {
+	if meal.AvailableQuantity < req.Quantity {
 		return errors.New("yeterli stok yok")
 	}
 	
@@ -74,7 +74,7 @@ func (s *CartService) AddItem(userID uint, req *model.AddToCartRequest) error {
 	}
 	
 	// Mevcut öğeyi kontrol et
-	existingItem, err := s.cartRepo.GetCartItem(cart.ID, req.ProductID)
+	existingItem, err := s.cartRepo.GetCartItem(cart.ID, req.MealID)
 	if err != nil {
 		return err
 	}
@@ -82,27 +82,29 @@ func (s *CartService) AddItem(userID uint, req *model.AddToCartRequest) error {
 	if existingItem != nil {
 		// Mevcut öğeyi güncelle
 		existingItem.Quantity += req.Quantity
-		if existingItem.Quantity > product.Stock {
+		if existingItem.Quantity > meal.AvailableQuantity {
 			return errors.New("yeterli stok yok")
 		}
 		return s.cartRepo.UpdateCartItem(existingItem)
 	} else {
 		// Yeni öğe ekle
 		cartItem := &model.CartItem{
-			CartID:    cart.ID,
-			ProductID: req.ProductID,
-			Quantity:  req.Quantity,
+			CartID:              cart.ID,
+			MealID:              req.MealID,
+			ChefID:              meal.ChefID,
+			Quantity:            req.Quantity,
+			SpecialInstructions: req.SpecialInstructions,
 		}
 		return s.cartRepo.CreateCartItem(cartItem)
 	}
 }
 
-func (s *CartService) UpdateItem(userID uint, productID uint, quantity int) error {
+func (s *CartService) UpdateItem(userID uint, mealID uint, quantity int) error {
 	if userID == 0 {
 		return errors.New("geçersiz kullanıcı ID")
 	}
-	if productID == 0 {
-		return errors.New("geçersiz ürün ID")
+	if mealID == 0 {
+		return errors.New("geçersiz yemek ID")
 	}
 	if quantity < 0 {
 		return errors.New("miktar negatif olamaz")
@@ -118,7 +120,7 @@ func (s *CartService) UpdateItem(userID uint, productID uint, quantity int) erro
 	}
 	
 	// Öğeyi bul
-	item, err := s.cartRepo.GetCartItem(cart.ID, productID)
+	item, err := s.cartRepo.GetCartItem(cart.ID, mealID)
 	if err != nil {
 		return err
 	}
@@ -132,11 +134,11 @@ func (s *CartService) UpdateItem(userID uint, productID uint, quantity int) erro
 	}
 	
 	// Stok kontrolü
-	product, err := s.productRepo.GetByID(productID)
+	meal, err := s.mealRepo.GetByID(mealID)
 	if err != nil {
 		return err
 	}
-	if product.Stock < quantity {
+	if meal.AvailableQuantity < quantity {
 		return errors.New("yeterli stok yok")
 	}
 	
@@ -145,12 +147,12 @@ func (s *CartService) UpdateItem(userID uint, productID uint, quantity int) erro
 	return s.cartRepo.UpdateCartItem(item)
 }
 
-func (s *CartService) RemoveItem(userID uint, productID uint) error {
+func (s *CartService) RemoveItem(userID uint, mealID uint) error {
 	if userID == 0 {
 		return errors.New("geçersiz kullanıcı ID")
 	}
-	if productID == 0 {
-		return errors.New("geçersiz ürün ID")
+	if mealID == 0 {
+		return errors.New("geçersiz yemek ID")
 	}
 	
 	// Sepeti al
@@ -163,7 +165,7 @@ func (s *CartService) RemoveItem(userID uint, productID uint) error {
 	}
 	
 	// Öğeyi bul ve sil
-	item, err := s.cartRepo.GetCartItem(cart.ID, productID)
+	item, err := s.cartRepo.GetCartItem(cart.ID, mealID)
 	if err != nil {
 		return err
 	}
@@ -216,7 +218,10 @@ func (s *CartService) GetCartTotal(userID uint) (float64, error) {
 	
 	var total float64
 	for _, item := range items {
-		total += item.ProductPrice * float64(item.Quantity)
+		// Get meal price from the related meal
+		if item.Meal != nil {
+			total += item.Meal.Price * float64(item.Quantity)
+		}
 	}
 	
 	return total, nil

@@ -44,7 +44,9 @@ func (s *UserService) Register(req *model.RegisterRequest) (*model.AuthResponse,
 		Password:  hashedPassword,
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		Role:      "customer", // Varsayılan rol
+		Phone:     req.Phone,
+		Role:      req.Role, // customer veya chef
+		IsActive:  true,
 	}
 	
 	// Veritabanına kaydet
@@ -108,6 +110,7 @@ func (s *UserService) UpdateProfile(userID uint, req *model.UpdateProfileRequest
 	// Güncelle
 	user.FirstName = req.FirstName
 	user.LastName = req.LastName
+	user.Phone = req.Phone
 	
 	err = s.userRepo.Update(user)
 	if err != nil {

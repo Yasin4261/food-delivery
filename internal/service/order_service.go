@@ -8,16 +8,16 @@ import (
 
 // OrderService - sipariş iş mantığı
 type OrderService struct {
-	orderRepo   *repository.OrderRepository
-	productRepo *repository.ProductRepository
-	cartRepo    *repository.CartRepository
+	orderRepo *repository.OrderRepository
+	mealRepo  *repository.MealRepository
+	cartRepo  *repository.CartRepository
 }
 
-func NewOrderService(orderRepo *repository.OrderRepository, productRepo *repository.ProductRepository, cartRepo *repository.CartRepository) *OrderService {
+func NewOrderService(orderRepo *repository.OrderRepository, mealRepo *repository.MealRepository, cartRepo *repository.CartRepository) *OrderService {
 	return &OrderService{
-		orderRepo:   orderRepo,
-		productRepo: productRepo,
-		cartRepo:    cartRepo,
+		orderRepo: orderRepo,
+		mealRepo:  mealRepo,
+		cartRepo:  cartRepo,
 	}
 }
 
@@ -26,8 +26,8 @@ func (s *OrderService) CreateOrder(userID uint, req *model.CreateOrderRequest) (
 	if userID == 0 {
 		return nil, errors.New("geçersiz kullanıcı ID")
 	}
-	if req.Address == "" {
-		return nil, errors.New("teslimat adresi boş olamaz")
+	if req.DeliveryAddress == "" && req.DeliveryType == "delivery" {
+		return nil, errors.New("teslimat için adres gerekli")
 	}
 	if len(req.Items) == 0 {
 		return nil, errors.New("sipariş öğeleri boş olamaz")
@@ -36,25 +36,38 @@ func (s *OrderService) CreateOrder(userID uint, req *model.CreateOrderRequest) (
 	// Stok kontrolü ve toplam fiyat hesaplama
 	var total float64
 	for _, item := range req.Items {
-		product, err := s.productRepo.GetByID(item.ProductID)
+		meal, err := s.mealRepo.GetByID(item.MealID)
 		if err != nil {
 			return nil, err
 		}
-		if product == nil {
-			return nil, errors.New("ürün bulunamadı: " + string(rune(item.ProductID)))
+		if meal == nil {
+			return nil, errors.New("yemek bulunamadı: " + string(rune(item.MealID)))
 		}
-		if product.Stock < item.Quantity {
-			return nil, errors.New("yeterli stok yok: " + product.Name)
+		if meal.AvailableQuantity < item.Quantity {
+			return nil, errors.New("yeterli stok yok: " + meal.Name)
 		}
-		total += product.Price * float64(item.Quantity)
+		total += meal.Price * float64(item.Quantity)
 	}
 	
-	// Sipariş oluştur
+	// Sipariş oluştur - ana chef bilgisini ilk yemekten al
+	var mainChefID uint
+	if len(req.Items) > 0 {
+		firstMeal, _ := s.mealRepo.GetByID(req.Items[0].MealID)
+		if firstMeal != nil {
+			mainChefID = firstMeal.ChefID
+		}
+	}
+	
 	order := &model.Order{
-		UserID:  userID,
-		Total:   total,
-		Status:  "pending",
-		Address: req.Address,
+		UserID:          userID,
+		ChefID:          mainChefID,
+		Total:           total,
+		Status:          "pending",
+		DeliveryType:    req.DeliveryType,
+		Address:         req.DeliveryAddress,
+		DeliveryAddress: req.DeliveryAddress,
+		PaymentMethod:   req.PaymentMethod,
+		CustomerNote:    req.CustomerNote,
 	}
 	
 	err := s.orderRepo.Create(order)
@@ -64,13 +77,15 @@ func (s *OrderService) CreateOrder(userID uint, req *model.CreateOrderRequest) (
 	
 	// Sipariş öğelerini oluştur ve stok güncelle
 	for _, item := range req.Items {
-		product, _ := s.productRepo.GetByID(item.ProductID)
+		meal, _ := s.mealRepo.GetByID(item.MealID)
 		
 		orderItem := &model.OrderItem{
-			OrderID:   order.ID,
-			ProductID: item.ProductID,
-			Quantity:  item.Quantity,
-			Price:     product.Price, // Sipariş anındaki fiyat
+			OrderID:             order.ID,
+			MealID:              item.MealID,
+			ChefID:              meal.ChefID,
+			Quantity:            item.Quantity,
+			Price:               meal.Price, // Sipariş anındaki fiyat
+			SpecialInstructions: item.SpecialInstructions,
 		}
 		
 		err = s.orderRepo.CreateOrderItem(orderItem)
@@ -79,8 +94,8 @@ func (s *OrderService) CreateOrder(userID uint, req *model.CreateOrderRequest) (
 		}
 		
 		// Stok güncelle
-		product.Stock -= item.Quantity
-		err = s.productRepo.Update(product)
+		meal.AvailableQuantity -= item.Quantity
+		err = s.mealRepo.Update(meal)
 		if err != nil {
 			return nil, err
 		}
@@ -159,13 +174,13 @@ func (s *OrderService) CancelOrder(id uint) error {
 	}
 	
 	for _, item := range orderItems {
-		product, err := s.productRepo.GetByID(item.ProductID)
+		meal, err := s.mealRepo.GetByID(item.MealID)
 		if err != nil {
-			continue // Ürün bulunamazsa geç
+			continue // Yemek bulunamazsa geç
 		}
 		
-		product.Stock += item.Quantity
-		s.productRepo.Update(product)
+		meal.AvailableQuantity += item.Quantity
+		s.mealRepo.Update(meal)
 	}
 	
 	return s.UpdateOrderStatus(id, "cancelled")

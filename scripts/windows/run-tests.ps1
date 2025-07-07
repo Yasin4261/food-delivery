@@ -174,10 +174,10 @@ Test Summary for Özgür Mutfak API
 ==================================
 
 Test Results:
-- Model Tests: $($testResults.ModelPassed ? "PASSED" : "FAILED")
-- Service Tests: $($testResults.ServicePassed ? "PASSED" : "FAILED")
-- Handler Tests: $($testResults.HandlerPassed ? "PASSED" : "FAILED")
-- Integration Tests: $($testResults.IntegrationPassed ? "PASSED" : "FAILED")
+- Model Tests: $(if ($testResults.ModelPassed) { "PASSED" } else { "FAILED" })
+- Service Tests: $(if ($testResults.ServicePassed) { "PASSED" } else { "FAILED" })
+- Handler Tests: $(if ($testResults.HandlerPassed) { "PASSED" } else { "FAILED" })
+- Integration Tests: $(if ($testResults.IntegrationPassed) { "PASSED" } else { "FAILED" })
 
 Coverage: $($testResults.OverallCoverage)
 

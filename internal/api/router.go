@@ -7,11 +7,15 @@ import (
 	"ecommerce/internal/auth"
 )
 
-// SetupRoutes tüm API route'larını ayarlar
+// SetupRoutes tüm API route'larını ayarlar (Ev yemekleri platformu için)
 func SetupRoutes(router *gin.Engine, jwtManager *auth.JWTManager) {
 	// Global middleware'ler
 	router.Use(middleware.CORS())
 	router.Use(middleware.Logger())
+
+	// Get dependencies
+	deps := handler.GetDependencies()
+	adminHandler := handler.NewAdminHandler(deps.AdminService)
 
 	// API grubu
 	api := router.Group("/api/v1")
@@ -21,8 +25,13 @@ func SetupRoutes(router *gin.Engine, jwtManager *auth.JWTManager) {
 	{
 		public.POST("/auth/login", handler.Login)
 		public.POST("/auth/register", handler.Register)
-		public.GET("/products", handler.GetProducts)
-		public.GET("/products/:id", handler.GetProduct)
+		
+		// Public meal browsing
+		public.GET("/meals", handler.GetMeals)
+		public.GET("/meals/:id", handler.GetMeal)
+		public.GET("/chefs", handler.GetChefs)
+		public.GET("/chefs/:id", handler.GetChef)
+		public.GET("/chefs/:id/meals", handler.GetChefMeals)
 	}
 
 	// Auth required for logout
@@ -51,17 +60,49 @@ func SetupRoutes(router *gin.Engine, jwtManager *auth.JWTManager) {
 		protected.GET("/orders/:id", handler.GetOrder)
 	}
 
+	// Chef specific routes
+	chef := api.Group("/chef")
+	chef.Use(middleware.AuthRequired(jwtManager))
+	chef.Use(middleware.RoleRequired("chef"))
+	{
+		chef.GET("/profile", handler.GetChefProfile)
+		chef.POST("/profile", handler.CreateChefProfile)
+		chef.PUT("/profile", handler.UpdateChefProfile)
+		
+		chef.GET("/meals", handler.GetMyMeals)
+		chef.POST("/meals", handler.CreateMeal)
+		chef.PUT("/meals/:id", handler.UpdateMeal)
+		chef.DELETE("/meals/:id", handler.DeleteMeal)
+		chef.PUT("/meals/:id/toggle", handler.ToggleMealAvailability)
+		
+		chef.GET("/orders", handler.GetChefOrders)
+		chef.PUT("/orders/:id/status", handler.UpdateOrderStatus)
+	}
+
 	// Admin route'lar
 	admin := api.Group("/admin")
 	admin.Use(middleware.AuthRequired(jwtManager))
 	admin.Use(middleware.AdminRequired())
 	{
-		admin.GET("/products", handler.AdminGetProducts)
-		admin.POST("/products", handler.AdminCreateProduct)
-		admin.PUT("/products/:id", handler.AdminUpdateProduct)
-		admin.DELETE("/products/:id", handler.AdminDeleteProduct)
+		// Dashboard
+		admin.GET("/dashboard", adminHandler.AdminGetDashboard)
 		
-		admin.GET("/orders", handler.AdminGetOrders)
-		admin.PUT("/orders/:id/status", handler.AdminUpdateOrderStatus)
+		// User management
+		admin.GET("/users", adminHandler.AdminGetUsers)
+		admin.GET("/users/:id", adminHandler.AdminGetUser)
+		
+		// Chef management
+		admin.GET("/chefs", adminHandler.AdminGetChefs)
+		admin.GET("/chefs/pending", adminHandler.AdminGetPendingChefs)
+		admin.PUT("/chefs/:id/verify", adminHandler.AdminVerifyChef)
+		
+		// Order management
+		admin.GET("/orders", adminHandler.AdminGetOrders)
+		admin.PUT("/orders/:id/status", adminHandler.AdminUpdateOrderStatus)
+		
+		// Meal management
+		admin.GET("/meals", adminHandler.AdminGetMeals)
+		admin.PUT("/meals/:id/approve", adminHandler.AdminApproveMeal)
+		admin.DELETE("/meals/:id", adminHandler.AdminDeleteMeal)
 	}
 }

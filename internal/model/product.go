@@ -4,7 +4,8 @@ import (
 	"time"
 )
 
-// Product model - Ürün bilgileri
+// Product model - Sadece geriye dönük uyumluluk için (deprecated)
+// Artık Meal modelini kullanın
 type Product struct {
 	ID          uint      `json:"id" db:"id"`
 	Name        string    `json:"name" db:"name"`
@@ -20,6 +21,7 @@ type Product struct {
 	CategoryName string `json:"category_name,omitempty" db:"category_name"`
 }
 
+// DEPRECATED: Meal modelini kullanın
 // Category model - Kategori bilgileri
 type Category struct {
 	ID        uint      `json:"id" db:"id"`
@@ -28,6 +30,7 @@ type Category struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
+// DEPRECATED: Meal modelini kullanın
 // Product request/response models
 type CreateProductRequest struct {
 	Name        string  `json:"name" binding:"required"`
@@ -67,6 +70,7 @@ type ProductListResponse struct {
 	Limit    int               `json:"limit"`
 }
 
+// DEPRECATED: Meal modelini kullanın
 // Category request/response models
 type CreateCategoryRequest struct {
 	Name string `json:"name" binding:"required"`

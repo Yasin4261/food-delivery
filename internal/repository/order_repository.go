@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// OrderRepository - sipariş veritabanı işlemleri
+// OrderRepository - sipariş veritabanı işlemleri (Ev yemekleri platformu için)
 type OrderRepository struct {
 	db *sql.DB
 }
@@ -17,13 +17,13 @@ func NewOrderRepository(db *sql.DB) *OrderRepository {
 
 func (r *OrderRepository) Create(order *model.Order) error {
 	query := `
-		INSERT INTO orders (user_id, total, status, address, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO orders (user_id, chef_id, total, status, address, delivery_date, delivery_time, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id`
 	
 	now := time.Now()
-	err := r.db.QueryRow(query, order.UserID, order.Total, order.Status, 
-		order.Address, now, now).Scan(&order.ID)
+	err := r.db.QueryRow(query, order.UserID, order.ChefID, order.Total, order.Status, 
+		order.Address, order.DeliveryDate, order.DeliveryTime, now, now).Scan(&order.ID)
 	
 	if err != nil {
 		return err
@@ -36,12 +36,12 @@ func (r *OrderRepository) Create(order *model.Order) error {
 
 func (r *OrderRepository) CreateOrderItem(item *model.OrderItem) error {
 	query := `
-		INSERT INTO order_items (order_id, product_id, quantity, price, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO order_items (order_id, meal_id, chef_id, quantity, price, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id`
 	
 	now := time.Now()
-	err := r.db.QueryRow(query, item.OrderID, item.ProductID, item.Quantity, 
+	err := r.db.QueryRow(query, item.OrderID, item.MealID, item.ChefID, item.Quantity, 
 		item.Price, now, now).Scan(&item.ID)
 	
 	if err != nil {
@@ -55,10 +55,9 @@ func (r *OrderRepository) CreateOrderItem(item *model.OrderItem) error {
 
 func (r *OrderRepository) GetByUserID(userID uint) ([]model.Order, error) {
 	query := `
-		SELECT o.id, o.user_id, o.total, o.status, o.address, o.created_at, o.updated_at,
-		       u.email, u.first_name, u.last_name
+		SELECT o.id, o.user_id, o.chef_id, o.total, o.status, o.address, 
+		       o.delivery_date, o.delivery_time, o.created_at, o.updated_at
 		FROM orders o
-		JOIN users u ON o.user_id = u.id
 		WHERE o.user_id = $1
 		ORDER BY o.created_at DESC`
 	
@@ -72,9 +71,8 @@ func (r *OrderRepository) GetByUserID(userID uint) ([]model.Order, error) {
 	for rows.Next() {
 		var order model.Order
 		err := rows.Scan(
-			&order.ID, &order.UserID, &order.Total, &order.Status, &order.Address,
-			&order.CreatedAt, &order.UpdatedAt, &order.UserEmail, 
-			&order.UserFirstName, &order.UserLastName,
+			&order.ID, &order.UserID, &order.ChefID, &order.Total, &order.Status, &order.Address,
+			&order.DeliveryDate, &order.DeliveryTime, &order.CreatedAt, &order.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -88,16 +86,14 @@ func (r *OrderRepository) GetByUserID(userID uint) ([]model.Order, error) {
 func (r *OrderRepository) GetByID(id uint) (*model.Order, error) {
 	order := &model.Order{}
 	query := `
-		SELECT o.id, o.user_id, o.total, o.status, o.address, o.created_at, o.updated_at,
-		       u.email, u.first_name, u.last_name
+		SELECT o.id, o.user_id, o.chef_id, o.total, o.status, o.address, 
+		       o.delivery_date, o.delivery_time, o.created_at, o.updated_at
 		FROM orders o
-		JOIN users u ON o.user_id = u.id
 		WHERE o.id = $1`
 	
 	err := r.db.QueryRow(query, id).Scan(
-		&order.ID, &order.UserID, &order.Total, &order.Status, &order.Address,
-		&order.CreatedAt, &order.UpdatedAt, &order.UserEmail, 
-		&order.UserFirstName, &order.UserLastName,
+		&order.ID, &order.UserID, &order.ChefID, &order.Total, &order.Status, &order.Address,
+		&order.DeliveryDate, &order.DeliveryTime, &order.CreatedAt, &order.UpdatedAt,
 	)
 	
 	if err != nil {
@@ -112,10 +108,9 @@ func (r *OrderRepository) GetByID(id uint) (*model.Order, error) {
 
 func (r *OrderRepository) GetAll() ([]model.Order, error) {
 	query := `
-		SELECT o.id, o.user_id, o.total, o.status, o.address, o.created_at, o.updated_at,
-		       u.email, u.first_name, u.last_name
+		SELECT o.id, o.user_id, o.chef_id, o.total, o.status, o.address, 
+		       o.delivery_date, o.delivery_time, o.created_at, o.updated_at
 		FROM orders o
-		JOIN users u ON o.user_id = u.id
 		ORDER BY o.created_at DESC`
 	
 	rows, err := r.db.Query(query)
@@ -128,9 +123,8 @@ func (r *OrderRepository) GetAll() ([]model.Order, error) {
 	for rows.Next() {
 		var order model.Order
 		err := rows.Scan(
-			&order.ID, &order.UserID, &order.Total, &order.Status, &order.Address,
-			&order.CreatedAt, &order.UpdatedAt, &order.UserEmail, 
-			&order.UserFirstName, &order.UserLastName,
+			&order.ID, &order.UserID, &order.ChefID, &order.Total, &order.Status, &order.Address,
+			&order.DeliveryDate, &order.DeliveryTime, &order.CreatedAt, &order.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -143,10 +137,9 @@ func (r *OrderRepository) GetAll() ([]model.Order, error) {
 
 func (r *OrderRepository) GetByStatus(status string) ([]model.Order, error) {
 	query := `
-		SELECT o.id, o.user_id, o.total, o.status, o.address, o.created_at, o.updated_at,
-		       u.email, u.first_name, u.last_name
+		SELECT o.id, o.user_id, o.chef_id, o.total, o.status, o.address, 
+		       o.delivery_date, o.delivery_time, o.created_at, o.updated_at
 		FROM orders o
-		JOIN users u ON o.user_id = u.id
 		WHERE o.status = $1
 		ORDER BY o.created_at DESC`
 	
@@ -160,9 +153,8 @@ func (r *OrderRepository) GetByStatus(status string) ([]model.Order, error) {
 	for rows.Next() {
 		var order model.Order
 		err := rows.Scan(
-			&order.ID, &order.UserID, &order.Total, &order.Status, &order.Address,
-			&order.CreatedAt, &order.UpdatedAt, &order.UserEmail, 
-			&order.UserFirstName, &order.UserLastName,
+			&order.ID, &order.UserID, &order.ChefID, &order.Total, &order.Status, &order.Address,
+			&order.DeliveryDate, &order.DeliveryTime, &order.CreatedAt, &order.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -175,10 +167,9 @@ func (r *OrderRepository) GetByStatus(status string) ([]model.Order, error) {
 
 func (r *OrderRepository) GetRecent(limit int) ([]model.Order, error) {
 	query := `
-		SELECT o.id, o.user_id, o.total, o.status, o.address, o.created_at, o.updated_at,
-		       u.email, u.first_name, u.last_name
+		SELECT o.id, o.user_id, o.chef_id, o.total, o.status, o.address, 
+		       o.delivery_date, o.delivery_time, o.created_at, o.updated_at
 		FROM orders o
-		JOIN users u ON o.user_id = u.id
 		ORDER BY o.created_at DESC
 		LIMIT $1`
 	
@@ -192,9 +183,8 @@ func (r *OrderRepository) GetRecent(limit int) ([]model.Order, error) {
 	for rows.Next() {
 		var order model.Order
 		err := rows.Scan(
-			&order.ID, &order.UserID, &order.Total, &order.Status, &order.Address,
-			&order.CreatedAt, &order.UpdatedAt, &order.UserEmail, 
-			&order.UserFirstName, &order.UserLastName,
+			&order.ID, &order.UserID, &order.ChefID, &order.Total, &order.Status, &order.Address,
+			&order.DeliveryDate, &order.DeliveryTime, &order.CreatedAt, &order.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -214,10 +204,9 @@ func (r *OrderRepository) UpdateStatus(id uint, status string) error {
 
 func (r *OrderRepository) GetOrderItems(orderID uint) ([]model.OrderItem, error) {
 	query := `
-		SELECT oi.id, oi.order_id, oi.product_id, oi.quantity, oi.price, 
-		       oi.created_at, oi.updated_at, p.name as product_name
+		SELECT oi.id, oi.order_id, oi.meal_id, oi.chef_id, oi.quantity, oi.price, 
+		       oi.created_at, oi.updated_at
 		FROM order_items oi
-		JOIN products p ON oi.product_id = p.id
 		WHERE oi.order_id = $1
 		ORDER BY oi.created_at ASC`
 	
@@ -231,8 +220,8 @@ func (r *OrderRepository) GetOrderItems(orderID uint) ([]model.OrderItem, error)
 	for rows.Next() {
 		var item model.OrderItem
 		err := rows.Scan(
-			&item.ID, &item.OrderID, &item.ProductID, &item.Quantity, &item.Price,
-			&item.CreatedAt, &item.UpdatedAt, &item.ProductName,
+			&item.ID, &item.OrderID, &item.MealID, &item.ChefID, &item.Quantity, &item.Price,
+			&item.CreatedAt, &item.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -241,6 +230,36 @@ func (r *OrderRepository) GetOrderItems(orderID uint) ([]model.OrderItem, error)
 	}
 	
 	return items, nil
+}
+
+func (r *OrderRepository) GetByChefID(chefID uint) ([]model.Order, error) {
+	query := `
+		SELECT o.id, o.user_id, o.chef_id, o.total, o.status, o.address, 
+		       o.delivery_date, o.delivery_time, o.created_at, o.updated_at
+		FROM orders o
+		WHERE o.chef_id = $1
+		ORDER BY o.created_at DESC`
+	
+	rows, err := r.db.Query(query, chefID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var orders []model.Order
+	for rows.Next() {
+		var order model.Order
+		err := rows.Scan(
+			&order.ID, &order.UserID, &order.ChefID, &order.Total, &order.Status, &order.Address,
+			&order.DeliveryDate, &order.DeliveryTime, &order.CreatedAt, &order.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, order)
+	}
+	
+	return orders, nil
 }
 
 func (r *OrderRepository) Delete(id uint) error {
