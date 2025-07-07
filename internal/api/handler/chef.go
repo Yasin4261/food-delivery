@@ -8,6 +8,14 @@ import (
 )
 
 // GetChefs - Tüm şefleri getir
+// @Summary Tüm şefleri listele
+// @Description Platformdaki tüm aktif şefleri getirir
+// @Tags Chefs
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Şefler başarıyla getirildi"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /chefs [get]
 func GetChefs(c *gin.Context) {
 	deps := GetDependencies()
 	chefs, err := deps.ChefService.GetAllChefs()
@@ -24,6 +32,17 @@ func GetChefs(c *gin.Context) {
 }
 
 // GetChef - Tekil şef getir
+// @Summary Belirli bir şefi getir
+// @Description ID'ye göre şef detaylarını getirir
+// @Tags Chefs
+// @Accept json
+// @Produce json
+// @Param id path int true "Şef ID"
+// @Success 200 {object} map[string]interface{} "Şef başarıyla getirildi"
+// @Failure 400 {object} map[string]string "Geçersiz ID"
+// @Failure 404 {object} map[string]string "Şef bulunamadı"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /chefs/{id} [get]
 func GetChef(c *gin.Context) {
 	id := c.Param("id")
 	chefID, err := strconv.ParseUint(id, 10, 32)
@@ -49,6 +68,16 @@ func GetChef(c *gin.Context) {
 }
 
 // GetChefMeals - Şefin yemeklerini getir
+// @Summary Şefin yemeklerini listele
+// @Description Belirli bir şefin tüm yemeklerini getirir
+// @Tags Chefs
+// @Accept json
+// @Produce json
+// @Param id path int true "Şef ID"
+// @Success 200 {object} map[string]interface{} "Şefin yemekleri başarıyla getirildi"
+// @Failure 400 {object} map[string]string "Geçersiz ID"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /chefs/{id}/meals [get]
 func GetChefMeals(c *gin.Context) {
 	id := c.Param("id")
 	chefID, err := strconv.ParseUint(id, 10, 32)
@@ -74,6 +103,17 @@ func GetChefMeals(c *gin.Context) {
 }
 
 // GetChefProfile - Şef profilini getir
+// @Summary Şef profilini getir
+// @Description Oturum açmış şefin profil bilgilerini getirir
+// @Tags Chef Profile
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} map[string]interface{} "Şef profili başarıyla getirildi"
+// @Failure 401 {object} map[string]string "Yetkisiz erişim"
+// @Failure 404 {object} map[string]string "Şef profili bulunamadı"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /chef/profile [get]
 func GetChefProfile(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {

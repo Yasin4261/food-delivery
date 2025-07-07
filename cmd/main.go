@@ -1,3 +1,24 @@
+// @title Özgür Mutfak API
+// @version 1.0
+// @description Bu, ev yemekleri pazaryeri için API dokümantasyonudur.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Desteği
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:3001
+// @BasePath /api/v1
+// @schemes http https
+
+// @securityDefinitions.apikey Bearer
+// @in header
+// @name Authorization
+// @description JWT token, "Bearer {token}" formatında yazın
+
 package main
 
 import (

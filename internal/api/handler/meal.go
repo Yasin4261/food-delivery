@@ -8,6 +8,14 @@ import (
 )
 
 // GetMeals - Tüm yemekleri getir
+// @Summary Tüm yemekleri listele
+// @Description Platformdaki mevcut tüm yemekleri getirir
+// @Tags Meals
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Yemekler başarıyla getirildi"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /meals [get]
 func GetMeals(c *gin.Context) {
 	deps := GetDependencies()
 	meals, err := deps.MealService.GetAllMeals()
@@ -24,6 +32,17 @@ func GetMeals(c *gin.Context) {
 }
 
 // GetMeal - Tekil yemek getir
+// @Summary Belirli bir yemeği getir
+// @Description ID'ye göre yemek detaylarını getirir
+// @Tags Meals
+// @Accept json
+// @Produce json
+// @Param id path int true "Yemek ID"
+// @Success 200 {object} map[string]interface{} "Yemek başarıyla getirildi"
+// @Failure 400 {object} map[string]string "Geçersiz ID"
+// @Failure 404 {object} map[string]string "Yemek bulunamadı"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /meals/{id} [get]
 func GetMeal(c *gin.Context) {
 	id := c.Param("id")
 	mealID, err := strconv.ParseUint(id, 10, 32)

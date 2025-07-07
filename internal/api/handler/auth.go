@@ -8,6 +8,16 @@ import (
 )
 
 // Login - Kullanıcı giriş handler'ı
+// @Summary Kullanıcı girişi
+// @Description Kullanıcı email ve şifre ile giriş yapar
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param login body model.LoginRequest true "Giriş bilgileri"
+// @Success 200 {object} map[string]interface{} "Başarıyla giriş yapıldı"
+// @Failure 400 {object} map[string]string "Geçersiz istek"
+// @Failure 401 {object} map[string]string "Yetkisiz"
+// @Router /auth/login [post]
 func Login(c *gin.Context) {
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -34,6 +44,15 @@ func Login(c *gin.Context) {
 }
 
 // Register - Kullanıcı kayıt handler'ı
+// @Summary Kullanıcı kaydı
+// @Description Yeni kullanıcı kaydı oluşturur
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param register body model.RegisterRequest true "Kayıt bilgileri"
+// @Success 200 {object} map[string]interface{} "Başarıyla kayıt olundu"
+// @Failure 400 {object} map[string]string "Geçersiz istek"
+// @Router /auth/register [post]
 func Register(c *gin.Context) {
 	var req model.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

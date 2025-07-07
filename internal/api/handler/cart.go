@@ -7,6 +7,16 @@ import (
 )
 
 // GetCart - Kullanıcının sepetini getir
+// @Summary Kullanıcının sepetini getir
+// @Description Oturum açmış kullanıcının sepet içeriğini getirir
+// @Tags Cart
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} map[string]interface{} "Sepet başarıyla getirildi"
+// @Failure 401 {object} map[string]string "Yetkisiz erişim"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /cart [get]
 func GetCart(c *gin.Context) {
 	// JWT middleware'den kullanıcı ID'sini al
 	userID, exists := c.Get("user_id")
@@ -24,6 +34,18 @@ func GetCart(c *gin.Context) {
 }
 
 // AddToCart - Sepete ürün ekle
+// @Summary Sepete yemek ekle
+// @Description Kullanıcının sepetine yeni bir yemek ekler
+// @Tags Cart
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param item body map[string]interface{} true "Sepete eklenecek yemek bilgileri"
+// @Success 200 {object} map[string]interface{} "Yemek sepete başarıyla eklendi"
+// @Failure 400 {object} map[string]string "Geçersiz istek"
+// @Failure 401 {object} map[string]string "Yetkisiz erişim"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /cart/items [post]
 func AddToCart(c *gin.Context) {
 	// JWT middleware'den kullanıcı ID'sini al
 	userID, exists := c.Get("user_id")
@@ -61,6 +83,19 @@ func UpdateCartItem(c *gin.Context) {
 }
 
 // RemoveFromCart - Sepetten ürün çıkar
+// @Summary Sepetten yemek çıkar
+// @Description Sepetten belirli bir yemeği kaldırır
+// @Tags Cart
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Sepet öğesi ID"
+// @Success 200 {object} map[string]interface{} "Yemek sepetten başarıyla kaldırıldı"
+// @Failure 400 {object} map[string]string "Geçersiz ID"
+// @Failure 401 {object} map[string]string "Yetkisiz erişim"
+// @Failure 404 {object} map[string]string "Sepet öğesi bulunamadı"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /cart/items/{id} [delete]
 func RemoveFromCart(c *gin.Context) {
 	id := c.Param("id")
 	

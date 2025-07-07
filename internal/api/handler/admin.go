@@ -19,6 +19,17 @@ func NewAdminHandler(adminService *service.AdminService) *AdminHandler {
 }
 
 // AdminGetDashboard - Admin: Dashboard istatistikleri
+// @Summary Admin dashboard istatistikleri
+// @Description Admin için genel platform istatistiklerini getirir
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} map[string]interface{} "Dashboard istatistikleri başarıyla getirildi"
+// @Failure 401 {object} map[string]string "Yetkisiz erişim"
+// @Failure 403 {object} map[string]string "Admin yetkisi gerekli"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /admin/dashboard [get]
 func (h *AdminHandler) AdminGetDashboard(c *gin.Context) {
 	stats, err := h.adminService.GetDashboardStats()
 	if err != nil {
@@ -37,6 +48,17 @@ func (h *AdminHandler) AdminGetDashboard(c *gin.Context) {
 }
 
 // AdminGetUsers - Admin: Tüm kullanıcıları getir
+// @Summary Admin: Tüm kullanıcıları listele
+// @Description Admin için platform kullanıcılarını getirir
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} map[string]interface{} "Kullanıcılar başarıyla getirildi"
+// @Failure 401 {object} map[string]string "Yetkisiz erişim"
+// @Failure 403 {object} map[string]string "Admin yetkisi gerekli"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /admin/users [get]
 func (h *AdminHandler) AdminGetUsers(c *gin.Context) {
 	users, err := h.adminService.GetAllUsers()
 	if err != nil {
@@ -56,6 +78,17 @@ func (h *AdminHandler) AdminGetUsers(c *gin.Context) {
 }
 
 // AdminGetChefs - Admin: Tüm chef'leri getir
+// @Summary Admin: Tüm şefleri listele
+// @Description Admin için platform şeflerini getirir
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} map[string]interface{} "Şefler başarıyla getirildi"
+// @Failure 401 {object} map[string]string "Yetkisiz erişim"
+// @Failure 403 {object} map[string]string "Admin yetkisi gerekli"
+// @Failure 500 {object} map[string]string "Sunucu hatası"
+// @Router /admin/chefs [get]
 func (h *AdminHandler) AdminGetChefs(c *gin.Context) {
 	chefs, err := h.adminService.GetAllChefs()
 	if err != nil {

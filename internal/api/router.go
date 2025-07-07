@@ -5,6 +5,11 @@ import (
 	"ecommerce/internal/api/handler"
 	"ecommerce/internal/api/middleware"
 	"ecommerce/internal/auth"
+	
+	// Swagger imports
+	"github.com/swaggo/gin-swagger"
+	"github.com/swaggo/files"
+	_ "ecommerce/docs" // swagger docs
 )
 
 // SetupRoutes tüm API route'larını ayarlar (Ev yemekleri platformu için)
@@ -12,6 +17,9 @@ func SetupRoutes(router *gin.Engine, jwtManager *auth.JWTManager) {
 	// Global middleware'ler
 	router.Use(middleware.CORS())
 	router.Use(middleware.Logger())
+
+	// Swagger route'u
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Get dependencies
 	deps := handler.GetDependencies()
