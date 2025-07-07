@@ -1,6 +1,6 @@
-# 🍽️ Özgür Mutfak - Food Delivery API
+# � Özgür Mutfak - Home-Cooked Meal Marketplace API
 
-Modern, modüler ve scalable bir yemek teslimat backend API'si. Docker ile tam entegre edilmiş, PostgreSQL veritabanı kullanarak geliştirilmiş professional bir e-commerce çözümü.
+Modern, modüler ve scalable bir ev yemekleri platformu backend API'si. Docker ile tam entegre edilmiş, PostgreSQL veritabanı kullanarak geliştirilmiş professional bir home-cooked meal marketplace çözümü.
 
 ## 🚀 Özellikler
 
@@ -9,10 +9,13 @@ Modern, modüler ve scalable bir yemek teslimat backend API'si. Docker ile tam e
 - ✅ **Docker Support**: Tam Docker entegrasyonu
 - ✅ **PostgreSQL**: Güvenilir veritabanı çözümü
 - ✅ **RESTful API**: Standart HTTP endpoint'leri
-- ✅ **Admin Panel**: Admin yönetim arayüzü
+- ✅ **Swagger Documentation**: API dokümantasyonu
+- ✅ **Chef Management**: Şef yönetimi ve doğrulama
+- ✅ **Meal Catalog**: Ev yemekleri kataloğu
 - ✅ **Cart Management**: Sepet yönetimi
 - ✅ **Order Processing**: Sipariş işleme sistemi
-- ✅ **Product Catalog**: Ürün kataloğu yönetimi
+- ✅ **Review System**: Değerlendirme sistemi
+- ✅ **Admin Dashboard**: Kapsamlı admin paneli
 
 ## 📁 Proje Yapısı
 
@@ -55,7 +58,10 @@ cd food-delivery
 docker-compose up -d
 
 # API'nin çalışıp çalışmadığını test edin
-curl http://localhost:8080/api/v1/products
+curl http://localhost:3001/api/v1/meals
+
+# Swagger UI'yi ziyaret edin
+# http://localhost:3001/swagger/index.html
 ```
 
 ### Windows Kullanıcıları için
@@ -186,61 +192,86 @@ Test sonuçları `test-results/` klasöründe saklanır:
 
 ## 📊 API Endpoints
 
-### Authentication
-- `POST /api/v1/auth/register` - Kullanıcı kaydı
+### 🔐 Authentication
+- `POST /api/v1/auth/register` - Kullanıcı kaydı (customer/chef)
 - `POST /api/v1/auth/login` - Kullanıcı girişi
-- `POST /api/v1/auth/logout` - Kullanıcı çıkışı
 
-### Products
-- `GET /api/v1/products` - Ürünleri listele
-- `GET /api/v1/products/:id` - Ürün detayı
+### 🍽️ Meals (Yemekler)
+- `GET /api/v1/meals` - Mevcut yemekleri listele
+- `GET /api/v1/meals/:id` - Yemek detayı
+- `POST /api/v1/meals` - Yeni yemek ekle (chef)
+- `PUT /api/v1/meals/:id` - Yemek güncelle (chef)
+- `DELETE /api/v1/meals/:id` - Yemek sil (chef)
 
-### User Profile
-- `GET /api/v1/profile` - Profil bilgisi
-- `PUT /api/v1/profile` - Profil güncelleme
+### 👨‍🍳 Chefs (Şefler)
+- `GET /api/v1/chefs` - Aktif şefleri listele
+- `GET /api/v1/chefs/:id` - Şef profili ve yemekleri
+- `POST /api/v1/chefs` - Şef profili oluştur
+- `PUT /api/v1/chefs/:id` - Şef profili güncelle
+- `GET /api/v1/chefs/:id/meals` - Şefin yemekleri
 
-### Cart (Sepet)
+### 👤 User Profile
+- `GET /api/v1/users/profile` - Profil bilgisi
+- `PUT /api/v1/users/profile` - Profil güncelleme
+
+### 🛒 Cart (Sepet)
 - `GET /api/v1/cart` - Sepet görüntüleme
-- `POST /api/v1/cart/items` - Sepete ürün ekleme
-- `DELETE /api/v1/cart/items/:id` - Sepetten ürün çıkarma
+- `POST /api/v1/cart/add` - Sepete yemek ekleme
+- `PUT /api/v1/cart/update/:id` - Sepet öğesi güncelleme
+- `DELETE /api/v1/cart/remove/:id` - Sepetten yemek çıkarma
 
-### Orders (Siparişler)
+### 📦 Orders (Siparişler)
 - `GET /api/v1/orders` - Siparişleri listele
 - `POST /api/v1/orders` - Yeni sipariş oluştur
 - `GET /api/v1/orders/:id` - Sipariş detayı
+- `PUT /api/v1/orders/:id/status` - Sipariş durumu güncelle
 
-### Admin
-- `GET /api/v1/admin/products` - Ürün yönetimi
-- `POST /api/v1/admin/products` - Ürün oluşturma
-- `PUT /api/v1/admin/products/:id` - Ürün güncelleme
-- `DELETE /api/v1/admin/products/:id` - Ürün silme
+### ⭐ Reviews (Değerlendirmeler)
+- `GET /api/v1/meals/:id/reviews` - Yemek değerlendirmeleri
+- `POST /api/v1/reviews` - Değerlendirme yap
+- `GET /api/v1/chefs/:id/reviews` - Şef değerlendirmeleri
+
+### 🔧 Admin
+- `GET /api/v1/admin/dashboard` - Dashboard istatistikleri
+- `GET /api/v1/admin/users` - Kullanıcı yönetimi
+- `GET /api/v1/admin/chefs` - Şef yönetimi ve doğrulama
+- `GET /api/v1/admin/meals` - Yemek yönetimi
 - `GET /api/v1/admin/orders` - Sipariş yönetimi
-- `PUT /api/v1/admin/orders/:id/status` - Sipariş durumu güncelleme
+- `PUT /api/v1/admin/chefs/:id/verify` - Şef doğrulama
 
 ## 🗄️ Veritabanı
 
 ### Tablolar
-- `users` - Kullanıcı bilgileri
-- `products` - Ürün kataloğu
-- `categories` - Ürün kategorileri
+- `users` - Kullanıcı bilgileri (customer/chef)
+- `chefs` - Şef profilleri ve iş bilgileri
+- `meals` - Ev yemekleri kataloğu
 - `carts` - Kullanıcı sepetleri
 - `cart_items` - Sepet öğeleri
 - `orders` - Siparişler
 - `order_items` - Sipariş öğeleri
+- `reviews` - Yemek ve şef değerlendirmeleri
 
 ### Veritabanı Yönetimi
 
 ```bash
-# pgAdmin: http://localhost:5050
+# pgAdmin: http://localhost:8081
 # Email: admin@admin.com
 # Password: admin
 
-# Adminer: http://localhost:8081
+# Adminer: http://localhost:8082
 # Server: ecommerce_db
 # Username: postgres
 # Password: postgres123
-# Database: ecommerce_db
+# Database: ecommerce
 ```
+
+## 📱 Swagger API Dokümantasyonu
+
+API dokümantasyonuna Swagger UI üzerinden erişebilirsiniz:
+
+**URL:** `http://localhost:3001/swagger/index.html`
+
+Swagger dokümantasyonu otomatik olarak güncellenir ve tüm endpoint'leri interaktif olarak test edebilirsiniz.
 
 ## 🔍 Monitoring & Logging
 
@@ -261,7 +292,10 @@ docker logs -f ecommerce_db
 
 ```bash
 # API sağlık kontrolü
-curl http://localhost:8080/api/v1/products
+curl http://localhost:3001/api/v1/meals
+
+# Swagger UI kontrolü  
+curl http://localhost:3001/swagger/index.html
 
 # Veritabanı bağlantı kontrolü
 docker exec ecommerce_db pg_isready -U postgres
@@ -269,7 +303,8 @@ docker exec ecommerce_db pg_isready -U postgres
 
 ## 📚 Dokümantasyon
 
-- [API Test Guide](api-docs/API_TEST_GUIDE.md) - API test rehberi
+- [API Test Guide](docs/API_TEST_GUIDE.md) - API test rehberi
+- [API Test Guide (TR)](docs/API_TEST_GUIDE_TR.md) - API test rehberi (Türkçe)
 - [Code Structure](docs/CODE_STRUCTURE.md) - Kod yapısı ve mimari
 - [Database Schema](docs/DATABASE_SCHEMA.md) - Veritabanı şeması
 - [Migration Report](docs/MODULAR_MIGRATION_REPORT.md) - Modüler yapı geçiş raporu
@@ -277,24 +312,28 @@ docker exec ecommerce_db pg_isready -U postgres
 ## 🧪 Test Dosyaları
 
 - `tests/api-test.http` - HTTP test dosyası
-- `tests/postman_collection.json` - Postman koleksiyonu
-- `tests/postman_environment.json` - Postman ortam değişkenleri
+- `tests/admin-test.http` - Admin endpoint test dosyası
+- `postman_collection.json` - Postman koleksiyonu
+- `postman_environment.json` - Postman ortam değişkenleri
 
 ## 🐳 Docker Servisler
 
-- **ecommerce_api** - Ana API servisi (Port: 8080)
-- **ecommerce_db** - PostgreSQL veritabanı (Port: 5432)
-- **ecommerce_pgadmin** - pgAdmin web arayüzü (Port: 5050)
-- **ecommerce_adminer** - Adminer web arayüzü (Port: 8081)
+- **ecommerce_api** - Ana API servisi (Port: 3001)
+- **ecommerce_db** - PostgreSQL veritabanı (Port: 5432)  
+- **ecommerce_pgadmin** - pgAdmin web arayüzü (Port: 8081)
+- **ecommerce_adminer** - Adminer web arayüzü (Port: 8082)
 
 ## 🏗️ Teknolojiler
 
 - **Go** - Programlama dili
-- **Gin** - HTTP web framework
+- **Gin** - HTTP web framework  
 - **PostgreSQL** - Veritabanı
 - **Docker** - Containerization
 - **JWT** - Authentication
 - **bcrypt** - Password hashing
+- **Swagger** - API dokümantasyonu
+- **pgAdmin** - Veritabanı yönetimi
+- **Adminer** - Hafif veritabanı arayüzü
 
 ## 🤝 Katkıda Bulunma
 
@@ -329,4 +368,4 @@ Bu proje MIT lisansı altında lisanslanmıştır.
 
 ---
 
-**🚀 Özgür Mutfak - Modern Food Delivery Platform**
+**🍳 Özgür Mutfak - Home-Cooked Meal Marketplace Platform**
