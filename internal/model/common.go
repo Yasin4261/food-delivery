@@ -68,6 +68,20 @@ type JWTClaims struct {
 	Role   string `json:"role"`
 }
 
+// ValidationError - Validation error structure
+type ValidationError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+	Code    string `json:"code,omitempty"`
+}
+
+// ValidationErrorResponse - Validation error response
+type ValidationErrorResponse struct {
+	Error   string            `json:"error"`
+	Message string            `json:"message"`
+	Errors  []ValidationError `json:"errors"`
+}
+
 // APIResponse - Standart API response yapısı (test'lerle uyumluluk için)
 type APIResponse struct {
 	Success bool        `json:"success"`

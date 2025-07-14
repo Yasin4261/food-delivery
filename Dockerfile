@@ -31,6 +31,9 @@ RUN go get github.com/swaggo/files
 # Swagger CLI'yi kur
 RUN go install github.com/swaggo/swag/cmd/swag@latest
 
+# Go-migrate CLI'yi kur (Go 1.21 ile uyumlu versiyon)
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.16.2
+
 # Swagger dokümantasyonu oluştur
 RUN swag init -g cmd/main.go
 
@@ -49,8 +52,14 @@ WORKDIR /root/
 # Binary'yi kopyala
 COPY --from=builder /app/main .
 
+# Go binary'lerini kopyala (migrate için)
+COPY --from=builder /go/bin/migrate /usr/local/bin/migrate
+
 # Config dosyasını kopyala
 COPY --from=builder /app/config ./config
+
+# Migration dosyalarını kopyala
+COPY --from=builder /app/migrations ./migrations
 
 # Swagger docs'ları kopyala
 COPY --from=builder /app/docs ./docs

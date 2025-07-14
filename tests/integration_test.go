@@ -784,3 +784,451 @@ func TestIntegration_AuthenticationRequired(t *testing.T) {
 		})
 	}
 }
+
+// TestMultiVendorOrderFlow - Multi-vendor sipariş akışı integration testi
+func TestMultiVendorOrderFlow(t *testing.T) {
+	suite := SetupTestSuite(t)
+
+	// 1. Kullanıcı kaydı
+	registerReq := model.RegisterRequest{
+		Name:     "Test User",
+		Email:    "test@example.com",
+		Password: "password123",
+		Phone:    "+905551234567",
+		Address:  "Test Address",
+	}
+
+	// Register user
+	registerBody, _ := json.Marshal(registerReq)
+	req := httptest.NewRequest("POST", "/api/v1/auth/register", bytes.NewBuffer(registerBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("Expected status 201, got %d", resp.Code)
+	}
+
+	// 2. Kullanıcı girişi
+	loginReq := model.LoginRequest{
+		Email:    "test@example.com",
+		Password: "password123",
+	}
+
+	loginBody, _ := json.Marshal(loginReq)
+	req = httptest.NewRequest("POST", "/api/v1/auth/login", bytes.NewBuffer(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	var loginResp struct {
+		Token string `json:"token"`
+		User  struct {
+			ID uint `json:"id"`
+		} `json:"user"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &loginResp)
+	token := loginResp.Token
+	userID := loginResp.User.ID
+
+	// 3. Şefleri listele
+	req = httptest.NewRequest("GET", "/api/v1/chefs", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	// 4. Yemekleri listele
+	req = httptest.NewRequest("GET", "/api/v1/meals", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	// 5. Sepete çoklu şef yemeği ekle
+	cartItems := []struct {
+		MealID   uint `json:"meal_id"`
+		Quantity int  `json:"quantity"`
+	}{
+		{MealID: 1, Quantity: 2}, // Chef 1 yemeği
+		{MealID: 3, Quantity: 1}, // Chef 2 yemeği
+		{MealID: 4, Quantity: 1}, // Chef 2 yemeği
+	}
+
+	for _, item := range cartItems {
+		itemBody, _ := json.Marshal(item)
+		req = httptest.NewRequest("POST", "/api/v1/cart/add", bytes.NewBuffer(itemBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp = httptest.NewRecorder()
+		suite.router.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Fatalf("Expected status 200 for cart add, got %d", resp.Code)
+		}
+	}
+
+	// 6. Sepeti görüntüle
+	req = httptest.NewRequest("GET", "/api/v1/cart", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	var cartResp struct {
+		Items     []model.CartItem `json:"items"`
+		Total     float64          `json:"total"`
+		ChefCount int              `json:"chef_count"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &cartResp)
+
+	// Çoklu şef kontrolü
+	if cartResp.ChefCount != 2 {
+		t.Errorf("Expected chef count 2, got %d", cartResp.ChefCount)
+	}
+
+	// 7. Multi-vendor sipariş oluştur
+	orderReq := model.CreateOrderRequest{
+		DeliveryType:      "delivery",
+		DeliveryAddress:   "123 Test Street, Test City",
+		DeliveryLatitude:  floatPtr(41.0082),
+		DeliveryLongitude: floatPtr(28.9784),
+		PaymentMethod:     "credit_card",
+		CustomerNote:      "Multi-vendor test order",
+		Items: []model.OrderItemInput{
+			{MealID: 1, Quantity: 2, SpecialInstructions: "Medium spicy"},
+			{MealID: 3, Quantity: 1, SpecialInstructions: "Extra cheese"},
+			{MealID: 4, Quantity: 1, SpecialInstructions: "No onions"},
+		},
+	}
+
+	orderBody, _ := json.Marshal(orderReq)
+	req = httptest.NewRequest("POST", "/api/v1/orders", bytes.NewBuffer(orderBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("Expected status 201, got %d", resp.Code)
+	}
+
+	var orderResp struct {
+		Order model.Order `json:"order"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &orderResp)
+	order := orderResp.Order
+
+	// Sipariş doğrulamaları
+	if order.UserID != userID {
+		t.Errorf("Expected user ID %d, got %d", userID, order.UserID)
+	}
+
+	if order.ChefCount != 2 {
+		t.Errorf("Expected chef count 2, got %d", order.ChefCount)
+	}
+
+	if order.Status != "pending" {
+		t.Errorf("Expected status 'pending', got %s", order.Status)
+	}
+
+	if order.PaymentStatus != "pending" {
+		t.Errorf("Expected payment status 'pending', got %s", order.PaymentStatus)
+	}
+
+	// 8. Siparişi detaylarıyla getir
+	req = httptest.NewRequest("GET", "/api/v1/orders/"+string(rune(order.ID)), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	var orderDetailResp struct {
+		Order model.Order `json:"order"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &orderDetailResp)
+	orderDetail := orderDetailResp.Order
+
+	// Alt siparişlerin varlığını kontrol et
+	if len(orderDetail.SubOrders) != 2 {
+		t.Errorf("Expected 2 sub orders, got %d", len(orderDetail.SubOrders))
+	}
+
+	// Sipariş öğelerinin varlığını kontrol et
+	if len(orderDetail.Items) != 3 {
+		t.Errorf("Expected 3 order items, got %d", len(orderDetail.Items))
+	}
+
+	// 9. Şef alt siparişlerini güncelle
+	for _, subOrder := range orderDetail.SubOrders {
+		statusUpdateReq := struct {
+			Status string `json:"status"`
+		}{
+			Status: "confirmed",
+		}
+
+		statusBody, _ := json.Marshal(statusUpdateReq)
+		req = httptest.NewRequest("PUT", "/api/v1/orders/sub/"+string(rune(subOrder.ID))+"/status", bytes.NewBuffer(statusBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp = httptest.NewRecorder()
+		suite.router.ServeHTTP(resp, req)
+
+		if resp.Code != http.StatusOK {
+			t.Errorf("Expected status 200 for sub order status update, got %d", resp.Code)
+		}
+	}
+
+	// 10. Ana sipariş durumunu kontrol et
+	req = httptest.NewRequest("GET", "/api/v1/orders/"+string(rune(order.ID)), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	json.Unmarshal(resp.Body.Bytes(), &orderDetailResp)
+	updatedOrder := orderDetailResp.Order
+
+	// Tüm alt siparişler onaylandığında ana sipariş durumu da güncellenmiş olmalı
+	allConfirmed := true
+	for _, subOrder := range updatedOrder.SubOrders {
+		if subOrder.Status != "confirmed" {
+			allConfirmed = false
+			break
+		}
+	}
+
+	if allConfirmed && updatedOrder.Status == "pending" {
+		t.Error("Expected main order status to be updated when all sub orders are confirmed")
+	}
+
+	// 11. Kullanıcının sipariş geçmişini getir
+	req = httptest.NewRequest("GET", "/api/v1/orders/user", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	var ordersResp struct {
+		Orders []model.Order `json:"orders"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &ordersResp)
+
+	if len(ordersResp.Orders) == 0 {
+		t.Error("Expected at least one order in user's order history")
+	}
+
+	// Sipariş geçmişinde oluşturduğumuz sipariş var mı kontrol et
+	found := false
+	for _, historyOrder := range ordersResp.Orders {
+		if historyOrder.ID == order.ID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Error("Created order not found in user's order history")
+	}
+}
+
+// TestSubOrderStatusFlow - Alt sipariş durum akışı testi
+func TestSubOrderStatusFlow(t *testing.T) {
+	suite := SetupTestSuite(t)
+
+	// Test senaryosu: pending -> confirmed -> preparing -> ready -> delivered
+	statusFlow := []string{"confirmed", "preparing", "ready", "delivered"}
+
+	// Mock sub order ID
+	subOrderID := uint(1)
+
+	for i, status := range statusFlow {
+		t.Run("Status transition to "+status, func(t *testing.T) {
+			statusUpdateReq := struct {
+				Status string `json:"status"`
+			}{
+				Status: status,
+			}
+
+			statusBody, _ := json.Marshal(statusUpdateReq)
+			req := httptest.NewRequest("PUT", "/api/v1/orders/sub/"+string(rune(subOrderID))+"/status", bytes.NewBuffer(statusBody))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer mock-chef-token")
+			resp := httptest.NewRecorder()
+			suite.router.ServeHTTP(resp, req)
+
+			if resp.Code != http.StatusOK {
+				t.Errorf("Step %d: Expected status 200, got %d", i+1, resp.Code)
+			}
+
+			// Durumun güncellendiğini doğrula
+			req = httptest.NewRequest("GET", "/api/v1/orders/sub/"+string(rune(subOrderID)), nil)
+			req.Header.Set("Authorization", "Bearer mock-chef-token")
+			resp = httptest.NewRecorder()
+			suite.router.ServeHTTP(resp, req)
+
+			if resp.Code != http.StatusOK {
+				t.Errorf("Step %d: Expected status 200 for get, got %d", i+1, resp.Code)
+				return
+			}
+
+			var subOrderResp struct {
+				SubOrder model.SubOrder `json:"sub_order"`
+			}
+			json.Unmarshal(resp.Body.Bytes(), &subOrderResp)
+
+			if subOrderResp.SubOrder.Status != status {
+				t.Errorf("Step %d: Expected status %s, got %s", i+1, status, subOrderResp.SubOrder.Status)
+			}
+		})
+	}
+}
+
+// TestOrderCancellation - Sipariş iptali testi
+func TestOrderCancellation(t *testing.T) {
+	suite := SetupTestSuite(t)
+
+	// Sipariş oluştur (mock)
+	orderID := uint(1)
+
+	// Sipariş iptali
+	req := httptest.NewRequest("DELETE", "/api/v1/orders/"+string(rune(orderID)), nil)
+	req.Header.Set("Authorization", "Bearer mock-user-token")
+	resp := httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	// İptal edilen siparişin durumunu kontrol et
+	req = httptest.NewRequest("GET", "/api/v1/orders/"+string(rune(orderID)), nil)
+	req.Header.Set("Authorization", "Bearer mock-user-token")
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	var orderResp struct {
+		Order model.Order `json:"order"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &orderResp)
+
+	if orderResp.Order.Status != "cancelled" {
+		t.Errorf("Expected status 'cancelled', got %s", orderResp.Order.Status)
+	}
+
+	// Alt siparişlerin de iptal edildiğini kontrol et
+	for _, subOrder := range orderResp.Order.SubOrders {
+		if subOrder.Status != "cancelled" {
+			t.Errorf("Expected sub order status 'cancelled', got %s", subOrder.Status)
+		}
+	}
+}
+
+// TestOrderSearch - Sipariş arama testi
+func TestOrderSearch(t *testing.T) {
+	suite := SetupTestSuite(t)
+
+	// Sipariş numarası ile arama
+	req := httptest.NewRequest("GET", "/api/v1/orders/search?order_number=ORD-20250714-001", nil)
+	req.Header.Set("Authorization", "Bearer mock-admin-token")
+	resp := httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	// Duruma göre arama
+	req = httptest.NewRequest("GET", "/api/v1/orders/search?status=pending", nil)
+	req.Header.Set("Authorization", "Bearer mock-admin-token")
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	// Tarih aralığı ile arama
+	req = httptest.NewRequest("GET", "/api/v1/orders/search?start_date=2025-07-01&end_date=2025-07-31", nil)
+	req.Header.Set("Authorization", "Bearer mock-admin-token")
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+}
+
+// TestOrderAnalytics - Sipariş analitik testi
+func TestOrderAnalytics(t *testing.T) {
+	suite := SetupTestSuite(t)
+
+	// Günlük sipariş istatistikleri
+	req := httptest.NewRequest("GET", "/api/v1/analytics/orders/daily", nil)
+	req.Header.Set("Authorization", "Bearer mock-admin-token")
+	resp := httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	// Şef bazlı istatistikler
+	req = httptest.NewRequest("GET", "/api/v1/analytics/orders/by-chef", nil)
+	req.Header.Set("Authorization", "Bearer mock-admin-token")
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	// Multi-vendor sipariş oranları
+	req = httptest.NewRequest("GET", "/api/v1/analytics/orders/multi-vendor-ratio", nil)
+	req.Header.Set("Authorization", "Bearer mock-admin-token")
+	resp = httptest.NewRecorder()
+	suite.router.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", resp.Code)
+	}
+
+	var analyticsResp struct {
+		SingleVendorCount int     `json:"single_vendor_count"`
+		MultiVendorCount  int     `json:"multi_vendor_count"`
+		MultiVendorRatio  float64 `json:"multi_vendor_ratio"`
+	}
+	json.Unmarshal(resp.Body.Bytes(), &analyticsResp)
+
+	// Multi-vendor oranının mantıklı aralıkta olduğunu kontrol et
+	if analyticsResp.MultiVendorRatio < 0 || analyticsResp.MultiVendorRatio > 1 {
+		t.Errorf("Multi-vendor ratio should be between 0 and 1, got %.2f", analyticsResp.MultiVendorRatio)
+	}
+}
+
+// Helper function
+func floatPtr(f float64) *float64 {
+	return &f
+}

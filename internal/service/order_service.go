@@ -33,8 +33,10 @@ func (s *OrderService) CreateOrder(userID uint, req *model.CreateOrderRequest) (
 		return nil, errors.New("sipariş öğeleri boş olamaz")
 	}
 	
-	// Stok kontrolü ve toplam fiyat hesaplama
+	// Stok kontrolü ve chef bazlı gruplandırma
+	chefItems := make(map[uint][]model.OrderItemInput)
 	var total float64
+	
 	for _, item := range req.Items {
 		meal, err := s.mealRepo.GetByID(item.MealID)
 		if err != nil {
@@ -46,28 +48,29 @@ func (s *OrderService) CreateOrder(userID uint, req *model.CreateOrderRequest) (
 		if meal.AvailableQuantity < item.Quantity {
 			return nil, errors.New("yeterli stok yok: " + meal.Name)
 		}
+		
+		// Chef bazlı gruplandırma
+		if chefItems[meal.ChefID] == nil {
+			chefItems[meal.ChefID] = make([]model.OrderItemInput, 0)
+		}
+		chefItems[meal.ChefID] = append(chefItems[meal.ChefID], item)
+		
 		total += meal.Price * float64(item.Quantity)
 	}
 	
-	// Sipariş oluştur - ana chef bilgisini ilk yemekten al
-	var mainChefID uint
-	if len(req.Items) > 0 {
-		firstMeal, _ := s.mealRepo.GetByID(req.Items[0].MealID)
-		if firstMeal != nil {
-			mainChefID = firstMeal.ChefID
-		}
-	}
-	
+	// Ana sipariş oluştur
 	order := &model.Order{
-		UserID:          userID,
-		ChefID:          mainChefID,
-		Total:           total,
-		Status:          "pending",
-		DeliveryType:    req.DeliveryType,
-		Address:         req.DeliveryAddress,
-		DeliveryAddress: req.DeliveryAddress,
-		PaymentMethod:   req.PaymentMethod,
-		CustomerNote:    req.CustomerNote,
+		UserID:            userID,
+		Total:             total,
+		Status:            "pending",
+		DeliveryType:      req.DeliveryType,
+		Address:           req.DeliveryAddress,
+		DeliveryAddress:   req.DeliveryAddress,
+		PaymentMethod:     req.PaymentMethod,
+		CustomerNote:      req.CustomerNote,
+		ChefCount:         len(chefItems),
+		DeliveryLatitude:  req.DeliveryLatitude,
+		DeliveryLongitude: req.DeliveryLongitude,
 	}
 	
 	err := s.orderRepo.Create(order)
@@ -75,27 +78,56 @@ func (s *OrderService) CreateOrder(userID uint, req *model.CreateOrderRequest) (
 		return nil, err
 	}
 	
-	// Sipariş öğelerini oluştur ve stok güncelle
-	for _, item := range req.Items {
-		meal, _ := s.mealRepo.GetByID(item.MealID)
+	// Her chef için SubOrder oluştur
+	for chefID, items := range chefItems {
+		var subTotal float64
 		
-		orderItem := &model.OrderItem{
-			OrderID:             order.ID,
-			MealID:              item.MealID,
-			ChefID:              meal.ChefID,
-			Quantity:            item.Quantity,
-			Price:               meal.Price, // Sipariş anındaki fiyat
-			SpecialInstructions: item.SpecialInstructions,
+		// SubOrder oluştur
+		subOrder := &model.SubOrder{
+			OrderID: order.ID,
+			ChefID:  chefID,
+			Status:  "pending",
 		}
 		
-		err = s.orderRepo.CreateOrderItem(orderItem)
+		err = s.orderRepo.CreateSubOrder(subOrder)
 		if err != nil {
 			return nil, err
 		}
 		
-		// Stok güncelle
-		meal.AvailableQuantity -= item.Quantity
-		err = s.mealRepo.Update(meal)
+		// SubOrder için OrderItem'ları oluştur
+		for _, item := range items {
+			meal, _ := s.mealRepo.GetByID(item.MealID)
+			itemSubtotal := meal.Price * float64(item.Quantity)
+			subTotal += itemSubtotal
+			
+			orderItem := &model.OrderItem{
+				OrderID:             order.ID,
+				SubOrderID:          subOrder.ID,
+				MealID:              item.MealID,
+				ChefID:              chefID,
+				Quantity:            item.Quantity,
+				Price:               meal.Price,
+				Subtotal:            itemSubtotal,
+				SpecialInstructions: item.SpecialInstructions,
+			}
+			
+			err = s.orderRepo.CreateOrderItem(orderItem)
+			if err != nil {
+				return nil, err
+			}
+			
+			// Stok güncelle
+			meal.AvailableQuantity -= item.Quantity
+			err = s.mealRepo.Update(meal)
+			if err != nil {
+				return nil, err
+			}
+		}
+		
+		// SubOrder toplamını güncelle
+		subOrder.Subtotal = subTotal
+		subOrder.Total = subTotal // Şimdilik delivery fee vb. yok
+		err = s.orderRepo.UpdateSubOrder(subOrder)
 		if err != nil {
 			return nil, err
 		}

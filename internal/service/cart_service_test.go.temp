@@ -1,0 +1,440 @@
+package service
+
+import (
+	"errors"
+	"testing"
+	"time"
+
+	"ecommerce/internal/model"
+	"ecommerce/internal/repository"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
+
+// Mock CartRepository for Cart Service
+type MockCartRepositoryForCart struct {
+	mock.Mock
+}
+
+func (m *MockCartRepositoryForCart) Create(cart *model.Cart) error {
+	args := m.Called(cart)
+	return args.Error(0)
+}
+
+func (m *MockCartRepositoryForCart) GetByUserID(userID uint) (*model.Cart, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Cart), args.Error(1)
+}
+
+func (m *MockCartRepositoryForCart) Update(cart *model.Cart) error {
+	args := m.Called(cart)
+	return args.Error(0)
+}
+
+func (m *MockCartRepositoryForCart) ClearItems(cartID uint) error {
+	args := m.Called(cartID)
+	return args.Error(0)
+}
+
+func (m *MockCartRepositoryForCart) GetCartItems(cartID uint) ([]model.CartItem, error) {
+	args := m.Called(cartID)
+	return args.Get(0).([]model.CartItem), args.Error(1)
+}
+
+func (m *MockCartRepositoryForCart) AddItem(item *model.CartItem) error {
+	args := m.Called(item)
+	return args.Error(0)
+}
+
+func (m *MockCartRepositoryForCart) UpdateItem(item *model.CartItem) error {
+	args := m.Called(item)
+	return args.Error(0)
+}
+
+func (m *MockCartRepositoryForCart) RemoveItem(cartID, mealID uint) error {
+	args := m.Called(cartID, mealID)
+	return args.Error(0)
+}
+
+func (m *MockCartRepositoryForCart) GetByID(cartID uint) (*model.Cart, error) {
+	args := m.Called(cartID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Cart), args.Error(1)
+}
+
+// Mock MealRepository for Cart Service
+type MockMealRepositoryForCart struct {
+	mock.Mock
+}
+
+func (m *MockMealRepositoryForCart) GetByID(id uint) (*model.Meal, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Meal), args.Error(1)
+}
+
+func (m *MockMealRepositoryForCart) Create(meal *model.Meal) error {
+	args := m.Called(meal)
+	return args.Error(0)
+}
+
+func (m *MockMealRepositoryForCart) Update(meal *model.Meal) error {
+	args := m.Called(meal)
+	return args.Error(0)
+}
+
+func (m *MockMealRepositoryForCart) Delete(id uint) error {
+	args := m.Called(id)
+	return args.Error(0)
+}
+
+func (m *MockMealRepositoryForCart) GetByChefID(chefID uint) ([]model.Meal, error) {
+	args := m.Called(chefID)
+	return args.Get(0).([]model.Meal), args.Error(1)
+}
+
+func (m *MockMealRepositoryForCart) Search(filter *model.SearchFilter) ([]model.Meal, int, error) {
+	args := m.Called(filter)
+	return args.Get(0).([]model.Meal), args.Int(1), args.Error(2)
+}
+
+func (m *MockMealRepositoryForCart) GetAll(page, limit int) ([]model.Meal, int, error) {
+	args := m.Called(page, limit)
+	return args.Get(0).([]model.Meal), args.Int(1), args.Error(2)
+}
+
+func TestCartService_GetOrCreateCart(t *testing.T) {
+	mockCartRepo := new(MockCartRepositoryForCart)
+	mockMealRepo := new(MockMealRepositoryForCart)
+	service := NewCartService(mockCartRepo, mockMealRepo)
+
+	tests := []struct {
+		name        string
+		userID      uint
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:   "Create new cart for user",
+			userID: 1,
+			setupMocks: func() {
+				mockCartRepo.On("GetByUserID", uint(1)).Return(nil, nil)
+				mockCartRepo.On("Create", mock.AnythingOfType("*model.Cart")).Return(nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:   "Get existing cart",
+			userID: 1,
+			setupMocks: func() {
+				existingCart := &model.Cart{
+					ID:     1,
+					UserID: 1,
+				}
+				mockCartRepo.On("GetByUserID", uint(1)).Return(existingCart, nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:        "Invalid user ID",
+			userID:      0,
+			setupMocks:  func() {},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockCartRepo.ExpectedCalls = nil
+			mockCartRepo.Calls = nil
+
+			tt.setupMocks()
+
+			cart, err := service.GetOrCreateCart(tt.userID)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, cart)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, cart)
+				assert.Equal(t, tt.userID, cart.UserID)
+			}
+
+			mockCartRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestCartService_AddItem(t *testing.T) {
+	mockCartRepo := new(MockCartRepository)
+	mockMealRepo := new(MockMealRepository)
+	service := NewCartService(mockCartRepo, mockMealRepo)
+
+	meal := &model.Meal{
+		ID:       1,
+		ChefID:   1,
+		Name:     "Test Meal",
+		Price:    25.50,
+		IsActive: true,
+	}
+
+	cart := &model.Cart{
+		ID:     1,
+		UserID: 1,
+	}
+
+	tests := []struct {
+		name        string
+		userID      uint
+		request     *model.AddToCartRequest
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:   "Add new item to cart",
+			userID: 1,
+			request: &model.AddToCartRequest{
+				MealID:   1,
+				Quantity: 2,
+			},
+			setupMocks: func() {
+				mockCartRepo.On("GetByUserID", uint(1)).Return(cart, nil)
+				mockMealRepo.On("GetByID", uint(1)).Return(meal, nil)
+				mockCartRepo.On("GetCartItems", uint(1)).Return([]model.CartItem{}, nil)
+				mockCartRepo.On("AddItem", mock.AnythingOfType("*model.CartItem")).Return(nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:        "Invalid user ID",
+			userID:      0,
+			request:     &model.AddToCartRequest{MealID: 1, Quantity: 1},
+			setupMocks:  func() {},
+			expectedErr: true,
+		},
+		{
+			name:   "Meal not found",
+			userID: 1,
+			request: &model.AddToCartRequest{
+				MealID:   999,
+				Quantity: 1,
+			},
+			setupMocks: func() {
+				mockCartRepo.On("GetByUserID", uint(1)).Return(cart, nil)
+				mockMealRepo.On("GetByID", uint(999)).Return(nil, errors.New("meal not found"))
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockCartRepo.ExpectedCalls = nil
+			mockCartRepo.Calls = nil
+			mockMealRepo.ExpectedCalls = nil
+			mockMealRepo.Calls = nil
+
+			tt.setupMocks()
+
+			err := service.AddItem(tt.userID, tt.request)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockCartRepo.AssertExpectations(t)
+			mockMealRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestCartService_RemoveItem(t *testing.T) {
+	mockCartRepo := new(MockCartRepository)
+	mockMealRepo := new(MockMealRepository)
+	service := NewCartService(mockCartRepo, mockMealRepo)
+
+	cart := &model.Cart{
+		ID:     1,
+		UserID: 1,
+	}
+
+	tests := []struct {
+		name        string
+		userID      uint
+		mealID      uint
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:   "Remove item from cart",
+			userID: 1,
+			mealID: 1,
+			setupMocks: func() {
+				mockCartRepo.On("GetByUserID", uint(1)).Return(cart, nil)
+				mockCartRepo.On("RemoveItem", uint(1), uint(1)).Return(nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:        "Invalid user ID",
+			userID:      0,
+			mealID:      1,
+			setupMocks:  func() {},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockCartRepo.ExpectedCalls = nil
+			mockCartRepo.Calls = nil
+
+			tt.setupMocks()
+
+			err := service.RemoveItem(tt.userID, tt.mealID)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockCartRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestCartService_GetCartItems(t *testing.T) {
+	mockCartRepo := new(MockCartRepository)
+	mockMealRepo := new(MockMealRepository)
+	service := NewCartService(mockCartRepo, mockMealRepo)
+
+	cart := &model.Cart{
+		ID:     1,
+		UserID: 1,
+	}
+
+	cartItems := []model.CartItem{
+		{
+			ID:       1,
+			CartID:   1,
+			MealID:   1,
+			Quantity: 2,
+			Price:    25.50,
+		},
+	}
+
+	tests := []struct {
+		name        string
+		userID      uint
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:   "Get cart items successfully",
+			userID: 1,
+			setupMocks: func() {
+				mockCartRepo.On("GetByUserID", uint(1)).Return(cart, nil)
+				mockCartRepo.On("GetCartItems", uint(1)).Return(cartItems, nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:        "Invalid user ID",
+			userID:      0,
+			setupMocks:  func() {},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockCartRepo.ExpectedCalls = nil
+			mockCartRepo.Calls = nil
+
+			tt.setupMocks()
+
+			items, err := service.GetCartItems(tt.userID)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, items)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, items)
+				assert.Len(t, items, 1)
+			}
+
+			mockCartRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestCartService_ClearCart(t *testing.T) {
+	mockCartRepo := new(MockCartRepository)
+	mockMealRepo := new(MockMealRepository)
+	service := NewCartService(mockCartRepo, mockMealRepo)
+
+	cart := &model.Cart{
+		ID:     1,
+		UserID: 1,
+	}
+
+	tests := []struct {
+		name        string
+		userID      uint
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:   "Clear cart successfully",
+			userID: 1,
+			setupMocks: func() {
+				mockCartRepo.On("GetByUserID", uint(1)).Return(cart, nil)
+				mockCartRepo.On("ClearItems", uint(1)).Return(nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:        "Invalid user ID",
+			userID:      0,
+			setupMocks:  func() {},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockCartRepo.ExpectedCalls = nil
+			mockCartRepo.Calls = nil
+
+			tt.setupMocks()
+
+			err := service.ClearCart(tt.userID)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockCartRepo.AssertExpectations(t)
+		})
+	}
+}

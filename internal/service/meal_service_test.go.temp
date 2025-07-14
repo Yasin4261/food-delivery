@@ -1,0 +1,557 @@
+package service
+
+import (
+	"errors"
+	"testing"
+	"time"
+
+	"ecommerce/internal/model"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
+
+func TestMealService_CreateMeal(t *testing.T) {
+	mockMealRepo := new(MockMealRepository)
+	mockChefRepo := new(MockChefRepository)
+	service := NewMealService(mockMealRepo, mockChefRepo)
+
+	chef := &model.Chef{
+		ID:       1,
+		UserID:   1,
+		IsActive: true,
+	}
+
+	mealRequest := &model.CreateMealRequest{
+		Name:         "Test Meal",
+		Description:  "Delicious test meal",
+		Price:        25.50,
+		CategoryID:   1,
+		PrepTime:     30,
+		ServingSize:  2,
+		Ingredients:  "Test ingredients",
+		Instructions: "Test instructions",
+	}
+
+	tests := []struct {
+		name        string
+		chefID      uint
+		request     *model.CreateMealRequest
+		setupMocks  func()
+		expectedErr bool
+		errorMsg    string
+	}{
+		{
+			name:    "Create meal successfully",
+			chefID:  1,
+			request: mealRequest,
+			setupMocks: func() {
+				mockChefRepo.On("GetByID", uint(1)).Return(chef, nil)
+				mockMealRepo.On("Create", mock.AnythingOfType("*model.Meal")).Return(nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:    "Chef not found",
+			chefID:  999,
+			request: mealRequest,
+			setupMocks: func() {
+				mockChefRepo.On("GetByID", uint(999)).Return(nil, errors.New("chef not found"))
+			},
+			expectedErr: true,
+		},
+		{
+			name:    "Chef not active",
+			chefID:  1,
+			request: mealRequest,
+			setupMocks: func() {
+				inactiveChef := &model.Chef{ID: 1, UserID: 1, IsActive: false}
+				mockChefRepo.On("GetByID", uint(1)).Return(inactiveChef, nil)
+			},
+			expectedErr: true,
+			errorMsg:    "chef aktif değil",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockMealRepo.ExpectedCalls = nil
+			mockMealRepo.Calls = nil
+			mockChefRepo.ExpectedCalls = nil
+			mockChefRepo.Calls = nil
+
+			tt.setupMocks()
+
+			meal, err := service.CreateMeal(tt.chefID, tt.request)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, meal)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, meal)
+				assert.Equal(t, tt.chefID, meal.ChefID)
+				assert.Equal(t, tt.request.Name, meal.Name)
+				assert.Equal(t, tt.request.Price, meal.Price)
+			}
+
+			mockMealRepo.AssertExpectations(t)
+			mockChefRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMealService_GetMealByID(t *testing.T) {
+	mockMealRepo := new(MockMealRepository)
+	mockChefRepo := new(MockChefRepository)
+	service := NewMealService(mockMealRepo, mockChefRepo)
+
+	meal := &model.Meal{
+		ID:          1,
+		ChefID:      1,
+		Name:        "Test Meal",
+		Price:       25.50,
+		IsActive:    true,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	tests := []struct {
+		name        string
+		mealID      uint
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:   "Get meal successfully",
+			mealID: 1,
+			setupMocks: func() {
+				mockMealRepo.On("GetByID", uint(1)).Return(meal, nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:   "Meal not found",
+			mealID: 999,
+			setupMocks: func() {
+				mockMealRepo.On("GetByID", uint(999)).Return(nil, errors.New("meal not found"))
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockMealRepo.ExpectedCalls = nil
+			mockMealRepo.Calls = nil
+
+			tt.setupMocks()
+
+			result, err := service.GetMealByID(tt.mealID)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+				assert.Equal(t, meal.Name, result.Name)
+				assert.Equal(t, meal.Price, result.Price)
+			}
+
+			mockMealRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMealService_UpdateMeal(t *testing.T) {
+	mockMealRepo := new(MockMealRepository)
+	mockChefRepo := new(MockChefRepository)
+	service := NewMealService(mockMealRepo, mockChefRepo)
+
+	existingMeal := &model.Meal{
+		ID:      1,
+		ChefID:  1,
+		Name:    "Old Meal",
+		Price:   20.00,
+		IsActive: true,
+	}
+
+	updateRequest := &model.UpdateMealRequest{
+		Name:        "Updated Meal",
+		Description: "Updated description",
+		Price:       30.00,
+		PrepTime:    45,
+	}
+
+	tests := []struct {
+		name        string
+		chefID      uint
+		mealID      uint
+		request     *model.UpdateMealRequest
+		setupMocks  func()
+		expectedErr bool
+		errorMsg    string
+	}{
+		{
+			name:    "Update meal successfully",
+			chefID:  1,
+			mealID:  1,
+			request: updateRequest,
+			setupMocks: func() {
+				mockMealRepo.On("GetByID", uint(1)).Return(existingMeal, nil)
+				mockMealRepo.On("Update", mock.AnythingOfType("*model.Meal")).Return(nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:    "Meal not found",
+			chefID:  1,
+			mealID:  999,
+			request: updateRequest,
+			setupMocks: func() {
+				mockMealRepo.On("GetByID", uint(999)).Return(nil, errors.New("meal not found"))
+			},
+			expectedErr: true,
+		},
+		{
+			name:    "Chef not authorized",
+			chefID:  2,
+			mealID:  1,
+			request: updateRequest,
+			setupMocks: func() {
+				mockMealRepo.On("GetByID", uint(1)).Return(existingMeal, nil)
+			},
+			expectedErr: true,
+			errorMsg:    "bu yemeği sadece sahibi güncelleyebilir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockMealRepo.ExpectedCalls = nil
+			mockMealRepo.Calls = nil
+
+			tt.setupMocks()
+
+			meal, err := service.UpdateMeal(tt.chefID, tt.mealID, tt.request)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, meal)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, meal)
+				assert.Equal(t, tt.request.Name, meal.Name)
+				assert.Equal(t, tt.request.Price, meal.Price)
+			}
+
+			mockMealRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMealService_DeleteMeal(t *testing.T) {
+	mockMealRepo := new(MockMealRepository)
+	mockChefRepo := new(MockChefRepository)
+	service := NewMealService(mockMealRepo, mockChefRepo)
+
+	existingMeal := &model.Meal{
+		ID:       1,
+		ChefID:   1,
+		Name:     "Test Meal",
+		IsActive: true,
+	}
+
+	tests := []struct {
+		name        string
+		chefID      uint
+		mealID      uint
+		setupMocks  func()
+		expectedErr bool
+		errorMsg    string
+	}{
+		{
+			name:   "Delete meal successfully",
+			chefID: 1,
+			mealID: 1,
+			setupMocks: func() {
+				mockMealRepo.On("GetByID", uint(1)).Return(existingMeal, nil)
+				mockMealRepo.On("Delete", uint(1)).Return(nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:   "Meal not found",
+			chefID: 1,
+			mealID: 999,
+			setupMocks: func() {
+				mockMealRepo.On("GetByID", uint(999)).Return(nil, errors.New("meal not found"))
+			},
+			expectedErr: true,
+		},
+		{
+			name:   "Chef not authorized",
+			chefID: 2,
+			mealID: 1,
+			setupMocks: func() {
+				mockMealRepo.On("GetByID", uint(1)).Return(existingMeal, nil)
+			},
+			expectedErr: true,
+			errorMsg: "bu yemeği sadece sahibi silebilir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockMealRepo.ExpectedCalls = nil
+			mockMealRepo.Calls = nil
+
+			tt.setupMocks()
+
+			err := service.DeleteMeal(tt.chefID, tt.mealID)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockMealRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMealService_GetMealsByChef(t *testing.T) {
+	mockMealRepo := new(MockMealRepository)
+	mockChefRepo := new(MockChefRepository)
+	service := NewMealService(mockMealRepo, mockChefRepo)
+
+	meals := []model.Meal{
+		{
+			ID:       1,
+			ChefID:   1,
+			Name:     "Meal 1",
+			Price:    25.50,
+			IsActive: true,
+		},
+		{
+			ID:       2,
+			ChefID:   1,
+			Name:     "Meal 2",
+			Price:    30.00,
+			IsActive: true,
+		},
+	}
+
+	tests := []struct {
+		name        string
+		chefID      uint
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:   "Get chef meals successfully",
+			chefID: 1,
+			setupMocks: func() {
+				mockMealRepo.On("GetByChefID", uint(1)).Return(meals, nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:   "Database error",
+			chefID: 1,
+			setupMocks: func() {
+				mockMealRepo.On("GetByChefID", uint(1)).Return([]model.Meal{}, errors.New("database error"))
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockMealRepo.ExpectedCalls = nil
+			mockMealRepo.Calls = nil
+
+			tt.setupMocks()
+
+			result, err := service.GetMealsByChef(tt.chefID)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+				assert.Len(t, result, 2)
+				assert.Equal(t, tt.chefID, result[0].ChefID)
+			}
+
+			mockMealRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMealService_SearchMeals(t *testing.T) {
+	mockMealRepo := new(MockMealRepository)
+	mockChefRepo := new(MockChefRepository)
+	service := NewMealService(mockMealRepo, mockChefRepo)
+
+	meals := []model.Meal{
+		{
+			ID:       1,
+			ChefID:   1,
+			Name:     "Turkish Kebab",
+			Price:    25.50,
+			IsActive: true,
+		},
+	}
+
+	searchFilter := &model.SearchFilter{
+		Query:    "kebab",
+		Category: "turkish",
+		MinPrice: 20.0,
+		MaxPrice: 30.0,
+		Page:     1,
+		Limit:    10,
+	}
+
+	tests := []struct {
+		name        string
+		filter      *model.SearchFilter
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:   "Search meals successfully",
+			filter: searchFilter,
+			setupMocks: func() {
+				mockMealRepo.On("Search", searchFilter).Return(meals, 1, nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:   "Search with no results",
+			filter: searchFilter,
+			setupMocks: func() {
+				mockMealRepo.On("Search", searchFilter).Return([]model.Meal{}, 0, nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:   "Database error",
+			filter: searchFilter,
+			setupMocks: func() {
+				mockMealRepo.On("Search", searchFilter).Return([]model.Meal{}, 0, errors.New("database error"))
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockMealRepo.ExpectedCalls = nil
+			mockMealRepo.Calls = nil
+
+			tt.setupMocks()
+
+			result, total, err := service.SearchMeals(tt.filter)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+				assert.Equal(t, 0, total)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+				if len(meals) > 0 {
+					assert.Len(t, result, 1)
+					assert.Equal(t, 1, total)
+				} else {
+					assert.Len(t, result, 0)
+					assert.Equal(t, 0, total)
+				}
+			}
+
+			mockMealRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMealService_GetAllMeals(t *testing.T) {
+	mockMealRepo := new(MockMealRepository)
+	mockChefRepo := new(MockChefRepository)
+	service := NewMealService(mockMealRepo, mockChefRepo)
+
+	meals := []model.Meal{
+		{ID: 1, Name: "Meal 1", IsActive: true},
+		{ID: 2, Name: "Meal 2", IsActive: true},
+	}
+
+	tests := []struct {
+		name        string
+		page        int
+		limit       int
+		setupMocks  func()
+		expectedErr bool
+	}{
+		{
+			name:  "Get all meals successfully",
+			page:  1,
+			limit: 10,
+			setupMocks: func() {
+				mockMealRepo.On("GetAll", 1, 10).Return(meals, 2, nil)
+			},
+			expectedErr: false,
+		},
+		{
+			name:  "Database error",
+			page:  1,
+			limit: 10,
+			setupMocks: func() {
+				mockMealRepo.On("GetAll", 1, 10).Return([]model.Meal{}, 0, errors.New("database error"))
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset mocks
+			mockMealRepo.ExpectedCalls = nil
+			mockMealRepo.Calls = nil
+
+			tt.setupMocks()
+
+			result, total, err := service.GetAllMeals(tt.page, tt.limit)
+
+			if tt.expectedErr {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+				assert.Equal(t, 0, total)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+				assert.Len(t, result, 2)
+				assert.Equal(t, 2, total)
+			}
+
+			mockMealRepo.AssertExpectations(t)
+		})
+	}
+}

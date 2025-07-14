@@ -65,35 +65,37 @@ func TestPaginationResponse(t *testing.T) {
 		map[string]interface{}{"id": 3, "name": "Item 3"},
 	}
 
-	pagination := PaginationResponse{
-		Data:       data,
-		Page:       1,
-		Limit:      10,
-		Total:      3,
-		TotalPages: 1,
+	listResponse := ListResponse{
+		Data: data,
+		Pagination: &PaginationResponse{
+			Page:       1,
+			Limit:      10,
+			Total:      3,
+			TotalPages: 1,
+		},
 	}
 
-	jsonData, err := json.Marshal(pagination)
+	jsonData, err := json.Marshal(listResponse)
 	if err != nil {
 		t.Errorf("JSON marshalling failed: %v", err)
 	}
 
-	var unmarshalledPagination PaginationResponse
-	if err := json.Unmarshal(jsonData, &unmarshalledPagination); err != nil {
+	var unmarshalledResponse ListResponse
+	if err := json.Unmarshal(jsonData, &unmarshalledResponse); err != nil {
 		t.Errorf("JSON unmarshalling failed: %v", err)
 	}
 
-	if unmarshalledPagination.Page != pagination.Page {
-		t.Errorf("Expected page %d, got %d", pagination.Page, unmarshalledPagination.Page)
+	if unmarshalledResponse.Pagination.Page != listResponse.Pagination.Page {
+		t.Errorf("Expected page %d, got %d", listResponse.Pagination.Page, unmarshalledResponse.Pagination.Page)
 	}
-	if unmarshalledPagination.Limit != pagination.Limit {
-		t.Errorf("Expected limit %d, got %d", pagination.Limit, unmarshalledPagination.Limit)
+	if unmarshalledResponse.Pagination.Limit != listResponse.Pagination.Limit {
+		t.Errorf("Expected limit %d, got %d", listResponse.Pagination.Limit, unmarshalledResponse.Pagination.Limit)
 	}
-	if unmarshalledPagination.Total != pagination.Total {
-		t.Errorf("Expected total %d, got %d", pagination.Total, unmarshalledPagination.Total)
+	if unmarshalledResponse.Pagination.Total != listResponse.Pagination.Total {
+		t.Errorf("Expected total %d, got %d", listResponse.Pagination.Total, unmarshalledResponse.Pagination.Total)
 	}
-	if unmarshalledPagination.TotalPages != pagination.TotalPages {
-		t.Errorf("Expected total pages %d, got %d", pagination.TotalPages, unmarshalledPagination.TotalPages)
+	if unmarshalledResponse.Pagination.TotalPages != listResponse.Pagination.TotalPages {
+		t.Errorf("Expected total pages %d, got %d", listResponse.Pagination.TotalPages, unmarshalledResponse.Pagination.TotalPages)
 	}
 }
 
