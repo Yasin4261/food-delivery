@@ -1,14 +1,14 @@
 // @title Özgür Mutfak API
-// @version 1.0
-// @description Bu, ev yemekleri pazaryeri için API dokümantasyonudur.
-// @termsOfService http://swagger.io/terms/
+// @version 1.0.0
+// @description Modern ev yemekleri pazaryeri platformu - Production ready food delivery API with comprehensive features
+// @termsOfService https://github.com/Yasin4261/food-delivery
 
 // @contact.name API Desteği
-// @contact.url http://www.swagger.io/support
-// @contact.email support@swagger.io
+// @contact.url https://github.com/Yasin4261/food-delivery/issues
+// @contact.email yasin@ozgurmutfak.com
 
-// @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+// @license.name MIT
+// @license.url https://github.com/Yasin4261/food-delivery/blob/main/LICENSE
 
 // @host localhost:3001
 // @BasePath /api/v1
@@ -18,6 +18,21 @@
 // @in header
 // @name Authorization
 // @description JWT token, "Bearer {token}" formatında yazın
+
+// @tag.name Auth
+// @tag.description Authentication ve authorization endpoints
+
+// @tag.name Meals
+// @tag.description Ev yemekleri CRUD operasyonları
+
+// @tag.name Chefs
+// @tag.description Şef profili ve yönetim endpoints
+
+// @tag.name Orders
+// @tag.description Sipariş yönetimi ve takip
+
+// @tag.name Admin
+// @tag.description Admin yönetim paneli endpoints
 
 package main
 
@@ -37,6 +52,24 @@ import (
 	"ecommerce/internal/repository"
 	"ecommerce/internal/service"
 )
+
+// Version information
+const (
+	APIVersion    = "1.0.0"
+	AppName       = "Özgür Mutfak API"
+	BuildDate     = "2025-07-14"
+	Description   = "Professional Home-Cooked Meal Marketplace Platform"
+)
+
+// VersionInfo represents API version information
+type VersionInfo struct {
+	Version     string `json:"version"`
+	AppName     string `json:"app_name"`
+	BuildDate   string `json:"build_date"`
+	Description string `json:"description"`
+	APIPath     string `json:"api_path"`
+	SwaggerURL  string `json:"swagger_url"`
+}
 
 func main() {
 	// Konfigürasyon yükleme

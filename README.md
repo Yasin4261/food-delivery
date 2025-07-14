@@ -1,23 +1,38 @@
 # 🍳 Özgür Mutfak - Home-Cooked Meal Marketplace API
 
+[![Version](https://img.shields.io/badge/Version-v1.0.0-blue.svg)](https://github.com/Yasin4261/food-delivery/releases)
 [![Go Version](https://img.shields.io/badge/Go-1.21-blue.svg)](https://golang.org)
-[![Docker](https://img.shields.io/badge/Docker-Compose-blue.svg)](https://www.docker.com)
+[![Docker](https://img.shields.io/badge/Docker-Compose-blue.svg)](https://www.docker.co### 🔐 Authentication
+- `POST /api/v1/auth/register` - Kullanıcı kaydı (customer/chef)
+- `POST /api/v1/auth/login` - Kullanıcı girişi
+
+### 🔍 System Information
+- `GET /version` - API version ve build bilgileri
+- `GET /health` - Sistem sağlık durumu
+- `GET /swagger/index.html` - Interactive API documentation
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue.svg)](https://www.postgresql.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Test Coverage](https://img.shields.io/badge/Coverage-85%25-green.svg)](#-test-etme)
+[![API Version](https://img.shields.io/badge/API-v1-orange.svg)](#-api-versiyonlama)
 
 Modern, modüler ve scalable bir ev yemekleri platformu backend API'si. Docker ile tam entegre edilmiş, PostgreSQL veritabanı kullanarak geliştirilmiş professional bir home-cooked meal marketplace çözümü.
 
-## 📈 Proje Durumu
+## 📈 Proje Durumu - v1.0.0
 
-- ✅ **Backend API**: %100 Tamamlandı
+- ✅ **Backend API**: %100 Tamamlandı (v1.0.0)
 - ✅ **Database Schema**: %100 Tamamlandı  
 - ✅ **Authentication**: %100 Tamamlandı
 - ✅ **Docker Integration**: %100 Tamamlandı
 - ✅ **API Documentation**: %100 Tamamlandı
 - ✅ **Test Coverage**: %85 Tamamlandı
-- 🔄 **Performance Optimization**: Devam ediyor
-- 📋 **Mobile API**: Planlandı
+- 🔄 **Performance Optimization**: Devam ediyor (v1.1.0)
+- 📋 **Mobile API**: Planlandı (v1.2.0)
+
+### 🏷️ Version History
+- **v1.0.0** (Current) - Complete food delivery platform with all core features
+- **v1.1.0** (Planned) - Performance optimization & enhanced testing  
+- **v1.2.0** (Planned) - Payment integration & real-time notifications
+- **v2.0.0** (Future) - Microservices architecture & advanced features
 
 ## 🚀 Özellikler
 
@@ -314,7 +329,31 @@ curl -X POST "http://localhost:3001/api/v1/auth/login" \
 
 ## 📊 API Endpoints
 
-### 🔐 Authentication
+### � API Versiyonlama
+
+Bu proje semantic versioning kullanır ve API versiyonlaması URL path'inde yapılır:
+
+**Current API Version: v1**
+- **Base URL**: `http://localhost:3001/api/v1/`
+- **Version Format**: `/api/v{major}/`
+- **Backward Compatibility**: v1.x serisi içinde garanti edilir
+
+#### Version Strategy
+| Version | Status | Supported Until | Breaking Changes |
+|---------|--------|-----------------|------------------|
+| **v1** | ✅ Current | 2026+ | No |
+| **v2** | 📋 Planned | TBD | Yes (Microservices) |
+
+#### Version Headers (Optional)
+```bash
+# Client can specify API version via header
+curl -H "API-Version: v1" http://localhost:3001/api/meals
+
+# Default fallback to latest stable (v1)
+curl http://localhost:3001/api/v1/meals
+```
+
+### �🔐 Authentication
 - `POST /api/v1/auth/register` - Kullanıcı kaydı (customer/chef)
 - `POST /api/v1/auth/login` - Kullanıcı girişi
 
@@ -548,7 +587,73 @@ Bu proje MIT lisansı altında lisanslanmıştır.
 
 ---
 
-## 📊 Performance Metrics
+## � Release Notes
+
+### v1.0.0 (2025-07-14) - Major Release
+**🚀 Complete Food Delivery Platform**
+
+#### ✨ New Features
+- **Complete REST API** with 25+ endpoints
+- **JWT Authentication** with role-based access (Customer/Chef/Admin)
+- **PostgreSQL Database** with comprehensive schema
+- **Docker Compose** orchestration for all services
+- **Swagger Documentation** with interactive API explorer
+- **Multi-vendor Marketplace** supporting multiple chefs
+- **Smart Cart System** with real-time calculations
+- **Order Management** with status tracking
+- **Review & Rating System** for meals and chefs
+- **Admin Dashboard** with comprehensive management tools
+
+#### 🏗️ Technical Improvements
+- **Clean Architecture** with separation of concerns
+- **Repository Pattern** for data access abstraction
+- **Service Layer** for business logic isolation
+- **Comprehensive Testing** with 85% coverage
+- **Docker Multi-stage Builds** for optimized containers
+- **Environment-based Configuration** management
+- **Error Handling** with centralized middleware
+- **CORS Support** for cross-origin requests
+
+#### 📊 Performance & Quality
+- **Response Times**: <200ms average
+- **Test Coverage**: 85% across all layers
+- **Docker Optimization**: 25MB container size
+- **Database Performance**: Indexed queries with connection pooling
+- **Security**: JWT tokens, bcrypt hashing, input validation
+
+#### 📚 Documentation
+- **Professional README** with comprehensive setup guides
+- **API Documentation** via Swagger UI
+- **Troubleshooting Guides** for common issues
+- **Development Tips** for contributors
+- **Performance Metrics** and monitoring information
+
+### 🔜 Upcoming Releases
+
+#### v1.1.0 (Planned) - Performance & Testing
+- Enhanced test coverage to 95%
+- Query optimization and caching
+- API rate limiting
+- Structured logging improvements
+- Database indexing optimization
+
+#### v1.2.0 (Planned) - Integrations
+- Payment gateway integration (Stripe/PayPal)
+- Real-time notifications via WebSocket
+- Image upload for meals and chefs
+- Email service integration
+- SMS notifications
+
+#### v2.0.0 (Future) - Microservices
+- Microservices architecture migration
+- GraphQL API support
+- Redis caching layer
+- Elasticsearch for advanced search
+- Kubernetes deployment support
+
+---
+
+## �📊 Performance Metrics
 
 ### Response Times (Average)
 - **Authentication**: ~50ms

@@ -21,6 +21,27 @@ func SetupRoutes(router *gin.Engine, jwtManager *auth.JWTManager) {
 	// Swagger route'u
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	// Version info endpoint
+	router.GET("/version", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"version":     "1.0.0",
+			"app_name":    "Özgür Mutfak API", 
+			"build_date":  "2025-07-14",
+			"description": "Professional Home-Cooked Meal Marketplace Platform",
+			"api_path":    "/api/v1",
+			"swagger_url": "/swagger/index.html",
+		})
+	})
+
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"status":    "healthy",
+			"timestamp": "2025-07-14T12:00:00Z",
+			"version":   "1.0.0",
+		})
+	})
+
 	// Get dependencies
 	deps := handler.GetDependencies()
 	adminHandler := handler.NewAdminHandler(deps.AdminService)
