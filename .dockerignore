@@ -1,23 +1,24 @@
 # Git
 .git
 .gitignore
+.github/
 
 # Documentation
 README.md
+*.md
 docs/
+api-docs/
 
 # Docker files
-Dockerfile
-docker-compose.yml
+Dockerfile*
+docker-compose*.yml
 .dockerignore
-
-# Scripts (except for test builds)
-*.bat
-# scripts/
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
@@ -25,18 +26,39 @@ Thumbs.db
 
 # Logs
 *.log
+**/*.log
 
 # Test files
 *_test.go
+tests/
+testdata/
 
 # Build artifacts
-/bin/
-/dist/
+bin/
+dist/
+tmp/
+coverage.out
+*.coverprofile
 
-# Temporary files
-/tmp/
-/temp/
-
-# Environment files
+# Environment files (copy only needed ones in Dockerfile)
 .env
 .env.local
+.env.dev
+.env.prod
+.env.example
+
+# Database files
+*.db
+*.sqlite
+postgres_data/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Air (hot reload)
+.air.toml
+tmp/
+
+# Makefile (not needed in container)
+Makefile

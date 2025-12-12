@@ -37,10 +37,15 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+.env.prod
+# Keep these in git:
+# .env.example
+# .env.dev (development defaults)
 
 # Database
 *.db
 *.sqlite
+postgres_data/
 
 # Config files with sensitive data
 config/config.local.yaml

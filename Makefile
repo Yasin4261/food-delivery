@@ -1,204 +1,73 @@
-# E-Commerce Docker Makefile
+.PHONY: help dev prod build clean test migrate-up migrate-down
 
-.PHONY: help build up down logs clean restart test test-unit test-integration test-coverage test-race test-bench test-docker test-ci
+help: ## Show this help message
+	@echo 'Usage: make [target]'
+	@echo ''
+	@echo 'Available targets:'
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-# Varsayılan hedef
-help:
-	@echo "E-Commerce Docker Commands:"
-	@echo "  make build    - Docker image'larını oluştur"
-	@echo "  make up       - Container'ları başlat"
-	@echo "  make down     - Container'ları durdur"
-	@echo "  make logs     - Logları göster"
-	@echo "  make restart  - Container'ları yeniden başlat"
-	@echo "  make clean    - Tüm container'ları ve volume'ları temizle"
-	@echo ""
-	@echo "Test Commands:"
-	@echo "  make test           - Tüm testleri çalıştır"
-	@echo "  make test-unit      - Unit testleri çalıştır"
-	@echo "  make test-integration - Integration testleri çalıştır"
-	@echo "  make test-coverage  - Coverage raporu ile testleri çalıştır"
-	@echo "  make test-race      - Race condition testleri çalıştır"
-	@echo "  make test-bench     - Benchmark testleri çalıştır"
-	@echo "  make test-docker    - Docker ile testleri çalıştır"
-	@echo "  make test-ci        - CI/CD için testleri çalıştır"
-	@echo "  make test-clean     - Test sonuçlarını temizle"
+# Development
+dev: ## Run development environment
+	docker compose -f docker-compose.dev.yml up --build
 
-# Docker image'larını oluştur
-build:
-	docker-compose build
+dev-down: ## Stop development environment
+	docker compose -f docker-compose.dev.yml down
 
-# Container'ları başlat
-up:
-	docker-compose up -d
+dev-logs: ## View development logs
+	docker compose -f docker-compose.dev.yml logs -f api
 
-# Container'ları durdur
-down:
-	docker-compose down
+# Production
+prod: ## Run production environment
+	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 
-# Logları göster
-logs:
-	docker-compose logs -f
+prod-down: ## Stop production environment
+	docker compose -f docker-compose.prod.yml down
 
-# Container'ları yeniden başlat
-restart:
-	docker-compose down
-	docker-compose up -d --build
+prod-logs: ## View production logs
+	docker compose -f docker-compose.prod.yml logs -f api
 
-# Temizlik
-clean:
-	docker-compose down -v
-	docker system prune -f
+# Local development (without Docker)
+run: ## Run locally without Docker
+	go run ./cmd/api
 
-# Development mode (log output ile)
-dev:
-	docker-compose up --build
+build: ## Build binary
+	go build -o bin/food-delivery ./cmd/api
 
-# Sadece API container'ını yeniden başlat
-api-restart:
-	docker-compose restart api
+# Testing
+test: ## Run tests
+	go test -v ./...
 
-# Veritabanına bağlan
-db-connect:
-	docker exec -it ecommerce_db psql -U postgres -d ecommerce_db
+test-coverage: ## Run tests with coverage
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
 
-# Test Commands
-# =============
+# Database
+migrate-up: ## Run database migrations up
+	migrate -path migrations -database "${DATABASE_URL}" up
 
-# Tüm testleri çalıştır
-test:
-	@echo "🧪 Running all tests..."
-	@mkdir -p test-results
-	@chmod +x scripts/run-tests.sh
-	@bash scripts/run-tests.sh
+migrate-down: ## Run database migrations down
+	migrate -path migrations -database "${DATABASE_URL}" down
 
-# Unit testleri çalıştır
-test-unit:
-	@echo "🧪 Running unit tests..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -v ./internal/... 2>&1 | tee test-results/unit-test.log
+migrate-create: ## Create new migration (usage: make migrate-create name=create_users_table)
+	migrate create -ext sql -dir migrations -seq $(name)
 
-# Integration testleri çalıştır
-test-integration:
-	@echo "🧪 Running integration tests..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -v ./tests/... 2>&1 | tee test-results/integration-test.log
+# Cleanup
+clean: ## Clean build artifacts
+	rm -rf bin/ tmp/ coverage.out
 
-# Coverage raporu ile testleri çalıştır
-test-coverage:
-	@echo "📊 Running tests with coverage..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -v ./... -coverprofile=test-results/coverage.out
-	@go tool cover -html=test-results/coverage.out -o test-results/coverage.html
-	@go tool cover -func=test-results/coverage.out | grep total
-	@echo "Coverage report: test-results/coverage.html"
+# Dependencies
+deps: ## Download dependencies
+	go mod download
+	go mod tidy
 
-# Race condition testleri çalıştır
-test-race:
-	@echo "🏁 Running race condition tests..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -race -v ./internal/service/... 2>&1 | tee test-results/race-test.log
+# Code quality
+lint: ## Run linter
+	golangci-lint run
 
-# Benchmark testleri çalıştır
-test-bench:
-	@echo "⚡ Running benchmark tests..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -bench=. -benchmem ./internal/api/handler/... 2>&1 | tee test-results/benchmark.log
+fmt: ## Format code
+	go fmt ./...
 
-# Docker ile testleri çalıştır
-test-docker:
-	@echo "🐳 Running tests with Docker..."
-	@chmod +x scripts/docker/run-tests.sh
-	@bash scripts/docker/run-tests.sh
-
-# CI/CD için testleri çalıştır
-test-ci:
-	@echo "🔄 Running CI tests..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -v ./... -coverprofile=test-results/coverage.out -race
-	@go tool cover -html=test-results/coverage.out -o test-results/coverage.html
-	@go tool cover -func=test-results/coverage.out
-
-# Test sonuçlarını temizle
-test-clean:
-	@echo "🧹 Cleaning test results..."
-	@rm -rf test-results
-	@echo "Test results cleaned!"
-
-# Model testleri
-test-model:
-	@echo "📦 Running model tests..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -v ./internal/model/... -coverprofile=test-results/model-coverage.out
-
-# Service testleri
-test-service:
-	@echo "⚙️ Running service tests..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -v ./internal/service/... -coverprofile=test-results/service-coverage.out
-
-# Handler testleri
-test-handler:
-	@echo "🌐 Running handler tests..."
-	@mkdir -p test-results
-	@GO_ENV=test GIN_MODE=test go test -v ./internal/api/handler/... -coverprofile=test-results/handler-coverage.out
-
-# Test watch mode (otomatik yeniden çalıştırma)
-test-watch:
-	@echo "👀 Running tests in watch mode..."
-	@which fswatch > /dev/null || (echo "fswatch not found. Install with: brew install fswatch" && exit 1)
-	@fswatch -o . | xargs -n1 -I{} make test-unit
-
-# Test başarısını kontrol et
-test-check:
-	@echo "✅ Checking test results..."
-	@if [ -f "test-results/coverage.out" ]; then \
-		COVERAGE=$$(go tool cover -func=test-results/coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
-		echo "Coverage: $$COVERAGE%"; \
-		if [ $$(echo "$$COVERAGE < 70" | bc -l) -eq 1 ]; then \
-			echo "❌ Coverage $$COVERAGE% is below threshold 70%"; \
-			exit 1; \
-		else \
-			echo "✅ Coverage $$COVERAGE% meets threshold"; \
-		fi; \
-	else \
-		echo "❌ Coverage file not found"; \
-		exit 1; \
-	fi
-
-# Dependency management
-deps:
-	@echo "📦 Installing dependencies..."
-	@go mod download
-	@go mod tidy
-
-# Code formatting
-fmt:
-	@echo "🎨 Formatting code..."
-	@go fmt ./...
-
-# Code linting
-lint:
-	@echo "🔍 Linting code..."
-	@which golangci-lint > /dev/null || (echo "golangci-lint not found. Install from https://golangci-lint.run/usage/install/" && exit 1)
-	@golangci-lint run ./...
-
-# Security scan
-security:
-	@echo "🔐 Running security scan..."
-	@which gosec > /dev/null || go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
-	@gosec ./...
-
-# Full quality check
-quality: deps fmt lint security test-coverage
-	@echo "🎯 Quality check completed!"
-
-# Development setup
-setup:
-	@echo "🚀 Setting up development environment..."
-	@make deps
-	@make fmt
-	@chmod +x scripts/run-tests.sh
-	@chmod +x scripts/docker/run-tests.sh
-	@chmod +x scripts/windows/run-tests.ps1
-	@mkdir -p test-results
-	@echo "✅ Development environment ready!"
+# Docker cleanup
+docker-clean: ## Remove all containers and volumes
+	docker compose -f docker-compose.dev.yml down -v
+	docker compose -f docker-compose.prod.yml down -v
