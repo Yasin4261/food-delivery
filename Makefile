@@ -41,15 +41,28 @@ test-coverage: ## Run tests with coverage
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out
 
-# Database
+# Database migrations
+DB_URL ?= postgres://postgres:postgres123@localhost:5432/food_delivery?sslmode=disable
+
 migrate-up: ## Run database migrations up
-	migrate -path migrations -database "${DATABASE_URL}" up
+	@echo "Running migrations..."
+	migrate -path migrations -database "$(DB_URL)" up
 
 migrate-down: ## Run database migrations down
-	migrate -path migrations -database "${DATABASE_URL}" down
+	@echo "Rolling back last migration..."
+	migrate -path migrations -database "$(DB_URL)" down 1
+
+migrate-version: ## Show current migration version
+	migrate -path migrations -database "$(DB_URL)" version
 
 migrate-create: ## Create new migration (usage: make migrate-create name=create_users_table)
-	migrate create -ext sql -dir migrations -seq $(name)
+	@if [ -z "$(name)" ]; then \
+		read -p "Migration name: " migration_name; \
+		migrate create -ext sql -dir migrations -seq $$migration_name; \
+	else \
+		migrate create -ext sql -dir migrations -seq $(name); \
+	fi
+	@echo "✅ Migration files created in migrations/"
 
 # Cleanup
 clean: ## Clean build artifacts
