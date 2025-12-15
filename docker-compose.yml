@@ -37,6 +37,8 @@ services:
       PORT: "8080"
       DATABASE_URL: "postgres://postgres:postgres123@db:5432/food_delivery?sslmode=disable"
       ENV: "development"
+      JWT_SECRET: "391585ce6668596bece10d2f64ea7e7ec9d1e94293ad35cc83b728c752a9a93be843f15819cc33055d549856c5fc7e58e65a87e7e37fe719ebaafee16d588be2"
+      JWT_EXPIRATION: "24h"
       AUTO_MIGRATE: "true"
     networks:
       - food_delivery_network

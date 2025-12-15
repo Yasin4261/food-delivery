@@ -3,13 +3,14 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/Yasin4261/food-delivery/config"
-    "github.com/Yasin4261/food-delivery/database"
-    "github.com/Yasin4261/food-delivery/internal/handler"
-    "github.com/Yasin4261/food-delivery/internal/repository"
-    "github.com/Yasin4261/food-delivery/internal/service"
+	"github.com/Yasin4261/food-delivery/database"
+	"github.com/Yasin4261/food-delivery/internal/handler"
+	"github.com/Yasin4261/food-delivery/internal/middleware"
+	"github.com/Yasin4261/food-delivery/internal/repository"
+	"github.com/Yasin4261/food-delivery/internal/router"
+	"github.com/Yasin4261/food-delivery/internal/service"
 )
 
 func main() {
@@ -26,51 +27,56 @@ func main() {
 	}
 	defer db.Close()
 
-	// Migrations would go here (if any)
-	if os.Getenv("AUTO_MIGRATE") == "true" {
+	// Run migrations if enabled
+	if cfg.AutoMigrate {
 		if err := database.RunMigrations(db.DB, "./migrations"); err != nil {
 			log.Fatalf("Migration failed: %v", err)
 		}
-    }
+		log.Println("Migrations completed successfully")
+	}
 
-	// DI
+	// Initialize dependencies (Dependency Injection)
+	app := initializeApp(db, cfg)
+
+	// Setup and start server
+	log.Printf("Starting server on port %s (environment: %s)", cfg.Port, cfg.Env)
+	log.Printf("API Version: v2")
+	log.Printf("JWT Expiration: %s", cfg.JWTExpiration)
+	
+	if err := http.ListenAndServe(":"+cfg.Port, app); err != nil {
+		log.Fatalf("Could not start server: %s", err)
+	}
+}
+
+// initializeApp sets up all dependencies and returns the configured router
+func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	// Repository Layer
 	userRepo := repository.NewUserRepository(db)
 	orderRepo := repository.NewOrderRepository(db)
+	chefRepo := repository.NewChefRepository(db)
 
 	// Service Layer
-	userService := service.NewUserService(userRepo)
+	userService := service.NewUserService(userRepo, cfg.JWTSecret)
 	orderService := service.NewOrderService(orderRepo)
+	chefService := service.NewChefService(chefRepo)
+
+	// Middleware
+	authMiddleware := middleware.NewAuthMiddleware(userService)
 
 	// Handler Layer
 	userHandler := handler.NewUserHandler(userService)
 	orderHandler := handler.NewOrderHandler(orderService)
+	chefHandler := handler.NewChefHandler(chefService)
 	healthHandler := handler.NewHealthHandler()
 
-	// HTTP Server setup
-	mux := http.NewServeMux()
+	// Router
+	r := router.NewRouter(
+		authMiddleware,
+		userHandler,
+		orderHandler,
+		chefHandler,
+		healthHandler,
+	)
 
-	// Health check endpoint
-	mux.HandleFunc("GET /health", healthHandler.HealthCheck)
-
-	// User routes
-	mux.HandleFunc("POST /api/v1/users/register", userHandler.Register)
-    mux.HandleFunc("POST /api/v1/users/login", userHandler.Login)
-    mux.HandleFunc("GET /api/v1/users/profile", userHandler.GetProfile)
-	
-	// Order routes
-	mux.HandleFunc("POST /api/v1/orders", orderHandler.CreateOrder)
-	mux.HandleFunc("GET /api/v1/orders/{id}", orderHandler.GetOrder)
-	mux.HandleFunc("GET /api/v1/orders", orderHandler.ListOrders)
-
-
-	// Start the server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("Starting server on port %s", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatalf("Could not start server: %s", err)
-	}
+	return r.SetupRoutes()
 }

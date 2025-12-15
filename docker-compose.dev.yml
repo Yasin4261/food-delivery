@@ -39,6 +39,7 @@ services:
       DATABASE_URL: "postgres://postgres:postgres123@db:5432/food_delivery_dev?sslmode=disable"
       ENV: "development"
       JWT_SECRET: "dev-secret-key-not-for-production"
+      JWT_EXPIRATION: "24h"
       AUTO_MIGRATE: "true"
     networks:
       - food_delivery_network_dev
