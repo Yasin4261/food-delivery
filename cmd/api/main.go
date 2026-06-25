@@ -8,7 +8,10 @@ import (
 	"github.com/Yasin4261/food-delivery/config"
 	"github.com/Yasin4261/food-delivery/database"
 	"github.com/Yasin4261/food-delivery/internal/handler"
+	"github.com/Yasin4261/food-delivery/internal/middleware"
+	"github.com/Yasin4261/food-delivery/internal/repository"
 	"github.com/Yasin4261/food-delivery/internal/router"
+	"github.com/Yasin4261/food-delivery/internal/service"
 )
 
 func main() {
@@ -30,7 +33,7 @@ func main() {
 		log.Println("migrations applied")
 	}
 
-	app := initializeApp(db)
+	app := initializeApp(db, cfg)
 
 	log.Printf("starting server on :%s (env=%s)", cfg.Port, cfg.Env)
 	if err := http.ListenAndServe(":"+cfg.Port, app); err != nil {
@@ -41,9 +44,20 @@ func main() {
 // initializeApp is the composition root: it constructs the concrete adapters
 // and wires them into the core. As features are added, new repositories,
 // services and handlers are assembled here.
-func initializeApp(db *database.DB) http.Handler {
-	healthHandler := handler.NewHealthHandler(db)
+func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
+	// Repositories (driven adapters).
+	userRepo := repository.NewUserRepository(db.DB)
 
-	r := router.NewRouter(healthHandler)
+	// Services (use cases).
+	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiration)
+
+	// Middleware.
+	authMiddleware := middleware.NewAuth(authService)
+
+	// Handlers (driving adapters).
+	healthHandler := handler.NewHealthHandler(db)
+	authHandler := handler.NewAuthHandler(authService)
+
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler)
 	return r.Setup()
 }
