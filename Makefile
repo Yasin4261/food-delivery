@@ -80,6 +80,27 @@ lint: ## Run linter
 fmt: ## Format code
 	go fmt ./...
 
+# Swagger documentation
+swagger: ## Generate Swagger documentation
+	@echo "Generating Swagger documentation..."
+	swag init -g cmd/api/main.go --output docs
+	@echo "✓ Swagger docs generated! Visit http://localhost:8080/swagger/index.html"
+
+swagger-fmt: ## Format Swagger annotations
+	@echo "Formatting Swagger annotations..."
+	swag fmt
+	@echo "✓ Swagger annotations formatted"
+
+swagger-clean: ## Clean Swagger docs
+	@echo "Cleaning Swagger docs..."
+	rm -rf docs/
+	@echo "✓ Swagger docs cleaned"
+
+install-swag: ## Install swag CLI
+	@echo "Installing swag..."
+	go install github.com/swaggo/swag/cmd/swag@latest
+	@echo "✓ Swag installed"
+
 # Docker cleanup
 docker-clean: ## Remove all containers and volumes
 	docker compose -f docker-compose.dev.yml down -v

@@ -55,6 +55,9 @@ config/config.prod.yaml
 /bin/
 /dist/
 
+# Swagger docs (auto-generated)
+/docs/
+
 # Temporary files
 /tmp/
 /temp/
