@@ -19,7 +19,7 @@ Key product rules that shape the data model:
 - Orders move through a **status lifecycle** (see §4). Payment is **cash or card**.
 - Customers and chefs can **chat in real time** or just call each other by phone.
 
-> The current code is an early scaffold. Some features above (favorites, reviews, chat, forgot-password, online/offline, earnings) are **planned but not yet built** — see §6 for the gap list and §5 for the DB tables to add.
+> The code was rebuilt from scratch into a clean, Dockerized skeleton (only a `/health` endpoint so far). Everything above beyond health is **planned but not yet built** — see §6 for current state and §5 for the DB tables to add.
 
 ---
 
@@ -83,25 +83,29 @@ If you ever feel tempted to write SQL in a service, or business `if` rules in a 
 
 ```
 cmd/api/main.go            # entrypoint + dependency injection (composition root)
-config/                    # env/config loading
-database/                  # DB connection + migration runner
+config/config.go           # env/config loading
+database/database.go       # DB connection pool
+database/migrate.go        # golang-migrate runner
 migrations/                # versioned SQL (golang-migrate, *.up.sql / *.down.sql)
 internal/
   domain/                  # entities + repository interfaces (the core; no external deps)
   service/                 # use cases / business orchestration
   repository/              # Postgres adapters implementing domain interfaces
-  handler/                 # HTTP handlers (+ dto.go for request/response shapes)
-  middleware/              # auth (JWT) etc.
+  handler/                 # HTTP handlers (health_handler.go, response.go)
   router/                  # route table
 ```
+
+Each empty layer (`domain/`, `service/`, `repository/`) currently holds only a
+`doc.go` that states the package's hexagonal contract. Add real files as
+features land — `middleware/` (JWT auth) returns when auth is built.
 
 Tech: **Go 1.25**, standard library `net/http` (Go 1.22+ method-based routing like `"POST /api/v2/..."`), `database/sql` + `lib/pq` (raw SQL, no ORM), JWT (`golang-jwt/v5`), bcrypt, `golang-migrate`, Swagger via `swaggo`. Module path: `github.com/Yasin4261/food-delivery`.
 
 ---
 
-## 4. Order status lifecycle
+## 4. Order status lifecycle (target design)
 
-Defined in `internal/domain/order.go`. Transitions are enforced by methods that return `ErrInvalidStatusTransition` on an illegal move — **always go through these methods, never set `o.Status` directly.**
+This is the intended `Order` model — to be implemented in `internal/domain/order.go`. Transitions should be enforced by methods that return `ErrInvalidStatusTransition` on an illegal move — **always go through these methods, never set `o.Status` directly.**
 
 ```
 pending → confirmed → preparing → ready → delivering → delivered
@@ -151,16 +155,18 @@ Modeling decisions worth noting:
 
 ---
 
-## 6. Current state & known gaps (read before building)
+## 6. Current state (rebuilt from scratch)
 
-This is an early scaffold — don't assume everything compiles end-to-end. Verified facts:
+The Go code was wiped and rebuilt as a clean, verified skeleton on branch
+`rebuild/hexagonal-skeleton`. What exists today:
 
-- `internal/service/chef_service.go` and `internal/service/order_service.go` are **empty stub files** (0 lines), but `cmd/api/main.go` calls `service.NewChefService(...)` and `service.NewOrderService(...)`. Those constructors must be implemented before the app builds.
-- **`domain.User` mismatch:** `internal/domain/user.go` defines `User.ID` as `int` and `NewUser(username, email, passwordHash string)` (3 args). But `internal/service/user_service.go` uses **string** user IDs and calls `NewUser` with 6 args plus fields like `FirstName`, `LastName`, `Phone`, `ProfileImageURL`, `LastLoginAt` that **don't exist on the struct**. Reconcile these before relying on the user flow (pick one shape and update the migration/struct/service/repo together).
-- Chef/order **handlers return `501 Not Implemented`** placeholders (`chef_handler.go`). Repositories for chef/order/user are substantially implemented; services/handlers are the missing middle for chef & order.
-- Routes exist for auth, users, chefs (read-only), orders. No routes yet for favorites, reviews, chat, forgot-password, chef earnings, or chef online/offline toggles.
+- **Runs end-to-end under Docker.** `docker compose up --build` starts Postgres + the API + Adminer; the API connects to the DB, runs all migrations via golang-migrate, and serves `GET /health` → `200 {"status":"ok","database":"ok"}`.
+- **Implemented:** `config`, `database` (connection + migration runner), the `/health` handler, the router, and the composition root in `cmd/api/main.go`.
+- **Empty (only `doc.go`):** `internal/domain`, `internal/service`, `internal/repository`. No entities, services or repositories are written yet.
+- **Schema exists, code does not use it yet:** `migrations/` still defines `users`, `chefs`, `menus`, `menu_items`, `orders`, `order_items` (kept from the old project). The new Go layers do not read/write these tables yet.
+- **Not built:** auth (register/login/logout/forgot-password), chefs, menus, orders, favorites, reviews, chat, earnings, online/offline. Everything in §1 beyond `/health` is still to do.
 
-When asked to "implement X", first check whether the service/handler exists or is a stub, and follow the §2 recipe to fill the layers consistently.
+When asked to "implement X", build it inside-out with the §2 recipe (domain → port → service → repository → migration → handler → wire in `main.go` + `router`), and commit per feature on this branch.
 
 ---
 

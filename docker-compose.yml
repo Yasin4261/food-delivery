@@ -1,5 +1,5 @@
 services:
-  # PostgreSQL Database
+  # PostgreSQL database
   db:
     image: postgres:16-alpine
     container_name: food_delivery_db
@@ -12,7 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
     networks:
       - food_delivery_network
     healthcheck:
@@ -21,7 +20,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Go API Application
+  # Go API. Runs golang-migrate on startup (AUTO_MIGRATE=true).
   api:
     build:
       context: .
@@ -35,18 +34,15 @@ services:
         condition: service_healthy
     environment:
       PORT: "8080"
-      DATABASE_URL: "postgres://postgres:postgres123@db:5432/food_delivery?sslmode=disable"
       ENV: "development"
-      JWT_SECRET: "391585ce6668596bece10d2f64ea7e7ec9d1e94293ad35cc83b728c752a9a93be843f15819cc33055d549856c5fc7e58e65a87e7e37fe719ebaafee16d588be2"
+      DATABASE_URL: "postgres://postgres:postgres123@db:5432/food_delivery?sslmode=disable"
+      JWT_SECRET: "change-me-in-production"
       JWT_EXPIRATION: "24h"
       AUTO_MIGRATE: "true"
     networks:
       - food_delivery_network
-    volumes:
-      - ./config:/app/config
-      - ./migrations:/app/migrations
 
-  # Adminer (Lightweight DB UI)
+  # Adminer: lightweight web UI for the database (http://localhost:8081).
   adminer:
     image: adminer:latest
     container_name: food_delivery_adminer
@@ -55,11 +51,10 @@ services:
       - "8081:8080"
     environment:
       ADMINER_DEFAULT_SERVER: db
-      ADMINER_DESIGN: "nette"
-    networks:
-      - food_delivery_network
     depends_on:
       - db
+    networks:
+      - food_delivery_network
 
 volumes:
   postgres_data:

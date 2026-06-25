@@ -12,7 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data_dev:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
     networks:
       - food_delivery_network_dev
     healthcheck:
