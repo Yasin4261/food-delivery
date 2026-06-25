@@ -33,8 +33,11 @@ func respondDomainError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, domain.ErrUserNotFound):
 		respondError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, domain.ErrChefNotFound):
+		respondError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, domain.ErrEmailAlreadyExists),
-		errors.Is(err, domain.ErrUsernameAlreadyExists):
+		errors.Is(err, domain.ErrUsernameAlreadyExists),
+		errors.Is(err, domain.ErrChefProfileExists):
 		respondError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrInvalidCredentials),
 		errors.Is(err, domain.ErrAccountInactive):

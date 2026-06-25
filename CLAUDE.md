@@ -161,9 +161,13 @@ The Go code was wiped and rebuilt as a clean, verified skeleton on branch
 `rebuild/hexagonal-skeleton`. What exists today:
 
 - **Runs end-to-end under Docker.** `docker compose up --build` starts Postgres + the API + Adminer; the API connects to the DB, runs all migrations via golang-migrate, and serves `GET /health` → `200 {"status":"ok","database":"ok"}`.
-- **Implemented:** `config`, `database` (connection + migration runner), `/health`, the router, the composition root, and **authentication** — `User` domain entity + `UserRepository` port, Postgres `UserRepository`, `AuthService` (bcrypt + JWT via golang-jwt/v5), bearer-token middleware (`Auth.Require` / `RequireRole`), and `POST /api/v2/auth/{register,login,logout}` + `GET /api/v2/auth/me`.
-- **Schema vs. code:** `migrations/` defines `users`, `chefs`, `menus`, `menu_items`, `orders`, `order_items`. Only `users` is wired into Go so far; the rest have no entities/repositories yet.
-- **Not built:** forgot-password (needs a `password_reset_tokens` table + email), chefs, menus, orders, favorites, reviews, chat, earnings, online/offline. Use these as the next features, each following the §2 recipe.
+- **Implemented:**
+  - `config`, `database` (connection + migration runner), `/health`, the router, the composition root.
+  - **Authentication** — `User` entity + `UserRepository` port, Postgres adapter, `AuthService` (bcrypt + JWT via golang-jwt/v5), bearer-token middleware (`Auth.Require` / `RequireRole`), `POST /api/v2/auth/{register,login,logout}` + `GET /api/v2/auth/me`.
+  - **Chef profiles** — `Chef` entity (+ Haversine `CanDeliverTo`) + `ChefRepository` port, Postgres adapter (incl. SQL Haversine `FindNearby`), `ChefService` (one profile per user, paging), `POST /api/v2/chefs` (auth) + `GET /api/v2/chefs`, `/chefs/nearby`, `/chefs/{id}`.
+- **Schema vs. code:** `migrations/` defines `users`, `chefs`, `menus`, `menu_items`, `orders`, `order_items`. `users` and `chefs` are wired into Go; `menus`, `menu_items`, `orders`, `order_items` are not yet.
+- **Tests already exist** — `go test ./...` runs green (`-race` clean). Domain, service and handler layers are covered. See §7a for the pattern to follow; **every new feature ships with tests.**
+- **Not built:** forgot-password (needs a `password_reset_tokens` table + email), menus, orders, favorites, reviews, chat, earnings, online/offline toggle. Use these as the next features, each following the §2 recipe.
 
 When asked to "implement X", build it inside-out with the §2 recipe (domain → port → service → repository → migration → handler → wire in `main.go` + `router`), and commit per feature on this branch.
 
@@ -175,8 +179,21 @@ When asked to "implement X", build it inside-out with the §2 recipe (domain →
 - Repositories implement an interface declared in `domain/` and take `*sql.DB`; wrap errors with `fmt.Errorf("...: %w", err)`.
 - Mutate entity state through domain methods (e.g. `order.MarkReady()`), not by assigning fields, so invariants/`updated_at` stay correct.
 - Nullable DB columns → pointer fields (`*string`, `*float64`) in domain structs; `PasswordHash` is always cleared (`""`) before returning a user.
-- New endpoints: add Swagger annotations (see existing handlers) and run `make swagger`.
 - API is versioned under `/api/v2`.
+- Keep code `gofmt`-clean and `go vet`-clean — CI (`.github/workflows/test.yml`) enforces both, plus `go test -race`.
+
+## 7a. Testing (this project already has tests — keep adding them)
+
+Tests live next to the code as `*_test.go`. The hexagonal layering is what makes
+this cheap: services depend on repository **interfaces**, so tests inject an
+**in-memory fake repository** instead of touching Postgres. Established pattern,
+already in the repo — copy it for every new feature:
+
+- **Domain tests** (`internal/domain/*_test.go`): pure, no deps — defaults, validation, entity rule methods.
+- **Service tests** (`internal/service/*_test.go`): black-box `package <pkg>_test`, a fake implementing the domain port, **table-driven** cases for success + each error path. See `auth_service_test.go` (`fakeUserRepo`).
+- **Handler tests** (`internal/handler/*_test.go`): drive the **real router + middleware** with `httptest` over a fake repo; assert status codes and that secrets (e.g. password hash) never leak. See `auth_handler_test.go`.
+
+Run: `go test ./...`, or `go test -race -cover ./...`. **A feature is not done until its tests are green.**
 
 ## 8. Common commands
 
@@ -188,7 +205,6 @@ make test           # go test ./...
 make migrate-up     # apply migrations   (DB_URL overridable)
 make migrate-down   # roll back last migration
 make migrate-create name=create_favorites_table   # scaffold a new migration
-make swagger        # regenerate Swagger docs
 make fmt            # go fmt ./...
 ```
 

@@ -101,6 +101,10 @@ Base path: `/api/v2`. All responses are JSON.
 | `POST` | `/api/v2/auth/login` | — | authenticate, returns a JWT |
 | `POST` | `/api/v2/auth/logout` | — | client discards its token |
 | `GET` | `/api/v2/auth/me` | Bearer | current user's profile |
+| `POST` | `/api/v2/chefs` | Bearer | open a chef profile (one per user) |
+| `GET` | `/api/v2/chefs` | — | list chefs (`?limit=&offset=`) |
+| `GET` | `/api/v2/chefs/nearby` | — | chefs that deliver to `?lat=&lng=` |
+| `GET` | `/api/v2/chefs/{id}` | — | a chef profile by id |
 
 Example:
 
@@ -164,8 +168,8 @@ Following the inside-out recipe in [CLAUDE.md §2](./CLAUDE.md):
 
 - [x] Dockerized hexagonal skeleton + health check
 - [x] Authentication (register, login, logout, profile)
+- [x] Chef profiles (create, get, list, nearby by location)
 - [ ] Forgot / reset password
-- [ ] Chef profiles (create, list, nearby by location)
 - [ ] Menus & dishes
 - [ ] Orders (multi-chef cart, status lifecycle, cash/card)
 - [ ] Favorites, reviews & ratings

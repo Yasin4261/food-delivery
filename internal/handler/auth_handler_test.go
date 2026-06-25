@@ -64,14 +64,33 @@ type okPinger struct{}
 
 func (okPinger) PingContext(context.Context) error { return nil }
 
-// newTestServer wires the real auth stack over a fake repository and returns
-// the configured HTTP handler.
+// newTestServer wires the real handler stack over in-memory fake repositories
+// and returns the configured HTTP handler.
 func newTestServer() http.Handler {
 	authService := service.NewAuthService(newFakeUserRepo(), "test-secret", time.Hour)
+	chefService := service.NewChefService(newFakeChefRepo())
 	authMiddleware := middleware.NewAuth(authService)
 	healthHandler := handler.NewHealthHandler(okPinger{})
 	authHandler := handler.NewAuthHandler(authService)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler).Setup()
+	chefHandler := handler.NewChefHandler(chefService)
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler).Setup()
+}
+
+// registerAndToken registers a user through the API and returns its bearer token.
+func registerAndToken(t *testing.T, srv http.Handler, username, email string) string {
+	t.Helper()
+	body := `{"username":"` + username + `","email":"` + email + `","password":"secret123","role":"chef"}`
+	rec := do(t, srv, http.MethodPost, "/api/v2/auth/register", "", body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("setup register failed: %d (%s)", rec.Code, rec.Body)
+	}
+	var reg struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &reg); err != nil {
+		t.Fatalf("decode register: %v", err)
+	}
+	return reg.Token
 }
 
 func do(t *testing.T, srv http.Handler, method, path, token, body string) *httptest.ResponseRecorder {

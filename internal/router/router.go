@@ -13,6 +13,7 @@ type Router struct {
 	auth          *middleware.Auth
 	healthHandler *handler.HealthHandler
 	authHandler   *handler.AuthHandler
+	chefHandler   *handler.ChefHandler
 }
 
 // NewRouter creates a Router with its handler and middleware dependencies.
@@ -20,12 +21,14 @@ func NewRouter(
 	auth *middleware.Auth,
 	healthHandler *handler.HealthHandler,
 	authHandler *handler.AuthHandler,
+	chefHandler *handler.ChefHandler,
 ) *Router {
 	return &Router{
 		mux:           http.NewServeMux(),
 		auth:          auth,
 		healthHandler: healthHandler,
 		authHandler:   authHandler,
+		chefHandler:   chefHandler,
 	}
 }
 
@@ -40,6 +43,13 @@ func (r *Router) Setup() http.Handler {
 
 	// Protected: requires a valid bearer token.
 	r.mux.Handle("GET /api/v2/auth/me", r.auth.Require(http.HandlerFunc(r.authHandler.Me)))
+
+	// Chefs: reads are public, creating a profile requires authentication.
+	// The literal /nearby pattern is matched ahead of /{id} by ServeMux.
+	r.mux.HandleFunc("GET /api/v2/chefs", r.chefHandler.List)
+	r.mux.HandleFunc("GET /api/v2/chefs/nearby", r.chefHandler.Nearby)
+	r.mux.HandleFunc("GET /api/v2/chefs/{id}", r.chefHandler.Get)
+	r.mux.Handle("POST /api/v2/chefs", r.auth.Require(http.HandlerFunc(r.chefHandler.Create)))
 
 	return r.mux
 }

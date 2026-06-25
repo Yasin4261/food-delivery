@@ -10,4 +10,7 @@ var (
 	ErrUsernameAlreadyExists = errors.New("username already exists")
 	ErrInvalidCredentials    = errors.New("invalid credentials")
 	ErrAccountInactive       = errors.New("account is deactivated")
+
+	ErrChefNotFound      = errors.New("chef not found")
+	ErrChefProfileExists = errors.New("chef profile already exists for this user")
 )

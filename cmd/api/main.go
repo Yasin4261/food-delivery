@@ -47,9 +47,11 @@ func main() {
 func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	// Repositories (driven adapters).
 	userRepo := repository.NewUserRepository(db.DB)
+	chefRepo := repository.NewChefRepository(db.DB)
 
 	// Services (use cases).
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiration)
+	chefService := service.NewChefService(chefRepo)
 
 	// Middleware.
 	authMiddleware := middleware.NewAuth(authService)
@@ -57,7 +59,8 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	// Handlers (driving adapters).
 	healthHandler := handler.NewHealthHandler(db)
 	authHandler := handler.NewAuthHandler(authService)
+	chefHandler := handler.NewChefHandler(chefService)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler)
 	return r.Setup()
 }
