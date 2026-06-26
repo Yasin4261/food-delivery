@@ -67,13 +67,16 @@ func (okPinger) PingContext(context.Context) error { return nil }
 // newTestServer wires the real handler stack over in-memory fake repositories
 // and returns the configured HTTP handler.
 func newTestServer() http.Handler {
+	chefRepo := newFakeChefRepo()
 	authService := service.NewAuthService(newFakeUserRepo(), "test-secret", time.Hour)
-	chefService := service.NewChefService(newFakeChefRepo())
+	chefService := service.NewChefService(chefRepo)
+	menuService := service.NewMenuService(chefRepo, newFakeMenuRepo(), newFakeMenuItemRepo())
 	authMiddleware := middleware.NewAuth(authService)
 	healthHandler := handler.NewHealthHandler(okPinger{})
 	authHandler := handler.NewAuthHandler(authService)
 	chefHandler := handler.NewChefHandler(chefService)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler).Setup()
+	menuHandler := handler.NewMenuHandler(menuService)
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler).Setup()
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.

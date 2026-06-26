@@ -13,4 +13,11 @@ var (
 
 	ErrChefNotFound      = errors.New("chef not found")
 	ErrChefProfileExists = errors.New("chef profile already exists for this user")
+
+	ErrMenuNotFound     = errors.New("menu not found")
+	ErrMenuItemNotFound = errors.New("menu item not found")
+
+	// ErrForbidden marks an authenticated caller acting on a resource they do
+	// not own. Handlers map it to HTTP 403.
+	ErrForbidden = errors.New("you do not have permission to modify this resource")
 )
