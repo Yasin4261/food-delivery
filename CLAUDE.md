@@ -164,10 +164,12 @@ The Go code was wiped and rebuilt as a clean, verified skeleton on branch
 - **Implemented:**
   - `config`, `database` (connection + migration runner), `/health`, the router, the composition root.
   - **Authentication** — `User` entity + `UserRepository` port, Postgres adapter, `AuthService` (bcrypt + JWT via golang-jwt/v5), bearer-token middleware (`Auth.Require` / `RequireRole`), `POST /api/v2/auth/{register,login,logout}` + `GET /api/v2/auth/me`.
-  - **Chef profiles** — `Chef` entity (+ Haversine `CanDeliverTo`) + `ChefRepository` port, Postgres adapter (incl. SQL Haversine `FindNearby`), `ChefService` (one profile per user, paging), `POST /api/v2/chefs` (auth) + `GET /api/v2/chefs`, `/chefs/nearby`, `/chefs/{id}`.
-- **Schema vs. code:** `migrations/` defines `users`, `chefs`, `menus`, `menu_items`, `orders`, `order_items`. `users` and `chefs` are wired into Go; `menus`, `menu_items`, `orders`, `order_items` are not yet.
+  - **Chef profiles** — `Chef` entity (+ Haversine `CanDeliverTo`) + `ChefRepository` port, Postgres adapter (incl. SQL Haversine `FindNearby`), `ChefService` (one profile per user, paging), `POST /api/v2/chefs` (chef role) + `GET /api/v2/chefs`, `/chefs/nearby`, `/chefs/{id}`.
+  - **Menus & dishes** — `Menu` / `MenuItem` entities (+ stock/orderable rules) + `MenuRepository` / `MenuItemRepository` ports, Postgres adapters (soft-delete via `is_active`), `MenuService` (chef-owned CRUD with ownership checks; `MenuItem.chef_id` stamped from the menu). Chef-only mutations `POST/PUT/DELETE /api/v2/menus` and `/api/v2/menu-items`; public reads `GET /api/v2/menus/{id}`, `/menus/{id}/items`, `/chefs/{id}/menus`, `/chefs/{id}/menu-items`.
+  - **Authorization** — privileged `admin` role can't be self-assigned at registration; chef-only endpoints are guarded by `RequireRole(chef)` (see `router.handleRole`), and services additionally enforce per-resource ownership (`domain.ErrForbidden` → 403).
+- **Schema vs. code:** `migrations/` defines `users`, `chefs`, `menus`, `menu_items`, `orders`, `order_items`. `users`, `chefs`, `menus`, `menu_items` are wired into Go; `orders`, `order_items` are not yet.
 - **Tests already exist** — `go test ./...` runs green (`-race` clean). Domain, service and handler layers are covered. See §7a for the pattern to follow; **every new feature ships with tests.**
-- **Not built:** forgot-password (needs a `password_reset_tokens` table + email), menus, orders, favorites, reviews, chat, earnings, online/offline toggle. Use these as the next features, each following the §2 recipe.
+- **Not built:** forgot-password (needs a `password_reset_tokens` table + email), orders, favorites, reviews, chat, earnings, online/offline toggle. Use these as the next features, each following the §2 recipe.
 
 When asked to "implement X", build it inside-out with the §2 recipe (domain → port → service → repository → migration → handler → wire in `main.go` + `router`), and commit per feature on this branch.
 
