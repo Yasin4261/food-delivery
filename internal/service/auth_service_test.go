@@ -117,6 +117,18 @@ func TestRegister_CustomRole(t *testing.T) {
 	}
 }
 
+func TestRegister_AdminCannotSelfAssign(t *testing.T) {
+	svc := newService(newFakeUserRepo())
+	in := validRegister()
+	in.Role = domain.RoleAdmin
+
+	_, err := svc.Register(context.Background(), in)
+	var ve service.ValidationError
+	if !errors.As(err, &ve) {
+		t.Errorf("err = %v, want ValidationError (admin must not be self-assignable)", err)
+	}
+}
+
 func TestRegister_DuplicateEmail(t *testing.T) {
 	svc := newService(newFakeUserRepo())
 	ctx := context.Background()

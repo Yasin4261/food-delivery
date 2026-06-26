@@ -185,7 +185,10 @@ func validateRegister(in RegisterInput) error {
 	case len(in.Password) < 6:
 		return ValidationError{Msg: "password must be at least 6 characters"}
 	case in.Role != "" && !domain.ValidRole(in.Role):
-		return ValidationError{Msg: "invalid role: must be customer, chef or admin"}
+		return ValidationError{Msg: "invalid role: must be customer or chef"}
+	case in.Role == domain.RoleAdmin:
+		// Privileged roles must never be self-assigned at registration.
+		return ValidationError{Msg: "the admin role cannot be self-assigned"}
 	}
 	return nil
 }
