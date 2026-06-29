@@ -17,7 +17,7 @@ type AuthHandler struct {
 	denylist *service.TokenDenylist
 	// exposeResetToken returns the raw reset token in the forgot-password
 	// response. It is a development affordance (until email delivery exists,
-	// see #email-infra) and must be false in production.
+	// see #20) and must be false in production.
 	exposeResetToken bool
 }
 
@@ -127,7 +127,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	resp := map[string]string{"message": "if that email is registered, a reset link has been sent"}
 	if token != "" {
-		// Until email delivery exists (#email-infra) the token is logged, and
+		// Until email delivery exists (#20) the token is logged, and
 		// echoed in the response only in development.
 		log.Printf("password reset token for %q: %s", req.Email, token)
 		if h.exposeResetToken {
