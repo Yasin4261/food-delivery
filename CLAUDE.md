@@ -19,7 +19,7 @@ Key product rules that shape the data model:
 - Orders move through a **status lifecycle** (see §4). Payment is **cash or card**.
 - Customers and chefs can **chat in real time** or just call each other by phone.
 
-> The code was rebuilt from scratch into a clean, Dockerized skeleton (only a `/health` endpoint so far). Everything above beyond health is **planned but not yet built** — see §6 for current state and §5 for the DB tables to add.
+> The code was rebuilt from scratch into a clean, Dockerized hexagonal service, and the **entire product brief above is now implemented** and released as `v3.0.0` (see §6 for the per-feature breakdown and §9 for versioning). The only known follow-up is real email delivery for password reset (issue #20). When extending the app, keep following the §2 recipe.
 
 ---
 
@@ -95,9 +95,10 @@ internal/
   router/                  # route table
 ```
 
-Each empty layer (`domain/`, `service/`, `repository/`) currently holds only a
-`doc.go` that states the package's hexagonal contract. Add real files as
-features land — `middleware/` (JWT auth) returns when auth is built.
+Every layer is now populated (`domain/`, `service/`, `repository/`, `handler/`,
+`middleware/`, `router/`); each package still keeps a `doc.go` stating its
+hexagonal contract. `internal/middleware/` holds JWT auth plus the cross-cutting
+logging, CORS and rate-limit middleware.
 
 Tech: **Go 1.25**, standard library `net/http` (Go 1.22+ method-based routing like `"POST /api/v2/..."`), `database/sql` + `lib/pq` (raw SQL, no ORM), JWT (`golang-jwt/v5`), bcrypt, `golang-migrate`, Swagger via `swaggo`. Module path: `github.com/Yasin4261/food-delivery`.
 
