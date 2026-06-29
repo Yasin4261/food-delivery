@@ -3,6 +3,8 @@ package service_test
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -101,14 +103,47 @@ func (f *fakeResetRepo) MarkUsed(_ context.Context, id int) error {
 	return domain.ErrResetTokenNotFound
 }
 
+// recordingMailer is a domain.Mailer that captures sent emails for assertions.
+type recordingMailer struct {
+	mu   sync.Mutex
+	sent []domain.Email
+}
+
+func (m *recordingMailer) Send(_ context.Context, msg domain.Email) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sent = append(m.sent, msg)
+	return nil
+}
+func (m *recordingMailer) last() (domain.Email, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.sent) == 0 {
+		return domain.Email{}, false
+	}
+	return m.sent[len(m.sent)-1], true
+}
+
+// extractToken pulls the reset token out of an email body containing
+// "...?token=<raw>".
+func extractToken(t *testing.T, body string) string {
+	t.Helper()
+	i := strings.Index(body, "token=")
+	if i < 0 {
+		t.Fatalf("no token in email body: %q", body)
+	}
+	rest := body[i+len("token="):]
+	return strings.FieldsFunc(rest, func(r rune) bool { return r == '\n' || r == '\r' || r == ' ' })[0]
+}
+
 func newService(repo domain.UserRepository) *service.AuthService {
-	return service.NewAuthService(repo, newFakeResetRepo(), "test-secret", time.Hour)
+	return service.NewAuthService(repo, newFakeResetRepo(), &recordingMailer{}, "test-secret", time.Hour, "http://app.test")
 }
 
 // newServiceWithResets builds an AuthService over the given fakes so reset tests
-// can reach into the token store.
-func newServiceWithResets(repo domain.UserRepository, resets domain.PasswordResetRepository) *service.AuthService {
-	return service.NewAuthService(repo, resets, "test-secret", time.Hour)
+// can reach into the token store and the sent mail.
+func newServiceWithResets(repo domain.UserRepository, resets domain.PasswordResetRepository, mail domain.Mailer) *service.AuthService {
+	return service.NewAuthService(repo, resets, mail, "test-secret", time.Hour, "http://app.test")
 }
 
 func validRegister() service.RegisterInput {
@@ -303,21 +338,30 @@ func TestParseToken_RoundTrip(t *testing.T) {
 func TestPasswordReset_Flow(t *testing.T) {
 	repo := newFakeUserRepo()
 	resets := newFakeResetRepo()
-	svc := newServiceWithResets(repo, resets)
+	mail := &recordingMailer{}
+	svc := newServiceWithResets(repo, resets, mail)
 	ctx := context.Background()
 	if _, err := svc.Register(ctx, validRegister()); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 
-	// Unknown email is silent (no token, no error) to avoid enumeration.
-	if tok, err := svc.RequestPasswordReset(ctx, "ghost@example.com"); err != nil || tok != "" {
-		t.Errorf("unknown email = %q,%v, want \"\",nil", tok, err)
+	// Unknown email is a silent no-op: no error, and no email sent.
+	if err := svc.RequestPasswordReset(ctx, "ghost@example.com"); err != nil {
+		t.Errorf("unknown email = %v, want nil", err)
+	}
+	if _, ok := mail.last(); ok {
+		t.Error("no email should be sent for an unknown address")
 	}
 
-	token, err := svc.RequestPasswordReset(ctx, "yasin@example.com")
-	if err != nil || token == "" {
-		t.Fatalf("request reset = %q,%v, want a token", token, err)
+	// Known email: an email is sent carrying the reset link.
+	if err := svc.RequestPasswordReset(ctx, "yasin@example.com"); err != nil {
+		t.Fatalf("request reset: %v", err)
 	}
+	sent, ok := mail.last()
+	if !ok || sent.To != "yasin@example.com" {
+		t.Fatalf("expected a reset email to the user, got %+v", sent)
+	}
+	token := extractToken(t, sent.Body)
 
 	if err := svc.ResetPassword(ctx, token, "newsecret"); err != nil {
 		t.Fatalf("reset: %v", err)
@@ -339,7 +383,8 @@ func TestPasswordReset_Flow(t *testing.T) {
 func TestPasswordReset_RejectsBadTokens(t *testing.T) {
 	repo := newFakeUserRepo()
 	resets := newFakeResetRepo()
-	svc := newServiceWithResets(repo, resets)
+	mail := &recordingMailer{}
+	svc := newServiceWithResets(repo, resets, mail)
 	ctx := context.Background()
 	_, _ = svc.Register(ctx, validRegister())
 
@@ -349,7 +394,11 @@ func TestPasswordReset_RejectsBadTokens(t *testing.T) {
 	}
 
 	// Expired token.
-	token, _ := svc.RequestPasswordReset(ctx, "yasin@example.com")
+	if err := svc.RequestPasswordReset(ctx, "yasin@example.com"); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	sent, _ := mail.last()
+	token := extractToken(t, sent.Body)
 	for _, stored := range resets.byHash {
 		stored.ExpiresAt = time.Now().Add(-time.Minute)
 	}
@@ -357,13 +406,9 @@ func TestPasswordReset_RejectsBadTokens(t *testing.T) {
 		t.Errorf("expired token = %v, want ErrInvalidResetToken", err)
 	}
 
-	// Short password is a validation error.
-	token2, _ := svc.RequestPasswordReset(ctx, "yasin@example.com")
-	if _, err := svc.RequestPasswordReset(ctx, "yasin@example.com"); err != nil {
-		t.Fatalf("request: %v", err)
-	}
+	// Short password is a validation error (checked before the token lookup).
 	var ve service.ValidationError
-	if err := svc.ResetPassword(ctx, token2, "123"); !errors.As(err, &ve) {
+	if err := svc.ResetPassword(ctx, "anything", "123"); !errors.As(err, &ve) {
 		t.Errorf("short password = %v, want ValidationError", err)
 	}
 }
@@ -376,7 +421,7 @@ func TestParseToken_Rejected(t *testing.T) {
 	}
 
 	// A token signed with a different secret must be rejected.
-	other := service.NewAuthService(newFakeUserRepo(), newFakeResetRepo(), "different-secret", time.Hour)
+	other := service.NewAuthService(newFakeUserRepo(), newFakeResetRepo(), &recordingMailer{}, "different-secret", time.Hour, "http://app.test")
 	res, _ := other.Register(context.Background(), validRegister())
 	if _, err := svc.ParseToken(res.Token); err == nil {
 		t.Error("expected rejection of a token signed with another secret")

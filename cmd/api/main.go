@@ -14,7 +14,9 @@ import (
 
 	"github.com/Yasin4261/food-delivery/config"
 	"github.com/Yasin4261/food-delivery/database"
+	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/handler"
+	"github.com/Yasin4261/food-delivery/internal/mailer"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/repository"
 	"github.com/Yasin4261/food-delivery/internal/router"
@@ -97,8 +99,17 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	passwordResetRepo := repository.NewPasswordResetRepository(db.DB)
 	chatRepo := repository.NewChatRepository(db.DB)
 
+	// Mailer (driven adapter): real SMTP when configured, else the dev logger.
+	var mail domain.Mailer
+	if cfg.SMTPHost != "" {
+		mail = mailer.NewSMTP(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.MailFrom)
+	} else {
+		slog.Warn("SMTP_HOST not set; using the dev logging mailer (emails are logged, not sent)")
+		mail = mailer.NewLogging(slog.Default())
+	}
+
 	// Services (use cases).
-	authService := service.NewAuthService(userRepo, passwordResetRepo, cfg.JWTSecret, cfg.JWTExpiration)
+	authService := service.NewAuthService(userRepo, passwordResetRepo, mail, cfg.JWTSecret, cfg.JWTExpiration, cfg.AppBaseURL)
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, menuRepo, menuItemRepo)
 	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo)
@@ -114,7 +125,7 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 
 	// Handlers (driving adapters).
 	healthHandler := handler.NewHealthHandler(db)
-	authHandler := handler.NewAuthHandler(authService, tokenDenylist, cfg.Env != "production")
+	authHandler := handler.NewAuthHandler(authService, tokenDenylist)
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)

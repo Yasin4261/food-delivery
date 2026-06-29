@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -108,9 +109,38 @@ func (okPinger) PingContext(context.Context) error { return nil }
 // newTestServer wires the real handler stack over in-memory fake repositories
 // and returns the configured HTTP handler.
 func newTestServer() http.Handler {
+	srv, _ := newTestServerWithMailer()
+	return srv
+}
+
+// recordingMailer captures emails sent during HTTP tests (e.g. the reset link).
+type recordingMailer struct {
+	mu   sync.Mutex
+	sent []domain.Email
+}
+
+func (m *recordingMailer) Send(_ context.Context, msg domain.Email) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sent = append(m.sent, msg)
+	return nil
+}
+func (m *recordingMailer) last() (domain.Email, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.sent) == 0 {
+		return domain.Email{}, false
+	}
+	return m.sent[len(m.sent)-1], true
+}
+
+// newTestServerWithMailer is like newTestServer but exposes the mailer so reset
+// tests can read the emitted reset link.
+func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	chefRepo := newFakeChefRepo()
 	itemRepo := newFakeMenuItemRepo()
-	authService := service.NewAuthService(newFakeUserRepo(), newFakeResetRepo(), "test-secret", time.Hour)
+	mail := &recordingMailer{}
+	authService := service.NewAuthService(newFakeUserRepo(), newFakeResetRepo(), mail, "test-secret", time.Hour, "http://app.test")
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, newFakeMenuRepo(), itemRepo)
 	orderRepo := newFakeOrderRepo()
@@ -123,7 +153,7 @@ func newTestServer() http.Handler {
 	denylist := service.NewTokenDenylist()
 	authMiddleware := middleware.NewAuth(authService, denylist)
 	healthHandler := handler.NewHealthHandler(okPinger{})
-	authHandler := handler.NewAuthHandler(authService, denylist, true)
+	authHandler := handler.NewAuthHandler(authService, denylist)
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)
@@ -132,7 +162,7 @@ func newTestServer() http.Handler {
 	earningsHandler := handler.NewEarningsHandler(earningsService)
 	searchHandler := handler.NewSearchHandler(searchService)
 	chatHandler := handler.NewChatHandler(chatService)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler).Setup()
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler).Setup(), mail
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.

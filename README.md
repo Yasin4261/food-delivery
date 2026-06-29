@@ -90,6 +90,11 @@ if present). See [`.env.example`](./.env.example).
 | `JWT_EXPIRATION` | `24h` | token lifetime (Go duration) |
 | `ALLOWED_ORIGINS` | — | comma-separated CORS origins (`*` allows any) |
 | `AUTO_MIGRATE` | `false` | run migrations on startup when `true` |
+| `SMTP_HOST` | — | SMTP server host; empty ⇒ dev logging mailer |
+| `SMTP_PORT` | `587` | SMTP server port |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | — | SMTP credentials (omit for an unauthenticated relay) |
+| `MAIL_FROM` | — | From address for outgoing mail (**required** outside dev) |
+| `APP_BASE_URL` | `http://localhost:8080` | base URL for links in emails (e.g. the reset link) |
 
 **JWT secret:** generate a strong one and never commit it:
 
@@ -101,6 +106,13 @@ openssl rand -hex 32
 any non-`development` environment when it is left as the `change-me-in-production`
 placeholder. Provide it via the environment / your secret manager (the compose
 files read `${JWT_SECRET}`), not as a literal in version control.
+
+**Email:** transactional email (password-reset links) goes through the
+`domain.Mailer` port. In `development`, leaving `SMTP_HOST` empty selects the
+**logging mailer** — emails (including the reset link) are written to the logs
+instead of sent, so the flow is testable with no SMTP server. Outside
+`development` the app **fails to boot** unless `SMTP_HOST` and `MAIL_FROM` are
+set, and the reset token is never returned in an API response.
 
 ## API
 

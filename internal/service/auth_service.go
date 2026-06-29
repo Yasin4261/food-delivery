@@ -22,19 +22,24 @@ const passwordResetTTL = time.Hour
 // issuing/validation and password reset. It depends only on domain ports, so
 // it can be unit-tested with fakes.
 type AuthService struct {
-	users     domain.UserRepository
-	resets    domain.PasswordResetRepository
-	jwtSecret []byte
-	jwtExpiry time.Duration
+	users      domain.UserRepository
+	resets     domain.PasswordResetRepository
+	mailer     domain.Mailer
+	jwtSecret  []byte
+	jwtExpiry  time.Duration
+	appBaseURL string // base URL for links in emails (e.g. the reset link)
 }
 
-// NewAuthService builds an AuthService.
-func NewAuthService(users domain.UserRepository, resets domain.PasswordResetRepository, jwtSecret string, jwtExpiry time.Duration) *AuthService {
+// NewAuthService builds an AuthService. appBaseURL is the public base URL used
+// to build links in transactional emails.
+func NewAuthService(users domain.UserRepository, resets domain.PasswordResetRepository, mailer domain.Mailer, jwtSecret string, jwtExpiry time.Duration, appBaseURL string) *AuthService {
 	return &AuthService{
-		users:     users,
-		resets:    resets,
-		jwtSecret: []byte(jwtSecret),
-		jwtExpiry: jwtExpiry,
+		users:      users,
+		resets:     resets,
+		mailer:     mailer,
+		jwtSecret:  []byte(jwtSecret),
+		jwtExpiry:  jwtExpiry,
+		appBaseURL: strings.TrimRight(appBaseURL, "/"),
 	}
 }
 
@@ -142,22 +147,22 @@ func (s *AuthService) Profile(ctx context.Context, userID int) (*domain.User, er
 }
 
 // RequestPasswordReset issues a single-use reset token for the account with the
-// given email and returns the raw token (to be delivered out of band, e.g. by
-// email). To avoid leaking which emails are registered it returns ("", nil)
-// when no account matches — the caller responds identically either way.
-func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+// given email and emails the reset link. To avoid leaking which emails are
+// registered it is a silent no-op when no account matches — the caller responds
+// identically either way, and no token is ever returned to the client.
+func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) error {
 	email = strings.ToLower(strings.TrimSpace(email))
 
 	user, err := s.users.FindByEmail(ctx, email)
 	if err == domain.ErrUserNotFound {
-		return "", nil
+		return nil
 	} else if err != nil {
-		return "", err
+		return err
 	}
 
 	raw, err := randomToken()
 	if err != nil {
-		return "", err
+		return err
 	}
 	token := &domain.PasswordResetToken{
 		UserID:    user.ID,
@@ -165,9 +170,24 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (s
 		ExpiresAt: time.Now().Add(passwordResetTTL),
 	}
 	if err := s.resets.Create(ctx, token); err != nil {
-		return "", err
+		return err
 	}
-	return raw, nil
+
+	return s.mailer.Send(ctx, domain.Email{
+		To:      user.Email,
+		Subject: "Reset your password",
+		Body:    s.resetEmailBody(user.Username, raw),
+	})
+}
+
+// resetEmailBody renders the plain-text password-reset email.
+func (s *AuthService) resetEmailBody(username, rawToken string) string {
+	link := fmt.Sprintf("%s/reset-password?token=%s", s.appBaseURL, rawToken)
+	return fmt.Sprintf(
+		"Hi %s,\n\nWe received a request to reset your password. "+
+			"Use the link below within %s to choose a new one:\n\n%s\n\n"+
+			"If you didn't request this, you can safely ignore this email.\n",
+		username, passwordResetTTL, link)
 }
 
 // ResetPassword redeems a reset token and sets a new password. The token must
