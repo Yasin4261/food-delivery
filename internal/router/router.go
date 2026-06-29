@@ -19,6 +19,7 @@ type Router struct {
 	orderHandler    *handler.OrderHandler
 	favoriteHandler *handler.FavoriteHandler
 	reviewHandler   *handler.ReviewHandler
+	earningsHandler *handler.EarningsHandler
 }
 
 // NewRouter creates a Router with its handler and middleware dependencies.
@@ -31,6 +32,7 @@ func NewRouter(
 	orderHandler *handler.OrderHandler,
 	favoriteHandler *handler.FavoriteHandler,
 	reviewHandler *handler.ReviewHandler,
+	earningsHandler *handler.EarningsHandler,
 ) *Router {
 	return &Router{
 		mux:             http.NewServeMux(),
@@ -42,6 +44,7 @@ func NewRouter(
 		orderHandler:    orderHandler,
 		favoriteHandler: favoriteHandler,
 		reviewHandler:   reviewHandler,
+		earningsHandler: earningsHandler,
 	}
 }
 
@@ -64,6 +67,7 @@ func (r *Router) Setup() http.Handler {
 	r.mux.HandleFunc("GET /api/v2/chefs/{id}", r.chefHandler.Get)
 	r.handleRole("POST /api/v2/chefs", r.chefHandler.Create)
 	r.handleRole("PATCH /api/v2/chefs/me/status", r.chefHandler.SetStatus)
+	r.handleRole("GET /api/v2/chefs/me/earnings", r.earningsHandler.Get)
 
 	// A chef's menus and dishes (public reads).
 	r.mux.HandleFunc("GET /api/v2/chefs/{id}/menus", r.menuHandler.ListChefMenus)

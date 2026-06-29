@@ -53,6 +53,7 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	orderRepo := repository.NewOrderRepository(db.DB)
 	favoriteRepo := repository.NewFavoriteRepository(db.DB)
 	reviewRepo := repository.NewReviewRepository(db.DB)
+	earningsRepo := repository.NewEarningsRepository(db.DB)
 
 	// Services (use cases).
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiration)
@@ -61,6 +62,7 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo)
 	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
 	reviewService := service.NewReviewService(reviewRepo, orderRepo)
+	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
 
 	// Middleware.
 	authMiddleware := middleware.NewAuth(authService)
@@ -73,7 +75,8 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	orderHandler := handler.NewOrderHandler(orderService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
+	earningsHandler := handler.NewEarningsHandler(earningsService)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler)
 	return r.Setup()
 }
