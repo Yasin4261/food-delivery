@@ -76,16 +76,32 @@ func (s *ChefService) Get(ctx context.Context, id int) (*domain.Chef, error) {
 	return s.chefs.FindByID(ctx, id)
 }
 
-// List returns a page of chefs. limit is clamped to a sane range.
-func (s *ChefService) List(ctx context.Context, limit, offset int) ([]*domain.Chef, error) {
+// List returns a page of chefs. limit is clamped to a sane range. onlineOnly
+// restricts the result to chefs currently online.
+func (s *ChefService) List(ctx context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, error) {
 	limit, offset = normalisePaging(limit, offset)
-	return s.chefs.List(ctx, limit, offset)
+	return s.chefs.List(ctx, limit, offset, onlineOnly)
 }
 
-// Nearby returns chefs that can deliver to (lat, lng).
-func (s *ChefService) Nearby(ctx context.Context, lat, lng float64, limit int) ([]*domain.Chef, error) {
+// Nearby returns chefs that can deliver to (lat, lng); onlineOnly restricts to
+// chefs currently online.
+func (s *ChefService) Nearby(ctx context.Context, lat, lng float64, limit int, onlineOnly bool) ([]*domain.Chef, error) {
 	limit, _ = normalisePaging(limit, 0)
-	return s.chefs.FindNearby(ctx, lat, lng, limit)
+	return s.chefs.FindNearby(ctx, lat, lng, limit, onlineOnly)
+}
+
+// SetOnline toggles the live presence of the caller's chef profile and returns
+// the updated profile.
+func (s *ChefService) SetOnline(ctx context.Context, userID int, online bool) (*domain.Chef, error) {
+	chef, err := s.chefs.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.chefs.SetOnline(ctx, chef.ID, online); err != nil {
+		return nil, err
+	}
+	chef.SetOnline(online)
+	return chef, nil
 }
 
 // optional turns a trimmed string into a pointer, or nil when empty.

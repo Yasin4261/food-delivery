@@ -35,6 +35,7 @@ type Chef struct {
 	// Status
 	IsActive          bool `json:"is_active"`
 	IsAcceptingOrders bool `json:"is_accepting_orders"`
+	IsOnline          bool `json:"is_online"` // live presence, distinct from accepting orders
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -74,5 +75,11 @@ func (c *Chef) CanDeliverTo(lat, lng float64) bool {
 // SetAcceptingOrders toggles whether the chef takes new orders.
 func (c *Chef) SetAcceptingOrders(accepting bool) {
 	c.IsAcceptingOrders = accepting
+	c.UpdatedAt = time.Now()
+}
+
+// SetOnline toggles the chef's live presence.
+func (c *Chef) SetOnline(online bool) {
+	c.IsOnline = online
 	c.UpdatedAt = time.Now()
 }

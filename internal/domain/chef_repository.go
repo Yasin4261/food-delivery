@@ -8,8 +8,12 @@ type ChefRepository interface {
 	Create(ctx context.Context, chef *Chef) error
 	FindByID(ctx context.Context, id int) (*Chef, error)
 	FindByUserID(ctx context.Context, userID int) (*Chef, error)
-	List(ctx context.Context, limit, offset int) ([]*Chef, error)
+	// List returns a page of active chefs; onlineOnly restricts to chefs
+	// currently online.
+	List(ctx context.Context, limit, offset int, onlineOnly bool) ([]*Chef, error)
 	// FindNearby returns active chefs whose delivery radius covers (lat, lng),
-	// nearest first.
-	FindNearby(ctx context.Context, lat, lng float64, limit int) ([]*Chef, error)
+	// nearest first; onlineOnly restricts to chefs currently online.
+	FindNearby(ctx context.Context, lat, lng float64, limit int, onlineOnly bool) ([]*Chef, error)
+	// SetOnline updates a chef's live presence flag.
+	SetOnline(ctx context.Context, chefID int, online bool) error
 }

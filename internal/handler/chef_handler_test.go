@@ -42,25 +42,73 @@ func (f *fakeChefRepo) FindByUserID(_ context.Context, userID int) (*domain.Chef
 	}
 	return nil, domain.ErrChefNotFound
 }
-func (f *fakeChefRepo) List(_ context.Context, limit, offset int) ([]*domain.Chef, error) {
+func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
-		if c.IsActive {
+		if c.IsActive && (!onlineOnly || c.IsOnline) {
 			cp := *c
 			out = append(out, &cp)
 		}
 	}
 	return out, nil
 }
-func (f *fakeChefRepo) FindNearby(_ context.Context, lat, lng float64, limit int) ([]*domain.Chef, error) {
+func (f *fakeChefRepo) SetOnline(_ context.Context, chefID int, online bool) error {
+	if c, ok := f.chefs[chefID]; ok {
+		c.IsOnline = online
+		return nil
+	}
+	return domain.ErrChefNotFound
+}
+func (f *fakeChefRepo) FindNearby(_ context.Context, lat, lng float64, limit int, onlineOnly bool) ([]*domain.Chef, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
-		if c.IsActive && c.CanDeliverTo(lat, lng) {
+		if c.IsActive && (!onlineOnly || c.IsOnline) && c.CanDeliverTo(lat, lng) {
 			cp := *c
 			out = append(out, &cp)
 		}
 	}
 	return out, nil
+}
+
+func TestChef_OnlineStatusToggleAndFilter(t *testing.T) {
+	srv := newTestServer()
+	token := registerAndToken(t, srv, "yasin", "yasin@example.com")
+	if rec := do(t, srv, http.MethodPost, "/api/v2/chefs", token,
+		`{"business_name":"K","kitchen_address":"addr"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("create chef = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// New chefs default offline, so an online-only listing is empty.
+	rec := do(t, srv, http.MethodGet, "/api/v2/chefs?online=true", "", "")
+	var list []domain.Chef
+	_ = json.Unmarshal(rec.Body.Bytes(), &list)
+	if len(list) != 0 {
+		t.Errorf("online-only list before toggle = %d, want 0", len(list))
+	}
+
+	// Toggle online.
+	rec = do(t, srv, http.MethodPatch, "/api/v2/chefs/me/status", token, `{"is_online":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set status = %d, want 200 (%s)", rec.Code, rec.Body)
+	}
+	var chef domain.Chef
+	_ = json.Unmarshal(rec.Body.Bytes(), &chef)
+	if !chef.IsOnline {
+		t.Error("chef should be online after toggle")
+	}
+
+	// Now the online-only listing includes the chef.
+	rec = do(t, srv, http.MethodGet, "/api/v2/chefs?online=true", "", "")
+	_ = json.Unmarshal(rec.Body.Bytes(), &list)
+	if len(list) != 1 {
+		t.Errorf("online-only list after toggle = %d, want 1", len(list))
+	}
+
+	// A non-chef cannot toggle status.
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/chefs/me/status", customer, `{"is_online":true}`); rec.Code != http.StatusForbidden {
+		t.Errorf("customer set status = %d, want 403", rec.Code)
+	}
 }
 
 func TestChef_CreateRequiresAuth(t *testing.T) {

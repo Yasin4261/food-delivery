@@ -58,12 +58,40 @@ func TestChefRepository_FindNearby(t *testing.T) {
 		t.Fatalf("create far: %v", err)
 	}
 
-	got, err := repo.FindNearby(ctx(), istLat, istLng, 20)
+	got, err := repo.FindNearby(ctx(), istLat, istLng, 20, false)
 	if err != nil {
 		t.Fatalf("find nearby: %v", err)
 	}
 	if len(got) != 1 || got[0].ID != near.ID {
 		t.Errorf("nearby returned %d chefs, want only the Istanbul kitchen", len(got))
+	}
+}
+
+func TestChefRepository_SetOnlineAndFilter(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewChefRepository(testDB)
+	lat, lng := 41.0082, 28.9784
+
+	c := domain.NewChef(seedUser(t, "chef@example.com").ID, "Kitchen", "addr")
+	c.KitchenLatitude, c.KitchenLongitude, c.DeliveryRadius = &lat, &lng, 10
+	if err := repo.Create(ctx(), c); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Offline by default → excluded from online-only nearby.
+	if got, _ := repo.FindNearby(ctx(), lat, lng, 20, true); len(got) != 0 {
+		t.Errorf("online-only nearby before toggle = %d, want 0", len(got))
+	}
+
+	if err := repo.SetOnline(ctx(), c.ID, true); err != nil {
+		t.Fatalf("set online: %v", err)
+	}
+	got, _ := repo.FindByID(ctx(), c.ID)
+	if !got.IsOnline {
+		t.Error("is_online not persisted")
+	}
+	if near, _ := repo.FindNearby(ctx(), lat, lng, 20, true); len(near) != 1 {
+		t.Errorf("online-only nearby after toggle = %d, want 1", len(near))
 	}
 }
 
@@ -77,7 +105,7 @@ func TestChefRepository_List(t *testing.T) {
 			t.Fatalf("create: %v", err)
 		}
 	}
-	chefs, err := repo.List(ctx(), 2, 0)
+	chefs, err := repo.List(ctx(), 2, 0, false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

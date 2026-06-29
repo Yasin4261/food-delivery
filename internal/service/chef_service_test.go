@@ -45,10 +45,10 @@ func (f *fakeChefRepo) FindByUserID(_ context.Context, userID int) (*domain.Chef
 	return nil, domain.ErrChefNotFound
 }
 
-func (f *fakeChefRepo) List(_ context.Context, limit, offset int) ([]*domain.Chef, error) {
+func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
-		if c.IsActive {
+		if c.IsActive && (!onlineOnly || c.IsOnline) {
 			cp := *c
 			out = append(out, &cp)
 		}
@@ -63,10 +63,18 @@ func (f *fakeChefRepo) List(_ context.Context, limit, offset int) ([]*domain.Che
 	return out[offset:end], nil
 }
 
-func (f *fakeChefRepo) FindNearby(_ context.Context, lat, lng float64, limit int) ([]*domain.Chef, error) {
+func (f *fakeChefRepo) SetOnline(_ context.Context, chefID int, online bool) error {
+	if c, ok := f.chefs[chefID]; ok {
+		c.IsOnline = online
+		return nil
+	}
+	return domain.ErrChefNotFound
+}
+
+func (f *fakeChefRepo) FindNearby(_ context.Context, lat, lng float64, limit int, onlineOnly bool) ([]*domain.Chef, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
-		if c.IsActive && c.CanDeliverTo(lat, lng) {
+		if c.IsActive && (!onlineOnly || c.IsOnline) && c.CanDeliverTo(lat, lng) {
 			cp := *c
 			out = append(out, &cp)
 			if len(out) == limit {
@@ -157,7 +165,7 @@ func TestNearby_FiltersByRadius(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := svc.Nearby(ctx, lat, lng, 20)
+	got, err := svc.Nearby(ctx, lat, lng, 20, false)
 	if err != nil {
 		t.Fatalf("nearby failed: %v", err)
 	}

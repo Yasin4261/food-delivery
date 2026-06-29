@@ -90,7 +90,7 @@ func (h *ChefHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 20)
 	offset := queryInt(r, "offset", 0)
 
-	chefs, err := h.chefs.List(r.Context(), limit, offset)
+	chefs, err := h.chefs.List(r.Context(), limit, offset, queryBool(r, "online"))
 	if err != nil {
 		respondDomainError(w, err)
 		return
@@ -98,7 +98,7 @@ func (h *ChefHandler) List(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, chefs)
 }
 
-// Nearby handles GET /api/v2/chefs/nearby?lat=&lng=&limit=.
+// Nearby handles GET /api/v2/chefs/nearby?lat=&lng=&limit=&online=.
 func (h *ChefHandler) Nearby(w http.ResponseWriter, r *http.Request) {
 	lat, errLat := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
 	lng, errLng := strconv.ParseFloat(r.URL.Query().Get("lng"), 64)
@@ -107,12 +107,36 @@ func (h *ChefHandler) Nearby(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chefs, err := h.chefs.Nearby(r.Context(), lat, lng, queryInt(r, "limit", 20))
+	chefs, err := h.chefs.Nearby(r.Context(), lat, lng, queryInt(r, "limit", 20), queryBool(r, "online"))
 	if err != nil {
 		respondDomainError(w, err)
 		return
 	}
 	respondJSON(w, http.StatusOK, chefs)
+}
+
+type setStatusRequest struct {
+	IsOnline bool `json:"is_online"`
+}
+
+// SetStatus handles PATCH /api/v2/chefs/me/status (chef) — toggle presence.
+func (h *ChefHandler) SetStatus(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req setStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	chef, err := h.chefs.SetOnline(r.Context(), claims.UserID, req.IsOnline)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, chef)
 }
 
 // queryInt reads an integer query parameter, falling back to def.
@@ -121,4 +145,9 @@ func queryInt(r *http.Request, key string, def int) int {
 		return v
 	}
 	return def
+}
+
+// queryBool reports whether a query parameter is set to "true".
+func queryBool(r *http.Request, key string) bool {
+	return r.URL.Query().Get(key) == "true"
 }
