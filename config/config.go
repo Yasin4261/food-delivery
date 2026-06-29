@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -10,12 +11,13 @@ import (
 
 // Config holds all runtime configuration, loaded from environment variables.
 type Config struct {
-	Port          string
-	Env           string
-	DatabaseURL   string
-	JWTSecret     string
-	JWTExpiration time.Duration
-	AutoMigrate   bool
+	Port           string
+	Env            string
+	DatabaseURL    string
+	JWTSecret      string
+	JWTExpiration  time.Duration
+	AutoMigrate    bool
+	AllowedOrigins []string
 }
 
 // LoadConfig reads configuration from the environment (and a local .env file
@@ -25,11 +27,12 @@ func LoadConfig() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		Port:        getEnv("PORT", "8080"),
-		Env:         getEnv("ENV", "development"),
-		DatabaseURL: getEnv("DATABASE_URL", ""),
-		JWTSecret:   getEnv("JWT_SECRET", ""),
-		AutoMigrate: getEnv("AUTO_MIGRATE", "false") == "true",
+		Port:           getEnv("PORT", "8080"),
+		Env:            getEnv("ENV", "development"),
+		DatabaseURL:    getEnv("DATABASE_URL", ""),
+		JWTSecret:      getEnv("JWT_SECRET", ""),
+		AutoMigrate:    getEnv("AUTO_MIGRATE", "false") == "true",
+		AllowedOrigins: splitAndTrim(getEnv("ALLOWED_ORIGINS", "")),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -50,4 +53,15 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// splitAndTrim parses a comma-separated list, dropping blanks.
+func splitAndTrim(s string) []string {
+	out := make([]string, 0)
+	for _, part := range strings.Split(s, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

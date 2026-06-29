@@ -43,8 +43,11 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
-	// Global middleware: structured per-request logging wraps the whole app.
-	app := middleware.RequestLogger(logger)(initializeApp(db, cfg))
+	// Global middleware (outermost first): CORS, then structured per-request
+	// logging, then the app.
+	app := middleware.CORS(cfg.AllowedOrigins)(
+		middleware.RequestLogger(logger)(initializeApp(db, cfg)),
+	)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
