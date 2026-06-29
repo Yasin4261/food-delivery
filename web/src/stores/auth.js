@@ -1,0 +1,48 @@
+import { defineStore } from 'pinia'
+import { api } from '@/api/client'
+
+export const useAuthStore = defineStore('auth', {
+  state: () => ({
+    token: localStorage.getItem('token') || '',
+    user: JSON.parse(localStorage.getItem('user') || 'null'),
+  }),
+  getters: {
+    isAuthenticated: (s) => !!s.token,
+    role: (s) => s.user?.role || null,
+    isChef: (s) => s.user?.role === 'chef',
+  },
+  actions: {
+    persist() {
+      if (this.token) localStorage.setItem('token', this.token)
+      else localStorage.removeItem('token')
+      if (this.user) localStorage.setItem('user', JSON.stringify(this.user))
+      else localStorage.removeItem('user')
+    },
+    apply(result) {
+      this.token = result.token
+      this.user = result.user
+      this.persist()
+    },
+    async login(email, password) {
+      this.apply(await api.post('/auth/login', { email, password }))
+    },
+    async register(input) {
+      this.apply(await api.post('/auth/register', input))
+    },
+    async logout() {
+      try {
+        if (this.token) await api.post('/auth/logout')
+      } catch {
+        // best-effort; clear locally regardless
+      }
+      this.token = ''
+      this.user = null
+      this.persist()
+    },
+    clear() {
+      this.token = ''
+      this.user = null
+      this.persist()
+    },
+  },
+})
