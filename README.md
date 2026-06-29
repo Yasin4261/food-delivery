@@ -76,6 +76,17 @@ cp .env.example .env      # adjust DATABASE_URL if needed
 make run                  # go run ./cmd/api
 ```
 
+### Web UI (Vue)
+
+A role-based **Vue 3 + Vite + Tailwind** SPA lives in [`web/`](./web). With the
+API running:
+
+```bash
+cd web && npm install && npm run dev   # http://localhost:5173 (proxies /api to :8080)
+```
+
+See [`web/README.md`](./web/README.md) for details.
+
 ## Configuration
 
 Configuration is read from environment variables (a local `.env` file is loaded

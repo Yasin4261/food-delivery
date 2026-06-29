@@ -100,6 +100,12 @@ Every layer is now populated (`domain/`, `service/`, `repository/`, `handler/`,
 hexagonal contract. `internal/middleware/` holds JWT auth plus the cross-cutting
 logging, CORS and rate-limit middleware.
 
+**Frontend:** `web/` is a separate **Vue 3 + Vite + JavaScript + Tailwind** SPA
+(Pinia + Vue Router) — a single role-based app (customer + chef views). It is an
+independent driving adapter: it only talks to the API over `/api/v2`, owns no
+business rules, and has its own toolchain (`cd web && npm install`). Vite proxies
+`/api` to the Go backend in dev. See `web/README.md`.
+
 Tech: **Go 1.25**, standard library `net/http` (Go 1.22+ method-based routing like `"POST /api/v2/..."`), `database/sql` + `lib/pq` (raw SQL, no ORM), JWT (`golang-jwt/v5`), bcrypt, `golang-migrate`, Swagger via `swaggo`. Module path: `github.com/Yasin4261/food-delivery`.
 
 ---
