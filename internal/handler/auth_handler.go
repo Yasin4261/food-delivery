@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/Yasin4261/food-delivery/internal/middleware"
@@ -15,16 +14,11 @@ import (
 type AuthHandler struct {
 	auth     *service.AuthService
 	denylist *service.TokenDenylist
-	// exposeResetToken returns the raw reset token in the forgot-password
-	// response. It is a development affordance (until email delivery exists,
-	// see #20) and must be false in production.
-	exposeResetToken bool
 }
 
-// NewAuthHandler builds an AuthHandler. exposeResetToken should be false in
-// production, where the token is delivered by email instead.
-func NewAuthHandler(auth *service.AuthService, denylist *service.TokenDenylist, exposeResetToken bool) *AuthHandler {
-	return &AuthHandler{auth: auth, denylist: denylist, exposeResetToken: exposeResetToken}
+// NewAuthHandler builds an AuthHandler.
+func NewAuthHandler(auth *service.AuthService, denylist *service.TokenDenylist) *AuthHandler {
+	return &AuthHandler{auth: auth, denylist: denylist}
 }
 
 type registerRequest struct {
@@ -109,9 +103,9 @@ type resetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
-// ForgotPassword handles POST /api/v2/auth/forgot-password. It always responds
-// 202 with a generic message, regardless of whether the email is registered,
-// so it cannot be used to enumerate accounts.
+// ForgotPassword handles POST /api/v2/auth/forgot-password. When the email is
+// registered it emails a reset link; it always responds 202 with a generic
+// message (and never the token) so it cannot be used to enumerate accounts.
 func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	var req forgotPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -119,22 +113,13 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.auth.RequestPasswordReset(r.Context(), req.Email)
-	if err != nil {
+	if err := h.auth.RequestPasswordReset(r.Context(), req.Email); err != nil {
 		respondDomainError(w, err)
 		return
 	}
-
-	resp := map[string]string{"message": "if that email is registered, a reset link has been sent"}
-	if token != "" {
-		// Until email delivery exists (#20) the token is logged, and
-		// echoed in the response only in development.
-		log.Printf("password reset token for %q: %s", req.Email, token)
-		if h.exposeResetToken {
-			resp["reset_token"] = token
-		}
-	}
-	respondJSON(w, http.StatusAccepted, resp)
+	respondJSON(w, http.StatusAccepted, map[string]string{
+		"message": "if that email is registered, a reset link has been sent",
+	})
 }
 
 // ResetPassword handles POST /api/v2/auth/reset-password.

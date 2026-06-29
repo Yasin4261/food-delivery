@@ -18,6 +18,14 @@ type Config struct {
 	JWTExpiration  time.Duration
 	AutoMigrate    bool
 	AllowedOrigins []string
+
+	// Mail. When SMTPHost is empty the app uses the dev logging mailer.
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	MailFrom     string
+	AppBaseURL   string // public base URL for links in emails
 }
 
 // LoadConfig reads configuration from the environment (and a local .env file
@@ -33,6 +41,13 @@ func LoadConfig() (*Config, error) {
 		JWTSecret:      getEnv("JWT_SECRET", ""),
 		AutoMigrate:    getEnv("AUTO_MIGRATE", "false") == "true",
 		AllowedOrigins: splitAndTrim(getEnv("ALLOWED_ORIGINS", "")),
+
+		SMTPHost:     getEnv("SMTP_HOST", ""),
+		SMTPPort:     getEnv("SMTP_PORT", "587"),
+		SMTPUsername: getEnv("SMTP_USERNAME", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		MailFrom:     getEnv("MAIL_FROM", ""),
+		AppBaseURL:   getEnv("APP_BASE_URL", "http://localhost:8080"),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -40,6 +55,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	if err := validateJWTSecret(cfg); err != nil {
+		return nil, err
+	}
+	if err := validateMail(cfg); err != nil {
 		return nil, err
 	}
 
@@ -64,6 +82,22 @@ func validateJWTSecret(cfg *Config) error {
 	}
 	if cfg.Env != "development" && cfg.JWTSecret == placeholderJWTSecret {
 		return fmt.Errorf("JWT_SECRET is set to the insecure placeholder; set a strong secret in env=%q", cfg.Env)
+	}
+	return nil
+}
+
+// validateMail fails fast on a misconfigured mailer outside development. In
+// development an empty SMTP_HOST means "use the dev logging mailer"; in any
+// other environment real SMTP delivery is required (host + from address).
+func validateMail(cfg *Config) error {
+	if cfg.Env == "development" {
+		return nil
+	}
+	if cfg.SMTPHost == "" {
+		return fmt.Errorf("SMTP_HOST is required in env=%q (no dev logging mailer outside development)", cfg.Env)
+	}
+	if cfg.MailFrom == "" {
+		return fmt.Errorf("MAIL_FROM is required when SMTP is configured")
 	}
 	return nil
 }
