@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -38,9 +40,15 @@ func main() {
 		log.Println("migrations applied")
 	}
 
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	slog.SetDefault(logger)
+
+	// Global middleware: structured per-request logging wraps the whole app.
+	app := middleware.RequestLogger(logger)(initializeApp(db, cfg))
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           initializeApp(db, cfg),
+		Handler:           app,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
