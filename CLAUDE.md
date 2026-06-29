@@ -223,3 +223,33 @@ make fmt            # go fmt ./...
 ```
 
 App auto-runs migrations on boot when `AutoMigrate` is enabled (see `cmd/api/main.go`). Config comes from `.env*` files (see `.env.example`).
+
+---
+
+## 9. Versioning & releases
+
+Releases are tracked with **annotated git tags following SemVer** (`vMAJOR.MINOR.PATCH`). There are **no long-lived version branches** — work happens on short-lived feature branches that merge into `main`, and each release is a tag on `main`. (The old `archive/v1` / `v2` branches were deleted; their history is preserved in `main` and the tags below.)
+
+Bump rules:
+- **MAJOR** — incompatible API/behaviour change (or a ground-up rewrite).
+- **MINOR** — backwards-compatible feature.
+- **PATCH** — backwards-compatible fix.
+
+Tag history:
+
+| Tag | What it marks |
+|---|---|
+| `v0.1.0` | early "move to DDD" of the original project |
+| `v1.0.0` | original project, documented |
+| `v2.0.0` | original gin-based v2 (pre-rebuild) |
+| `v3.0.0` | **this hexagonal rebuild** — full product brief + hardening (PR #19, closes #1–#18) |
+
+Cutting a release (annotated tag on a clean, green `main`):
+
+```bash
+git checkout main && git pull
+git tag -a vX.Y.Z -m "vX.Y.Z — <summary>"
+git push origin vX.Y.Z
+```
+
+`git describe --tags` then yields human-readable build versions; wire it into the binary via ldflags if/when a `version` endpoint is added.
