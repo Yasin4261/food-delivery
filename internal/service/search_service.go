@@ -18,39 +18,39 @@ func NewSearchService(search domain.SearchRepository) *SearchService {
 	return &SearchService{search: search}
 }
 
-// Chefs searches chefs.
-func (s *SearchService) Chefs(ctx context.Context, q string, limit, offset int) ([]*domain.Chef, error) {
+// Chefs searches chefs, returning a page and the total.
+func (s *SearchService) Chefs(ctx context.Context, q string, limit, offset int) ([]*domain.Chef, int, error) {
 	q, limit, offset, err := s.normalise(q, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	return s.search.SearchChefs(ctx, q, limit, offset)
 }
 
-// Foods searches dishes.
-func (s *SearchService) Foods(ctx context.Context, q string, limit, offset int) ([]*domain.MenuItem, error) {
+// Foods searches dishes, returning a page and the total.
+func (s *SearchService) Foods(ctx context.Context, q string, limit, offset int) ([]*domain.MenuItem, int, error) {
 	q, limit, offset, err := s.normalise(q, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	return s.search.SearchMenuItems(ctx, q, limit, offset)
 }
 
-// Users searches users (admin-only at the handler layer). Password hashes are
-// cleared before returning.
-func (s *SearchService) Users(ctx context.Context, q string, limit, offset int) ([]*domain.User, error) {
+// Users searches users (admin-only at the handler layer), returning a page and
+// the total. Password hashes are cleared before returning.
+func (s *SearchService) Users(ctx context.Context, q string, limit, offset int) ([]*domain.User, int, error) {
 	q, limit, offset, err := s.normalise(q, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	users, err := s.search.SearchUsers(ctx, q, limit, offset)
+	users, total, err := s.search.SearchUsers(ctx, q, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for _, u := range users {
 		u.PasswordHash = ""
 	}
-	return users, nil
+	return users, total, nil
 }
 
 // normalise trims the query (rejecting empty) and clamps the paging window.

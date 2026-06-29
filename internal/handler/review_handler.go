@@ -61,12 +61,13 @@ func (h *ReviewHandler) ListForChef(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid chef id")
 		return
 	}
-	reviews, err := h.reviews.ListForChef(r.Context(), id, queryInt(r, "limit", 20), queryInt(r, "offset", 0))
+	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
+	reviews, total, err := h.reviews.ListForChef(r.Context(), id, limit, offset)
 	if err != nil {
 		respondReviewError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, reviews)
+	respondPage(w, reviews, limit, offset, total)
 }
 
 // ListForMenuItem handles GET /api/v2/menu-items/{id}/reviews (public).
@@ -76,12 +77,13 @@ func (h *ReviewHandler) ListForMenuItem(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusBadRequest, "invalid menu item id")
 		return
 	}
-	reviews, err := h.reviews.ListForMenuItem(r.Context(), id, queryInt(r, "limit", 20), queryInt(r, "offset", 0))
+	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
+	reviews, total, err := h.reviews.ListForMenuItem(r.Context(), id, limit, offset)
 	if err != nil {
 		respondReviewError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, reviews)
+	respondPage(w, reviews, limit, offset, total)
 }
 
 // respondReviewError maps validation errors to 400 and otherwise defers to the

@@ -9,6 +9,7 @@ type FavoriteRepository interface {
 	Add(ctx context.Context, userID, chefID int) error
 	// Remove unfavorites a chef. Removing a non-favorite is a no-op.
 	Remove(ctx context.Context, userID, chefID int) error
-	// ListChefs returns the active chefs a user has favorited, newest first.
-	ListChefs(ctx context.Context, userID, limit, offset int) ([]*Chef, error)
+	// ListChefs returns a page of the active chefs a user has favorited (newest
+	// first) plus the total number favorited.
+	ListChefs(ctx context.Context, userID, limit, offset int) ([]*Chef, int, error)
 }

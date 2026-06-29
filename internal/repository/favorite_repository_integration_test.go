@@ -22,12 +22,12 @@ func TestFavoriteRepository_AddIdempotentAndList(t *testing.T) {
 		t.Fatalf("re-add (should be idempotent): %v", err)
 	}
 
-	chefs, err := repo.ListChefs(ctx(), customer.ID, 20, 0)
+	chefs, total, err := repo.ListChefs(ctx(), customer.ID, 20, 0)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
-	if len(chefs) != 1 || chefs[0].ID != chef.ID {
-		t.Fatalf("favorites = %d, want exactly one (id %d)", len(chefs), chef.ID)
+	if len(chefs) != 1 || chefs[0].ID != chef.ID || total != 1 {
+		t.Fatalf("favorites = %d / total %d, want exactly one (id %d)", len(chefs), total, chef.ID)
 	}
 
 	// Remove unfavorites; removing again is a no-op.
@@ -37,7 +37,7 @@ func TestFavoriteRepository_AddIdempotentAndList(t *testing.T) {
 	if err := repo.Remove(ctx(), customer.ID, chef.ID); err != nil {
 		t.Fatalf("re-remove (no-op): %v", err)
 	}
-	chefs, _ = repo.ListChefs(ctx(), customer.ID, 20, 0)
+	chefs, _, _ = repo.ListChefs(ctx(), customer.ID, 20, 0)
 	if len(chefs) != 0 {
 		t.Errorf("favorites after remove = %d, want 0", len(chefs))
 	}
@@ -56,7 +56,7 @@ func TestFavoriteRepository_ListExcludesInactiveChef(t *testing.T) {
 	if _, err := testDB.Exec(`UPDATE chefs SET is_active = false WHERE id = $1`, chef.ID); err != nil {
 		t.Fatalf("deactivate chef: %v", err)
 	}
-	chefs, err := repo.ListChefs(ctx(), customer.ID, 20, 0)
+	chefs, _, err := repo.ListChefs(ctx(), customer.ID, 20, 0)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

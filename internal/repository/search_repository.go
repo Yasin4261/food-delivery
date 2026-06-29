@@ -23,47 +23,48 @@ func NewSearchRepository(db *sql.DB) *SearchRepository {
 func like(q string) string { return "%" + q + "%" }
 
 // SearchChefs finds active chefs by business name, specialty or city.
-func (r *SearchRepository) SearchChefs(ctx context.Context, q string, limit, offset int) ([]*domain.Chef, error) {
-	query := `SELECT` + chefColumns + `
-		FROM chefs
-		WHERE is_active = true
-		  AND (business_name ILIKE $1 OR specialty ILIKE $1 OR kitchen_city ILIKE $1)
-		ORDER BY rating DESC, created_at DESC
-		LIMIT $2 OFFSET $3`
-	rows, err := r.db.QueryContext(ctx, query, like(q), limit, offset)
+func (r *SearchRepository) SearchChefs(ctx context.Context, q string, limit, offset int) ([]*domain.Chef, int, error) {
+	const where = ` WHERE is_active = true
+		  AND (business_name ILIKE $1 OR specialty ILIKE $1 OR kitchen_city ILIKE $1)`
+	rows, err := r.db.QueryContext(ctx, `SELECT`+chefColumns+` FROM chefs`+where+`
+		ORDER BY rating DESC, created_at DESC LIMIT $2 OFFSET $3`, like(q), limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("search chefs: %w", err)
+		return nil, 0, fmt.Errorf("search chefs: %w", err)
 	}
 	defer rows.Close()
-	return collectChefs(rows)
+	chefs, err := collectChefs(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := r.count(ctx, `SELECT count(*) FROM chefs`+where, like(q))
+	return chefs, total, err
 }
 
 // SearchMenuItems finds active & available dishes.
-func (r *SearchRepository) SearchMenuItems(ctx context.Context, q string, limit, offset int) ([]*domain.MenuItem, error) {
-	query := `SELECT` + menuItemColumns + `
-		FROM menu_items
-		WHERE is_active = true AND is_available = true
-		  AND (name ILIKE $1 OR description ILIKE $1 OR category ILIKE $1 OR cuisine ILIKE $1)
-		ORDER BY is_featured DESC, rating DESC, created_at DESC
-		LIMIT $2 OFFSET $3`
-	rows, err := r.db.QueryContext(ctx, query, like(q), limit, offset)
+func (r *SearchRepository) SearchMenuItems(ctx context.Context, q string, limit, offset int) ([]*domain.MenuItem, int, error) {
+	const where = ` WHERE is_active = true AND is_available = true
+		  AND (name ILIKE $1 OR description ILIKE $1 OR category ILIKE $1 OR cuisine ILIKE $1)`
+	rows, err := r.db.QueryContext(ctx, `SELECT`+menuItemColumns+` FROM menu_items`+where+`
+		ORDER BY is_featured DESC, rating DESC, created_at DESC LIMIT $2 OFFSET $3`, like(q), limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("search menu items: %w", err)
+		return nil, 0, fmt.Errorf("search menu items: %w", err)
 	}
 	defer rows.Close()
-	return collectMenuItems(rows)
+	items, err := collectMenuItems(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := r.count(ctx, `SELECT count(*) FROM menu_items`+where, like(q))
+	return items, total, err
 }
 
 // SearchUsers finds active users by username or email.
-func (r *SearchRepository) SearchUsers(ctx context.Context, q string, limit, offset int) ([]*domain.User, error) {
-	query := `SELECT` + userColumns + `
-		FROM users
-		WHERE is_active = true AND (username ILIKE $1 OR email ILIKE $1)
-		ORDER BY id
-		LIMIT $2 OFFSET $3`
-	rows, err := r.db.QueryContext(ctx, query, like(q), limit, offset)
+func (r *SearchRepository) SearchUsers(ctx context.Context, q string, limit, offset int) ([]*domain.User, int, error) {
+	const where = ` WHERE is_active = true AND (username ILIKE $1 OR email ILIKE $1)`
+	rows, err := r.db.QueryContext(ctx, `SELECT`+userColumns+` FROM users`+where+`
+		ORDER BY id LIMIT $2 OFFSET $3`, like(q), limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("search users: %w", err)
+		return nil, 0, fmt.Errorf("search users: %w", err)
 	}
 	defer rows.Close()
 
@@ -71,9 +72,21 @@ func (r *SearchRepository) SearchUsers(ctx context.Context, q string, limit, off
 	for rows.Next() {
 		u, err := scanUser(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan user: %w", err)
+			return nil, 0, fmt.Errorf("scan user: %w", err)
 		}
 		users = append(users, u)
 	}
-	return users, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	total, err := r.count(ctx, `SELECT count(*) FROM users`+where, like(q))
+	return users, total, err
+}
+
+func (r *SearchRepository) count(ctx context.Context, query string, arg any) (int, error) {
+	var total int
+	if err := r.db.QueryRowContext(ctx, query, arg).Scan(&total); err != nil {
+		return 0, fmt.Errorf("count search: %w", err)
+	}
+	return total, nil
 }

@@ -62,8 +62,9 @@ func (r *MenuRepository) FindByID(ctx context.Context, id int) (*domain.Menu, er
 	return m, nil
 }
 
-// ListByChef returns a chef's active menus, featured first then newest.
-func (r *MenuRepository) ListByChef(ctx context.Context, chefID, limit, offset int) ([]*domain.Menu, error) {
+// ListByChef returns a page of a chef's active menus (featured first then
+// newest) plus the total.
+func (r *MenuRepository) ListByChef(ctx context.Context, chefID, limit, offset int) ([]*domain.Menu, int, error) {
 	query := `SELECT` + menuColumns + `
 		FROM menus WHERE chef_id = $1 AND is_active = true
 		ORDER BY is_featured DESC, created_at DESC
@@ -71,7 +72,7 @@ func (r *MenuRepository) ListByChef(ctx context.Context, chefID, limit, offset i
 
 	rows, err := r.db.QueryContext(ctx, query, chefID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list menus: %w", err)
+		return nil, 0, fmt.Errorf("list menus: %w", err)
 	}
 	defer rows.Close()
 
@@ -79,11 +80,20 @@ func (r *MenuRepository) ListByChef(ctx context.Context, chefID, limit, offset i
 	for rows.Next() {
 		m, err := scanMenu(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan menu: %w", err)
+			return nil, 0, fmt.Errorf("scan menu: %w", err)
 		}
 		menus = append(menus, m)
 	}
-	return menus, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	var total int
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM menus WHERE chef_id = $1 AND is_active = true`, chefID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count menus: %w", err)
+	}
+	return menus, total, nil
 }
 
 // Update writes the editable fields of a menu and refreshes updated_at.

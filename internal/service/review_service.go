@@ -69,14 +69,14 @@ func (s *ReviewService) Create(ctx context.Context, userID int, in CreateReviewI
 	return review, nil
 }
 
-// ListForChef returns a chef's reviews.
-func (s *ReviewService) ListForChef(ctx context.Context, chefID, limit, offset int) ([]*domain.Review, error) {
+// ListForChef returns a page of a chef's reviews and the total.
+func (s *ReviewService) ListForChef(ctx context.Context, chefID, limit, offset int) ([]*domain.Review, int, error) {
 	limit, offset = normalisePaging(limit, offset)
 	return s.reviews.ListByChef(ctx, chefID, limit, offset)
 }
 
-// ListForMenuItem returns a dish's reviews.
-func (s *ReviewService) ListForMenuItem(ctx context.Context, menuItemID, limit, offset int) ([]*domain.Review, error) {
+// ListForMenuItem returns a page of a dish's reviews and the total.
+func (s *ReviewService) ListForMenuItem(ctx context.Context, menuItemID, limit, offset int) ([]*domain.Review, int, error) {
 	limit, offset = normalisePaging(limit, offset)
 	return s.reviews.ListByMenuItem(ctx, menuItemID, limit, offset)
 }

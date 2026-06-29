@@ -49,7 +49,7 @@ func TestMenuItemRepository_CRUDAndScan(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Errorf("list by menu = %d, %v", len(list), err)
 	}
-	chefList, err := repo.ListByChef(ctx(), chef.ID, 20, 0)
+	chefList, _, err := repo.ListByChef(ctx(), chef.ID, 20, 0)
 	if err != nil || len(chefList) != 1 {
 		t.Errorf("list by chef = %d, %v", len(chefList), err)
 	}

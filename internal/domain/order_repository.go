@@ -10,12 +10,12 @@ type OrderRepository interface {
 	Create(ctx context.Context, order *Order) error
 	// FindByID returns an order with all of its items.
 	FindByID(ctx context.Context, id int) (*Order, error)
-	// ListByUser returns a customer's orders (newest first), each with all of
-	// its items.
-	ListByUser(ctx context.Context, userID, limit, offset int) ([]*Order, error)
-	// ListByChef returns orders that contain at least one of the chef's items
-	// (newest first). Each returned order's Items are filtered to that chef.
-	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Order, error)
+	// ListByUser returns a page of a customer's orders (newest first, each with
+	// all its items) and the total order count.
+	ListByUser(ctx context.Context, userID, limit, offset int) ([]*Order, int, error)
+	// ListByChef returns a page of orders containing at least one of the chef's
+	// items (newest first, items filtered to that chef) and the total count.
+	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Order, int, error)
 	// UpdateStatus persists the mutable status/payment/timestamp fields of an
 	// order after a transition.
 	UpdateStatus(ctx context.Context, order *Order) error

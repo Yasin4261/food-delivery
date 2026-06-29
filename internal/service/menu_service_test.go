@@ -34,7 +34,7 @@ func (f *fakeMenuRepo) FindByID(_ context.Context, id int) (*domain.Menu, error)
 	}
 	return nil, domain.ErrMenuNotFound
 }
-func (f *fakeMenuRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Menu, error) {
+func (f *fakeMenuRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Menu, int, error) {
 	out := make([]*domain.Menu, 0)
 	for _, m := range f.menus {
 		if m.ChefID == chefID && m.IsActive {
@@ -42,7 +42,7 @@ func (f *fakeMenuRepo) ListByChef(_ context.Context, chefID, limit, offset int) 
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 func (f *fakeMenuRepo) Update(_ context.Context, m *domain.Menu) error {
 	if _, ok := f.menus[m.ID]; !ok {
@@ -94,7 +94,7 @@ func (f *fakeMenuItemRepo) ListByMenu(_ context.Context, menuID int) ([]*domain.
 	}
 	return out, nil
 }
-func (f *fakeMenuItemRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.MenuItem, error) {
+func (f *fakeMenuItemRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.MenuItem, int, error) {
 	out := make([]*domain.MenuItem, 0)
 	for _, m := range f.items {
 		if m.ChefID == chefID && m.IsActive {
@@ -102,7 +102,7 @@ func (f *fakeMenuItemRepo) ListByChef(_ context.Context, chefID, limit, offset i
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 func (f *fakeMenuItemRepo) Update(_ context.Context, m *domain.MenuItem) error {
 	if _, ok := f.items[m.ID]; !ok {

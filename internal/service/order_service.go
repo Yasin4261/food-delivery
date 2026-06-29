@@ -125,8 +125,8 @@ func (s *OrderService) GetForCustomer(ctx context.Context, userID, orderID int) 
 	return order, nil
 }
 
-// ListForCustomer returns the customer's order history.
-func (s *OrderService) ListForCustomer(ctx context.Context, userID, limit, offset int) ([]*domain.Order, error) {
+// ListForCustomer returns a page of the customer's order history and the total.
+func (s *OrderService) ListForCustomer(ctx context.Context, userID, limit, offset int) ([]*domain.Order, int, error) {
 	limit, offset = normalisePaging(limit, offset)
 	return s.orders.ListByUser(ctx, userID, limit, offset)
 }
@@ -146,11 +146,12 @@ func (s *OrderService) CancelForCustomer(ctx context.Context, userID, orderID in
 	return order, nil
 }
 
-// ListForChef returns orders containing the chef's items, scoped to that chef.
-func (s *OrderService) ListForChef(ctx context.Context, userID, limit, offset int) ([]*domain.Order, error) {
+// ListForChef returns a page of orders containing the chef's items (scoped to
+// that chef) and the total.
+func (s *OrderService) ListForChef(ctx context.Context, userID, limit, offset int) ([]*domain.Order, int, error) {
 	chef, err := s.chefs.FindByUserID(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	limit, offset = normalisePaging(limit, offset)
 	return s.orders.ListByChef(ctx, chef.ID, limit, offset)

@@ -49,7 +49,7 @@ func TestMenuRepository_CRUD(t *testing.T) {
 	if err := repo.Deactivate(ctx(), m.ID); err != nil {
 		t.Fatalf("deactivate: %v", err)
 	}
-	list, err := repo.ListByChef(ctx(), chef.ID, 20, 0)
+	list, _, err := repo.ListByChef(ctx(), chef.ID, 20, 0)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

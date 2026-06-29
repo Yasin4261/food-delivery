@@ -121,8 +121,8 @@ func (s *MenuService) GetMenu(ctx context.Context, id int) (*domain.Menu, error)
 	return menu, nil
 }
 
-// ListChefMenus returns a chef's active menus (public).
-func (s *MenuService) ListChefMenus(ctx context.Context, chefID, limit, offset int) ([]*domain.Menu, error) {
+// ListChefMenus returns a page of a chef's active menus and the total (public).
+func (s *MenuService) ListChefMenus(ctx context.Context, chefID, limit, offset int) ([]*domain.Menu, int, error) {
 	limit, offset = normalisePaging(limit, offset)
 	return s.menus.ListByChef(ctx, chefID, limit, offset)
 }
@@ -176,8 +176,9 @@ func (s *MenuService) ListMenuItems(ctx context.Context, menuID int) ([]*domain.
 	return s.items.ListByMenu(ctx, menuID)
 }
 
-// ListChefItems returns a chef's active dishes across all menus (public).
-func (s *MenuService) ListChefItems(ctx context.Context, chefID, limit, offset int) ([]*domain.MenuItem, error) {
+// ListChefItems returns a page of a chef's active dishes across all menus and
+// the total (public).
+func (s *MenuService) ListChefItems(ctx context.Context, chefID, limit, offset int) ([]*domain.MenuItem, int, error) {
 	limit, offset = normalisePaging(limit, offset)
 	return s.items.ListByChef(ctx, chefID, limit, offset)
 }

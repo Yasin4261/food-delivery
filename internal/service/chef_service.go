@@ -78,7 +78,7 @@ func (s *ChefService) Get(ctx context.Context, id int) (*domain.Chef, error) {
 
 // List returns a page of chefs. limit is clamped to a sane range. onlineOnly
 // restricts the result to chefs currently online.
-func (s *ChefService) List(ctx context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, error) {
+func (s *ChefService) List(ctx context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, int, error) {
 	limit, offset = normalisePaging(limit, offset)
 	return s.chefs.List(ctx, limit, offset, onlineOnly)
 }

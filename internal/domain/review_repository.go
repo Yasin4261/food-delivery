@@ -10,8 +10,8 @@ type ReviewRepository interface {
 	// aggregate rating in the same transaction. A duplicate (same user, order
 	// and target) returns ErrReviewExists.
 	Create(ctx context.Context, review *Review) error
-	// ListByChef returns reviews of a chef, newest first.
-	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Review, error)
-	// ListByMenuItem returns reviews of a dish, newest first.
-	ListByMenuItem(ctx context.Context, menuItemID, limit, offset int) ([]*Review, error)
+	// ListByChef returns a page of a chef's reviews (newest first) and the total.
+	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Review, int, error)
+	// ListByMenuItem returns a page of a dish's reviews (newest first) and the total.
+	ListByMenuItem(ctx context.Context, menuItemID, limit, offset int) ([]*Review, int, error)
 }

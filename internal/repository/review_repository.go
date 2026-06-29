@@ -97,18 +97,36 @@ func recomputeRating(ctx context.Context, tx *sql.Tx, rv *domain.Review) error {
 	return nil
 }
 
-// ListByChef returns reviews of a chef, newest first.
-func (r *ReviewRepository) ListByChef(ctx context.Context, chefID, limit, offset int) ([]*domain.Review, error) {
-	return r.list(ctx, `SELECT`+reviewColumns+`
+// ListByChef returns a page of a chef's reviews (newest first) and the total.
+func (r *ReviewRepository) ListByChef(ctx context.Context, chefID, limit, offset int) ([]*domain.Review, int, error) {
+	reviews, err := r.list(ctx, `SELECT`+reviewColumns+`
 		FROM reviews WHERE chef_id = $1
 		ORDER BY created_at DESC LIMIT $2 OFFSET $3`, chefID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := r.count(ctx, `SELECT count(*) FROM reviews WHERE chef_id = $1`, chefID)
+	return reviews, total, err
 }
 
-// ListByMenuItem returns reviews of a dish, newest first.
-func (r *ReviewRepository) ListByMenuItem(ctx context.Context, menuItemID, limit, offset int) ([]*domain.Review, error) {
-	return r.list(ctx, `SELECT`+reviewColumns+`
+// ListByMenuItem returns a page of a dish's reviews (newest first) and the total.
+func (r *ReviewRepository) ListByMenuItem(ctx context.Context, menuItemID, limit, offset int) ([]*domain.Review, int, error) {
+	reviews, err := r.list(ctx, `SELECT`+reviewColumns+`
 		FROM reviews WHERE menu_item_id = $1
 		ORDER BY created_at DESC LIMIT $2 OFFSET $3`, menuItemID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := r.count(ctx, `SELECT count(*) FROM reviews WHERE menu_item_id = $1`, menuItemID)
+	return reviews, total, err
+}
+
+func (r *ReviewRepository) count(ctx context.Context, query string, arg any) (int, error) {
+	var total int
+	if err := r.db.QueryRowContext(ctx, query, arg).Scan(&total); err != nil {
+		return 0, fmt.Errorf("count reviews: %w", err)
+	}
+	return total, nil
 }
 
 func (r *ReviewRepository) list(ctx context.Context, query string, args ...any) ([]*domain.Review, error) {

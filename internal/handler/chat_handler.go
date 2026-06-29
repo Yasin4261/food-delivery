@@ -66,7 +66,8 @@ func (h *ChatHandler) ListConversations(w http.ResponseWriter, r *http.Request) 
 		respondDomainError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, convs)
+	// All of the requester's threads are returned (not offset-paginated).
+	respondPage(w, convs, len(convs), 0, len(convs))
 }
 
 type postMessageRequest struct {
@@ -112,12 +113,13 @@ func (h *ChatHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid conversation id")
 		return
 	}
-	msgs, err := h.chat.Messages(r.Context(), claims.UserID, id, queryInt(r, "limit", 50), queryInt(r, "offset", 0))
+	limit, offset := queryInt(r, "limit", 50), queryInt(r, "offset", 0)
+	msgs, total, err := h.chat.Messages(r.Context(), claims.UserID, id, limit, offset)
 	if err != nil {
 		respondDomainError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, msgs)
+	respondPage(w, msgs, limit, offset, total)
 }
 
 // WebSocket handles GET /api/v2/chat/conversations/{id}/ws (auth). It authorises

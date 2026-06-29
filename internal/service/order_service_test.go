@@ -33,7 +33,7 @@ func (f *fakeOrderRepo) FindByID(_ context.Context, id int) (*domain.Order, erro
 	}
 	return nil, domain.ErrOrderNotFound
 }
-func (f *fakeOrderRepo) ListByUser(_ context.Context, userID, limit, offset int) ([]*domain.Order, error) {
+func (f *fakeOrderRepo) ListByUser(_ context.Context, userID, limit, offset int) ([]*domain.Order, int, error) {
 	out := make([]*domain.Order, 0)
 	for _, o := range f.orders {
 		if o.UserID == userID {
@@ -41,9 +41,9 @@ func (f *fakeOrderRepo) ListByUser(_ context.Context, userID, limit, offset int)
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
-func (f *fakeOrderRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Order, error) {
+func (f *fakeOrderRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Order, int, error) {
 	out := make([]*domain.Order, 0)
 	for _, o := range f.orders {
 		if o.HasChef(chefID) {
@@ -51,7 +51,7 @@ func (f *fakeOrderRepo) ListByChef(_ context.Context, chefID, limit, offset int)
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	if _, ok := f.orders[o.ID]; !ok {

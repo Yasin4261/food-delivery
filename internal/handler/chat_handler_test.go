@@ -95,7 +95,7 @@ func (f *fakeChatRepo) CreateMessage(_ context.Context, m *domain.Message) error
 	}
 	return nil
 }
-func (f *fakeChatRepo) ListMessages(_ context.Context, conversationID, limit, offset int) ([]*domain.Message, error) {
+func (f *fakeChatRepo) ListMessages(_ context.Context, conversationID, limit, offset int) ([]*domain.Message, int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]*domain.Message, 0)
@@ -105,7 +105,7 @@ func (f *fakeChatRepo) ListMessages(_ context.Context, conversationID, limit, of
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 
 // startConversation has the customer open a thread with chef 1 and returns the
@@ -139,9 +139,8 @@ func TestChat_RESTFlowAndAuthorization(t *testing.T) {
 		t.Fatalf("post message = %d (%s)", rec.Code, rec.Body)
 	}
 	rec := do(t, srv, http.MethodGet, "/api/v2/chat/conversations/"+itoa(convID)+"/messages", customer, "")
-	var msgs []domain.Message
-	_ = json.Unmarshal(rec.Body.Bytes(), &msgs)
-	if rec.Code != http.StatusOK || len(msgs) != 1 || msgs[0].Body != "hello chef" {
+	msgs := decodePage[domain.Message](t, rec.Body.Bytes())
+	if rec.Code != http.StatusOK || len(msgs.Data) != 1 || msgs.Data[0].Body != "hello chef" || msgs.Total != 1 {
 		t.Errorf("history = %d/%+v, want 200 with one message", rec.Code, msgs)
 	}
 

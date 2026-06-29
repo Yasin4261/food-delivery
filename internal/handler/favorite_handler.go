@@ -63,10 +63,11 @@ func (h *FavoriteHandler) List(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	chefs, err := h.favorites.List(r.Context(), claims.UserID, queryInt(r, "limit", 20), queryInt(r, "offset", 0))
+	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
+	chefs, total, err := h.favorites.List(r.Context(), claims.UserID, limit, offset)
 	if err != nil {
 		respondDomainError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, chefs)
+	respondPage(w, chefs, limit, offset, total)
 }

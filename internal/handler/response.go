@@ -22,6 +22,24 @@ func respondJSON(w http.ResponseWriter, status int, payload any) {
 	_, _ = w.Write(body)
 }
 
+// page is the standard envelope for list endpoints: the items plus the paging
+// window and the total number of matching rows.
+type page[T any] struct {
+	Data   []T `json:"data"`
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
+}
+
+// respondPage writes a paginated list envelope. A nil slice is serialised as an
+// empty array, never null.
+func respondPage[T any](w http.ResponseWriter, items []T, limit, offset, total int) {
+	if items == nil {
+		items = []T{}
+	}
+	respondJSON(w, http.StatusOK, page[T]{Data: items, Limit: limit, Offset: offset, Total: total})
+}
+
 // respondError writes a JSON {"error": msg} body with the given status code.
 func respondError(w http.ResponseWriter, status int, msg string) {
 	respondJSON(w, status, map[string]string{"error": msg})

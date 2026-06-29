@@ -38,23 +38,23 @@ func (f *fakeReviewRepo) Create(_ context.Context, rv *domain.Review) error {
 	f.reviews = append(f.reviews, &cp)
 	return nil
 }
-func (f *fakeReviewRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Review, error) {
+func (f *fakeReviewRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Review, int, error) {
 	out := make([]*domain.Review, 0)
 	for _, rv := range f.reviews {
 		if rv.ChefID != nil && *rv.ChefID == chefID {
 			out = append(out, rv)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
-func (f *fakeReviewRepo) ListByMenuItem(_ context.Context, menuItemID, limit, offset int) ([]*domain.Review, error) {
+func (f *fakeReviewRepo) ListByMenuItem(_ context.Context, menuItemID, limit, offset int) ([]*domain.Review, int, error) {
 	out := make([]*domain.Review, 0)
 	for _, rv := range f.reviews {
 		if rv.MenuItemID != nil && *rv.MenuItemID == menuItemID {
 			out = append(out, rv)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 
 // placeAndDeliverOrder places an order for the customer containing the chef's
@@ -104,16 +104,12 @@ func TestReview_Flow(t *testing.T) {
 
 	// Public reads.
 	rec := do(t, srv, http.MethodGet, "/api/v2/chefs/1/reviews", "", "")
-	var chefReviews []domain.Review
-	_ = json.Unmarshal(rec.Body.Bytes(), &chefReviews)
-	if rec.Code != http.StatusOK || len(chefReviews) != 1 {
-		t.Errorf("chef reviews = %d/%d, want 200/1", rec.Code, len(chefReviews))
+	if p := decodePage[domain.Review](t, rec.Body.Bytes()); rec.Code != http.StatusOK || len(p.Data) != 1 || p.Total != 1 {
+		t.Errorf("chef reviews = %d/%+v, want 200 with one", rec.Code, p)
 	}
 	rec = do(t, srv, http.MethodGet, "/api/v2/menu-items/"+itoa(itemID)+"/reviews", "", "")
-	var itemReviews []domain.Review
-	_ = json.Unmarshal(rec.Body.Bytes(), &itemReviews)
-	if rec.Code != http.StatusOK || len(itemReviews) != 1 {
-		t.Errorf("item reviews = %d/%d, want 200/1", rec.Code, len(itemReviews))
+	if p := decodePage[domain.Review](t, rec.Body.Bytes()); rec.Code != http.StatusOK || len(p.Data) != 1 {
+		t.Errorf("item reviews = %d/%+v, want 200 with one", rec.Code, p)
 	}
 }
 

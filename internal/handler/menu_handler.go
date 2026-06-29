@@ -177,12 +177,13 @@ func (h *MenuHandler) ListChefMenus(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid chef id")
 		return
 	}
-	menus, err := h.menus.ListChefMenus(r.Context(), chefID, queryInt(r, "limit", 20), queryInt(r, "offset", 0))
+	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
+	menus, total, err := h.menus.ListChefMenus(r.Context(), chefID, limit, offset)
 	if err != nil {
 		respondMenuError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, menus)
+	respondPage(w, menus, limit, offset, total)
 }
 
 // --- dishes ---
@@ -263,7 +264,8 @@ func (h *MenuHandler) ListMenuItems(w http.ResponseWriter, r *http.Request) {
 		respondMenuError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, items)
+	// All active items in the menu are returned (not offset-paginated).
+	respondPage(w, items, len(items), 0, len(items))
 }
 
 // ListChefItems handles GET /api/v2/chefs/{id}/menu-items (public).
@@ -273,12 +275,13 @@ func (h *MenuHandler) ListChefItems(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid chef id")
 		return
 	}
-	items, err := h.menus.ListChefItems(r.Context(), chefID, queryInt(r, "limit", 20), queryInt(r, "offset", 0))
+	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
+	items, total, err := h.menus.ListChefItems(r.Context(), chefID, limit, offset)
 	if err != nil {
 		respondMenuError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, items)
+	respondPage(w, items, limit, offset, total)
 }
 
 // respondMenuError maps validation errors to 400 and otherwise defers to the

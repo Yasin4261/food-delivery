@@ -38,14 +38,14 @@ func (f *fakeFavoriteRepo) Remove(_ context.Context, userID, chefID int) error {
 	f.set[userID] = out
 	return nil
 }
-func (f *fakeFavoriteRepo) ListChefs(ctx context.Context, userID, limit, offset int) ([]*domain.Chef, error) {
+func (f *fakeFavoriteRepo) ListChefs(ctx context.Context, userID, limit, offset int) ([]*domain.Chef, int, error) {
 	out := make([]*domain.Chef, 0)
 	for _, id := range f.set[userID] {
 		if c, err := f.chefs.FindByID(ctx, id); err == nil {
 			out = append(out, c)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 
 func favoriteFixture(t *testing.T) (*service.FavoriteService, *fakeChefRepo) {
@@ -69,7 +69,7 @@ func TestFavoriteService_AddIsIdempotent(t *testing.T) {
 		t.Fatalf("second add should be a no-op: %v", err)
 	}
 
-	chefs, err := svc.List(ctx, 100, 20, 0)
+	chefs, _, err := svc.List(ctx, 100, 20, 0)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestFavoriteService_Remove(t *testing.T) {
 	if err := svc.Remove(ctx, 100, 1); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	chefs, _ := svc.List(ctx, 100, 20, 0)
+	chefs, _, _ := svc.List(ctx, 100, 20, 0)
 	if len(chefs) != 0 {
 		t.Errorf("favorites after remove = %d, want 0", len(chefs))
 	}

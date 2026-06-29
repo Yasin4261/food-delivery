@@ -7,8 +7,8 @@ import "context"
 type MenuRepository interface {
 	Create(ctx context.Context, menu *Menu) error
 	FindByID(ctx context.Context, id int) (*Menu, error)
-	// ListByChef returns a chef's active menus.
-	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Menu, error)
+	// ListByChef returns a page of a chef's active menus plus the total.
+	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Menu, int, error)
 	Update(ctx context.Context, menu *Menu) error
 	// Deactivate soft-deletes a menu (is_active = false).
 	Deactivate(ctx context.Context, id int) error
@@ -21,8 +21,8 @@ type MenuItemRepository interface {
 	FindByID(ctx context.Context, id int) (*MenuItem, error)
 	// ListByMenu returns the active items in a menu.
 	ListByMenu(ctx context.Context, menuID int) ([]*MenuItem, error)
-	// ListByChef returns a chef's active items across all menus.
-	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*MenuItem, error)
+	// ListByChef returns a page of a chef's active items across all menus plus the total.
+	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*MenuItem, int, error)
 	Update(ctx context.Context, item *MenuItem) error
 	// Deactivate soft-deletes an item (is_active = false).
 	Deactivate(ctx context.Context, id int) error

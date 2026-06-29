@@ -24,7 +24,7 @@ func TestSearchRepository_ChefsAndFood(t *testing.T) {
 	_ = chefRepo.Create(ctx(), sushi)
 
 	// The adapter wraps the term in %…% itself; pass the raw query.
-	got, err := search.SearchChefs(ctx(), "pizza", 20, 0)
+	got, _, err := search.SearchChefs(ctx(), "pizza", 20, 0)
 	if err != nil {
 		t.Fatalf("search chefs: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestSearchRepository_ChefsAndFood(t *testing.T) {
 		t.Errorf("chef search returned %d, want only Pizza Palace", len(got))
 	}
 	// Case-insensitive.
-	if up, _ := search.SearchChefs(ctx(), "PIZZA", 20, 0); len(up) != 1 {
+	if up, _, _ := search.SearchChefs(ctx(), "PIZZA", 20, 0); len(up) != 1 {
 		t.Errorf("case-insensitive search returned %d, want 1", len(up))
 	}
 
@@ -44,7 +44,7 @@ func TestSearchRepository_ChefsAndFood(t *testing.T) {
 	}
 	_ = itemRepo.Create(ctx(), domain.NewMenuItem(menu.ID, pizza.ID, "Green Salad", 5))
 
-	dishes, err := search.SearchMenuItems(ctx(), "pizza", 20, 0)
+	dishes, _, err := search.SearchMenuItems(ctx(), "pizza", 20, 0)
 	if err != nil {
 		t.Fatalf("search dishes: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestSearchRepository_Users(t *testing.T) {
 	seedUser(t, "bob@example.com")
 
 	// Match by email substring.
-	got, err := search.SearchUsers(ctx(), "alice", 20, 0)
+	got, _, err := search.SearchUsers(ctx(), "alice", 20, 0)
 	if err != nil {
 		t.Fatalf("search users: %v", err)
 	}

@@ -85,12 +85,13 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	orders, err := h.orders.ListForCustomer(r.Context(), claims.UserID, queryInt(r, "limit", 20), queryInt(r, "offset", 0))
+	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
+	orders, total, err := h.orders.ListForCustomer(r.Context(), claims.UserID, limit, offset)
 	if err != nil {
 		respondOrderError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, orders)
+	respondPage(w, orders, limit, offset, total)
 }
 
 // Get handles GET /api/v2/orders/{id} (auth, owner only).
@@ -143,12 +144,13 @@ func (h *OrderHandler) ChefList(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
-	orders, err := h.orders.ListForChef(r.Context(), claims.UserID, queryInt(r, "limit", 20), queryInt(r, "offset", 0))
+	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
+	orders, total, err := h.orders.ListForChef(r.Context(), claims.UserID, limit, offset)
 	if err != nil {
 		respondOrderError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, orders)
+	respondPage(w, orders, limit, offset, total)
 }
 
 type chefStatusRequest struct {

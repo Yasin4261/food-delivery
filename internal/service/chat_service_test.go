@@ -91,7 +91,7 @@ func (f *fakeChatRepo) CreateMessage(_ context.Context, m *domain.Message) error
 	}
 	return nil
 }
-func (f *fakeChatRepo) ListMessages(_ context.Context, conversationID, limit, offset int) ([]*domain.Message, error) {
+func (f *fakeChatRepo) ListMessages(_ context.Context, conversationID, limit, offset int) ([]*domain.Message, int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]*domain.Message, 0)
@@ -101,7 +101,7 @@ func (f *fakeChatRepo) ListMessages(_ context.Context, conversationID, limit, of
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 
 // chatFixture wires a ChatService over fakes, seeding chef profiles for the
@@ -162,12 +162,15 @@ func TestChatService_SendAndHistoryAuthorization(t *testing.T) {
 	if _, err := svc.SendMessage(ctx, 999, conv.ID, "intrude"); !errors.Is(err, domain.ErrForbidden) {
 		t.Errorf("stranger send = %v, want ErrForbidden", err)
 	}
-	if _, err := svc.Messages(ctx, 999, conv.ID, 50, 0); !errors.Is(err, domain.ErrForbidden) {
+	if _, _, err := svc.Messages(ctx, 999, conv.ID, 50, 0); !errors.Is(err, domain.ErrForbidden) {
 		t.Errorf("stranger read = %v, want ErrForbidden", err)
 	}
 
 	// History loads for a participant, in order.
-	msgs, err := svc.Messages(ctx, 100, conv.ID, 50, 0)
+	msgs, total, err := svc.Messages(ctx, 100, conv.ID, 50, 0)
+	if total != 2 {
+		t.Errorf("messages total = %d, want 2", total)
+	}
 	if err != nil {
 		t.Fatalf("history: %v", err)
 	}

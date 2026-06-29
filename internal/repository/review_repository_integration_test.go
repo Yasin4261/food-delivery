@@ -85,7 +85,10 @@ func TestReviewRepository_RecomputesItemRatingAndLists(t *testing.T) {
 		t.Errorf("item rating/total = %v/%d, want 5.00/1", got.Rating, got.TotalReviews)
 	}
 
-	list, err := repo.ListByMenuItem(ctx(), item.ID, 20, 0)
+	list, total, err := repo.ListByMenuItem(ctx(), item.ID, 20, 0)
+	if total != 1 {
+		t.Errorf("review total = %d, want 1", total)
+	}
 	if err != nil || len(list) != 1 {
 		t.Errorf("list by item = %d, %v", len(list), err)
 	}

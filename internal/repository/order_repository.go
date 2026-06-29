@@ -130,8 +130,9 @@ func (r *OrderRepository) FindByID(ctx context.Context, id int) (*domain.Order, 
 	return o, nil
 }
 
-// ListByUser returns a customer's orders, newest first, each with all items.
-func (r *OrderRepository) ListByUser(ctx context.Context, userID, limit, offset int) ([]*domain.Order, error) {
+// ListByUser returns a page of a customer's orders, newest first, each with all
+// items, plus the total order count.
+func (r *OrderRepository) ListByUser(ctx context.Context, userID, limit, offset int) ([]*domain.Order, int, error) {
 	query := `SELECT` + orderColumns + `
 		FROM orders WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -139,23 +140,24 @@ func (r *OrderRepository) ListByUser(ctx context.Context, userID, limit, offset 
 
 	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list orders by user: %w", err)
+		return nil, 0, fmt.Errorf("list orders by user: %w", err)
 	}
 	orders, err := collectOrders(rows)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for _, o := range orders {
 		if o.Items, err = r.loadItems(ctx, o.ID, 0); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
-	return orders, nil
+	total, err := r.countOrders(ctx, `SELECT count(*) FROM orders WHERE user_id = $1`, userID)
+	return orders, total, err
 }
 
-// ListByChef returns orders containing the chef's items, newest first. Each
-// order's Items are filtered to that chef.
-func (r *OrderRepository) ListByChef(ctx context.Context, chefID, limit, offset int) ([]*domain.Order, error) {
+// ListByChef returns a page of orders containing the chef's items, newest
+// first (items filtered to that chef), plus the total count.
+func (r *OrderRepository) ListByChef(ctx context.Context, chefID, limit, offset int) ([]*domain.Order, int, error) {
 	query := `SELECT` + orderColumns + `
 		FROM orders o
 		WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.chef_id = $1)
@@ -164,18 +166,28 @@ func (r *OrderRepository) ListByChef(ctx context.Context, chefID, limit, offset 
 
 	rows, err := r.db.QueryContext(ctx, query, chefID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list orders by chef: %w", err)
+		return nil, 0, fmt.Errorf("list orders by chef: %w", err)
 	}
 	orders, err := collectOrders(rows)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for _, o := range orders {
 		if o.Items, err = r.loadItems(ctx, o.ID, chefID); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
-	return orders, nil
+	total, err := r.countOrders(ctx,
+		`SELECT count(*) FROM orders o WHERE EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.chef_id = $1)`, chefID)
+	return orders, total, err
+}
+
+func (r *OrderRepository) countOrders(ctx context.Context, query string, arg any) (int, error) {
+	var total int
+	if err := r.db.QueryRowContext(ctx, query, arg).Scan(&total); err != nil {
+		return 0, fmt.Errorf("count orders: %w", err)
+	}
+	return total, nil
 }
 
 // UpdateStatus persists the mutable fields touched by a transition.

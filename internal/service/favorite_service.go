@@ -32,8 +32,8 @@ func (s *FavoriteService) Remove(ctx context.Context, userID, chefID int) error 
 	return s.favorites.Remove(ctx, userID, chefID)
 }
 
-// List returns the chefs the user has favorited.
-func (s *FavoriteService) List(ctx context.Context, userID, limit, offset int) ([]*domain.Chef, error) {
+// List returns a page of the chefs the user has favorited, plus the total.
+func (s *FavoriteService) List(ctx context.Context, userID, limit, offset int) ([]*domain.Chef, int, error) {
 	limit, offset = normalisePaging(limit, offset)
 	return s.favorites.ListChefs(ctx, userID, limit, offset)
 }

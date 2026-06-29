@@ -42,7 +42,7 @@ func (f *fakeChefRepo) FindByUserID(_ context.Context, userID int) (*domain.Chef
 	}
 	return nil, domain.ErrChefNotFound
 }
-func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, error) {
+func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, int, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
 		if c.IsActive && (!onlineOnly || c.IsOnline) {
@@ -50,7 +50,7 @@ func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly boo
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 func (f *fakeChefRepo) SetOnline(_ context.Context, chefID int, online bool) error {
 	if c, ok := f.chefs[chefID]; ok {
@@ -80,10 +80,8 @@ func TestChef_OnlineStatusToggleAndFilter(t *testing.T) {
 
 	// New chefs default offline, so an online-only listing is empty.
 	rec := do(t, srv, http.MethodGet, "/api/v2/chefs?online=true", "", "")
-	var list []domain.Chef
-	_ = json.Unmarshal(rec.Body.Bytes(), &list)
-	if len(list) != 0 {
-		t.Errorf("online-only list before toggle = %d, want 0", len(list))
+	if p := decodePage[domain.Chef](t, rec.Body.Bytes()); len(p.Data) != 0 {
+		t.Errorf("online-only list before toggle = %d, want 0", len(p.Data))
 	}
 
 	// Toggle online.
@@ -99,9 +97,8 @@ func TestChef_OnlineStatusToggleAndFilter(t *testing.T) {
 
 	// Now the online-only listing includes the chef.
 	rec = do(t, srv, http.MethodGet, "/api/v2/chefs?online=true", "", "")
-	_ = json.Unmarshal(rec.Body.Bytes(), &list)
-	if len(list) != 1 {
-		t.Errorf("online-only list after toggle = %d, want 1", len(list))
+	if p := decodePage[domain.Chef](t, rec.Body.Bytes()); len(p.Data) != 1 || p.Total != 1 {
+		t.Errorf("online-only list after toggle = %+v, want one chef", p)
 	}
 
 	// A non-chef cannot toggle status.
@@ -158,12 +155,8 @@ func TestChef_CreateGetListFlow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list = %d, want 200", rec.Code)
 	}
-	var list []domain.Chef
-	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decode list: %v", err)
-	}
-	if len(list) != 1 {
-		t.Errorf("list returned %d chefs, want 1", len(list))
+	if p := decodePage[domain.Chef](t, rec.Body.Bytes()); len(p.Data) != 1 || p.Total != 1 {
+		t.Errorf("list returned %+v, want one chef / total 1", p)
 	}
 }
 
@@ -194,11 +187,7 @@ func TestChef_Nearby(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("nearby = %d, want 200 (%s)", rec.Code, rec.Body)
 	}
-	var list []domain.Chef
-	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decode nearby: %v", err)
-	}
-	if len(list) != 1 {
-		t.Errorf("nearby returned %d chefs, want 1", len(list))
+	if p := decodePage[domain.Chef](t, rec.Body.Bytes()); len(p.Data) != 1 {
+		t.Errorf("nearby returned %d chefs, want 1", len(p.Data))
 	}
 }

@@ -90,12 +90,12 @@ func (h *ChefHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 20)
 	offset := queryInt(r, "offset", 0)
 
-	chefs, err := h.chefs.List(r.Context(), limit, offset, queryBool(r, "online"))
+	chefs, total, err := h.chefs.List(r.Context(), limit, offset, queryBool(r, "online"))
 	if err != nil {
 		respondDomainError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, chefs)
+	respondPage(w, chefs, limit, offset, total)
 }
 
 // Nearby handles GET /api/v2/chefs/nearby?lat=&lng=&limit=&online=.
@@ -107,12 +107,14 @@ func (h *ChefHandler) Nearby(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chefs, err := h.chefs.Nearby(r.Context(), lat, lng, queryInt(r, "limit", 20), queryBool(r, "online"))
+	limit := queryInt(r, "limit", 20)
+	chefs, err := h.chefs.Nearby(r.Context(), lat, lng, limit, queryBool(r, "online"))
 	if err != nil {
 		respondDomainError(w, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, chefs)
+	// Nearby is a proximity query (limit only); total is the page size.
+	respondPage(w, chefs, limit, 0, len(chefs))
 }
 
 type setStatusRequest struct {

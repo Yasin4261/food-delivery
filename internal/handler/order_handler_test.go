@@ -48,23 +48,23 @@ func (f *fakeOrderRepo) FindByID(_ context.Context, id int) (*domain.Order, erro
 	}
 	return nil, domain.ErrOrderNotFound
 }
-func (f *fakeOrderRepo) ListByUser(_ context.Context, userID, limit, offset int) ([]*domain.Order, error) {
+func (f *fakeOrderRepo) ListByUser(_ context.Context, userID, limit, offset int) ([]*domain.Order, int, error) {
 	out := make([]*domain.Order, 0)
 	for _, o := range f.orders {
 		if o.UserID == userID {
 			out = append(out, cloneOrder(o, 0))
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
-func (f *fakeOrderRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Order, error) {
+func (f *fakeOrderRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Order, int, error) {
 	out := make([]*domain.Order, 0)
 	for _, o := range f.orders {
 		if o.HasChef(chefID) {
 			out = append(out, cloneOrder(o, chefID))
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	stored, ok := f.orders[o.ID]
@@ -120,8 +120,7 @@ func TestOrder_FullLifecycle(t *testing.T) {
 
 	// Stock was decremented 10 -> 8.
 	rec = do(t, srv, http.MethodGet, "/api/v2/menus/1/items", "", "")
-	var items []domain.MenuItem
-	_ = json.Unmarshal(rec.Body.Bytes(), &items)
+	items := decodePage[domain.MenuItem](t, rec.Body.Bytes()).Data
 	if len(items) != 1 || items[0].AvailableQuantity == nil || *items[0].AvailableQuantity != 8 {
 		t.Errorf("stock not decremented: %+v", items)
 	}
@@ -137,8 +136,7 @@ func TestOrder_FullLifecycle(t *testing.T) {
 
 	// Chef sees the order scoped to their items and advances it.
 	rec = do(t, srv, http.MethodGet, "/api/v2/chef/orders", chefToken, "")
-	var chefOrders []domain.Order
-	_ = json.Unmarshal(rec.Body.Bytes(), &chefOrders)
+	chefOrders := decodePage[domain.Order](t, rec.Body.Bytes()).Data
 	if rec.Code != http.StatusOK || len(chefOrders) != 1 || len(chefOrders[0].Items) != 1 {
 		t.Fatalf("chef orders = %d/%d, want 200/1", rec.Code, len(chefOrders))
 	}

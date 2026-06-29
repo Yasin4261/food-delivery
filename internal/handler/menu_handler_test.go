@@ -34,7 +34,7 @@ func (f *fakeMenuRepo) FindByID(_ context.Context, id int) (*domain.Menu, error)
 	}
 	return nil, domain.ErrMenuNotFound
 }
-func (f *fakeMenuRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Menu, error) {
+func (f *fakeMenuRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Menu, int, error) {
 	out := make([]*domain.Menu, 0)
 	for _, m := range f.menus {
 		if m.ChefID == chefID && m.IsActive {
@@ -42,7 +42,7 @@ func (f *fakeMenuRepo) ListByChef(_ context.Context, chefID, limit, offset int) 
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 func (f *fakeMenuRepo) Update(_ context.Context, m *domain.Menu) error {
 	if _, ok := f.menus[m.ID]; !ok {
@@ -94,7 +94,7 @@ func (f *fakeMenuItemRepo) ListByMenu(_ context.Context, menuID int) ([]*domain.
 	}
 	return out, nil
 }
-func (f *fakeMenuItemRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.MenuItem, error) {
+func (f *fakeMenuItemRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.MenuItem, int, error) {
 	out := make([]*domain.MenuItem, 0)
 	for _, m := range f.items {
 		if m.ChefID == chefID && m.IsActive {
@@ -102,7 +102,7 @@ func (f *fakeMenuItemRepo) ListByChef(_ context.Context, chefID, limit, offset i
 			out = append(out, &cp)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 func (f *fakeMenuItemRepo) Update(_ context.Context, m *domain.MenuItem) error {
 	if _, ok := f.items[m.ID]; !ok {
@@ -184,10 +184,8 @@ func TestMenu_FullFlow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list chef menus = %d, want 200", rec.Code)
 	}
-	var menus []domain.Menu
-	_ = json.Unmarshal(rec.Body.Bytes(), &menus)
-	if len(menus) != 1 {
-		t.Errorf("chef menus = %d, want 1", len(menus))
+	if p := decodePage[domain.Menu](t, rec.Body.Bytes()); len(p.Data) != 1 || p.Total != 1 {
+		t.Errorf("chef menus = %+v, want one / total 1", p)
 	}
 
 	// Add a dish.
@@ -204,15 +202,12 @@ func TestMenu_FullFlow(t *testing.T) {
 
 	// List items in the menu and across the chef (public).
 	rec = do(t, srv, http.MethodGet, "/api/v2/menus/1/items", "", "")
-	var items []domain.MenuItem
-	_ = json.Unmarshal(rec.Body.Bytes(), &items)
-	if rec.Code != http.StatusOK || len(items) != 1 {
-		t.Errorf("menu items = %d/%d, want 200/1", rec.Code, len(items))
+	if p := decodePage[domain.MenuItem](t, rec.Body.Bytes()); rec.Code != http.StatusOK || len(p.Data) != 1 {
+		t.Errorf("menu items = %d/%+v, want 200 with one", rec.Code, p)
 	}
 	rec = do(t, srv, http.MethodGet, "/api/v2/chefs/1/menu-items", "", "")
-	_ = json.Unmarshal(rec.Body.Bytes(), &items)
-	if rec.Code != http.StatusOK || len(items) != 1 {
-		t.Errorf("chef items = %d/%d, want 200/1", rec.Code, len(items))
+	if p := decodePage[domain.MenuItem](t, rec.Body.Bytes()); rec.Code != http.StatusOK || len(p.Data) != 1 {
+		t.Errorf("chef items = %d/%+v, want 200 with one", rec.Code, p)
 	}
 
 	// Update the menu.

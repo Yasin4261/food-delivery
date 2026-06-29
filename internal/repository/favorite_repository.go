@@ -44,7 +44,7 @@ func (r *FavoriteRepository) Remove(ctx context.Context, userID, chefID int) err
 // favorited first. It reuses the shared chef column list and scanner; keeping
 // favorites in correlated subqueries (not a join) leaves chefs as the only
 // table in the main scope, so the unqualified chef columns stay unambiguous.
-func (r *FavoriteRepository) ListChefs(ctx context.Context, userID, limit, offset int) ([]*domain.Chef, error) {
+func (r *FavoriteRepository) ListChefs(ctx context.Context, userID, limit, offset int) ([]*domain.Chef, int, error) {
 	query := `SELECT` + chefColumns + `
 		FROM chefs
 		WHERE chefs.is_active = true
@@ -54,9 +54,20 @@ func (r *FavoriteRepository) ListChefs(ctx context.Context, userID, limit, offse
 
 	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list favorites: %w", err)
+		return nil, 0, fmt.Errorf("list favorites: %w", err)
 	}
 	defer rows.Close()
 
-	return collectChefs(rows)
+	chefs, err := collectChefs(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var total int
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT count(*) FROM favorites f JOIN chefs c ON c.id = f.chef_id
+		WHERE f.user_id = $1 AND c.is_active = true`, userID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count favorites: %w", err)
+	}
+	return chefs, total, nil
 }

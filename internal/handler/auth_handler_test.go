@@ -152,6 +152,24 @@ func registerAndToken(t *testing.T, srv http.Handler, username, email string) st
 	return reg.Token
 }
 
+// pageResp mirrors the handler's list envelope { data, limit, offset, total }.
+type pageResp[T any] struct {
+	Data   []T `json:"data"`
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
+}
+
+// decodePage unmarshals a paginated list response.
+func decodePage[T any](t *testing.T, body []byte) pageResp[T] {
+	t.Helper()
+	var p pageResp[T]
+	if err := json.Unmarshal(body, &p); err != nil {
+		t.Fatalf("decode page: %v (%s)", err, body)
+	}
+	return p
+}
+
 func do(t *testing.T, srv http.Handler, method, path, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(method, path, strings.NewReader(body))

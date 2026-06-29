@@ -2,7 +2,6 @@ package handler_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -19,14 +18,14 @@ type fakeSearchRepo struct{}
 
 func newFakeSearchRepo() *fakeSearchRepo { return &fakeSearchRepo{} }
 
-func (fakeSearchRepo) SearchChefs(_ context.Context, q string, limit, offset int) ([]*domain.Chef, error) {
-	return []*domain.Chef{{ID: 1, BusinessName: "Match " + q}}, nil
+func (fakeSearchRepo) SearchChefs(_ context.Context, q string, limit, offset int) ([]*domain.Chef, int, error) {
+	return []*domain.Chef{{ID: 1, BusinessName: "Match " + q}}, 1, nil
 }
-func (fakeSearchRepo) SearchMenuItems(_ context.Context, q string, limit, offset int) ([]*domain.MenuItem, error) {
-	return []*domain.MenuItem{{ID: 1, Name: "Match " + q}}, nil
+func (fakeSearchRepo) SearchMenuItems(_ context.Context, q string, limit, offset int) ([]*domain.MenuItem, int, error) {
+	return []*domain.MenuItem{{ID: 1, Name: "Match " + q}}, 1, nil
 }
-func (fakeSearchRepo) SearchUsers(_ context.Context, q string, limit, offset int) ([]*domain.User, error) {
-	return []*domain.User{{ID: 1, Username: "Match " + q, PasswordHash: "secret"}}, nil
+func (fakeSearchRepo) SearchUsers(_ context.Context, q string, limit, offset int) ([]*domain.User, int, error) {
+	return []*domain.User{{ID: 1, Username: "Match " + q, PasswordHash: "secret"}}, 1, nil
 }
 
 // adminToken mints a valid admin JWT signed with the test secret.
@@ -54,10 +53,8 @@ func TestSearch_TypesAndGuards(t *testing.T) {
 
 	// Chef and food search work for any authenticated user.
 	rec := do(t, srv, http.MethodGet, "/api/v2/search?q=pizza&type=chef", token, "")
-	var chefs []domain.Chef
-	_ = json.Unmarshal(rec.Body.Bytes(), &chefs)
-	if rec.Code != http.StatusOK || len(chefs) != 1 {
-		t.Errorf("chef search = %d/%d, want 200/1", rec.Code, len(chefs))
+	if p := decodePage[domain.Chef](t, rec.Body.Bytes()); rec.Code != http.StatusOK || len(p.Data) != 1 {
+		t.Errorf("chef search = %d/%+v, want 200 with one", rec.Code, p)
 	}
 	if rec := do(t, srv, http.MethodGet, "/api/v2/search?q=soup&type=food", token, ""); rec.Code != http.StatusOK {
 		t.Errorf("food search = %d, want 200", rec.Code)

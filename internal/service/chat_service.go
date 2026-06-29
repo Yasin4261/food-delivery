@@ -69,10 +69,11 @@ func (s *ChatService) SendMessage(ctx context.Context, senderUserID, conversatio
 	return msg, nil
 }
 
-// Messages returns a conversation's history for a participant.
-func (s *ChatService) Messages(ctx context.Context, requesterUserID, conversationID, limit, offset int) ([]*domain.Message, error) {
+// Messages returns a page of a conversation's history for a participant and the
+// total message count.
+func (s *ChatService) Messages(ctx context.Context, requesterUserID, conversationID, limit, offset int) ([]*domain.Message, int, error) {
 	if _, err := s.authorize(ctx, requesterUserID, conversationID); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	limit, offset = normalisePaging(limit, offset)
 	return s.chats.ListMessages(ctx, conversationID, limit, offset)

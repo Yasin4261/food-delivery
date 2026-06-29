@@ -31,34 +31,42 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
 
-	var (
-		result any
-		err    error
-	)
 	switch r.URL.Query().Get("type") {
 	case "chef":
-		result, err = h.search.Chefs(r.Context(), q, limit, offset)
+		chefs, total, err := h.search.Chefs(r.Context(), q, limit, offset)
+		if err != nil {
+			respondSearchError(w, err)
+			return
+		}
+		respondPage(w, chefs, limit, offset, total)
 	case "food":
-		result, err = h.search.Foods(r.Context(), q, limit, offset)
+		foods, total, err := h.search.Foods(r.Context(), q, limit, offset)
+		if err != nil {
+			respondSearchError(w, err)
+			return
+		}
+		respondPage(w, foods, limit, offset, total)
 	case "user":
 		if claims.Role != domain.RoleAdmin {
 			respondError(w, http.StatusForbidden, "user search is restricted to admins")
 			return
 		}
-		result, err = h.search.Users(r.Context(), q, limit, offset)
-	default:
-		respondError(w, http.StatusBadRequest, "type must be one of chef, food or user")
-		return
-	}
-
-	if err != nil {
-		var ve service.ValidationError
-		if errors.As(err, &ve) {
-			respondError(w, http.StatusBadRequest, ve.Msg)
+		users, total, err := h.search.Users(r.Context(), q, limit, offset)
+		if err != nil {
+			respondSearchError(w, err)
 			return
 		}
-		respondDomainError(w, err)
+		respondPage(w, users, limit, offset, total)
+	default:
+		respondError(w, http.StatusBadRequest, "type must be one of chef, food or user")
+	}
+}
+
+func respondSearchError(w http.ResponseWriter, err error) {
+	var ve service.ValidationError
+	if errors.As(err, &ve) {
+		respondError(w, http.StatusBadRequest, ve.Msg)
 		return
 	}
-	respondJSON(w, http.StatusOK, result)
+	respondDomainError(w, err)
 }

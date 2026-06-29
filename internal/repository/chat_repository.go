@@ -126,15 +126,16 @@ func (r *ChatRepository) CreateMessage(ctx context.Context, m *domain.Message) e
 	return nil
 }
 
-// ListMessages returns a conversation's messages, oldest first.
-func (r *ChatRepository) ListMessages(ctx context.Context, conversationID, limit, offset int) ([]*domain.Message, error) {
+// ListMessages returns a page of a conversation's messages (oldest first) and
+// the total message count.
+func (r *ChatRepository) ListMessages(ctx context.Context, conversationID, limit, offset int) ([]*domain.Message, int, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT id, conversation_id, sender_id, body, read_at, created_at
 		FROM chat_messages WHERE conversation_id = $1
 		ORDER BY created_at ASC, id ASC
 		LIMIT $2 OFFSET $3`, conversationID, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list messages: %w", err)
+		return nil, 0, fmt.Errorf("list messages: %w", err)
 	}
 	defer rows.Close()
 
@@ -142,9 +143,18 @@ func (r *ChatRepository) ListMessages(ctx context.Context, conversationID, limit
 	for rows.Next() {
 		m := &domain.Message{}
 		if err := rows.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.Body, &m.ReadAt, &m.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan message: %w", err)
+			return nil, 0, fmt.Errorf("scan message: %w", err)
 		}
 		out = append(out, m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	var total int
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM chat_messages WHERE conversation_id = $1`, conversationID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count messages: %w", err)
+	}
+	return out, total, nil
 }

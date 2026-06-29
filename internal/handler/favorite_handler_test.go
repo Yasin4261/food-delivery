@@ -2,7 +2,6 @@ package handler_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -40,14 +39,14 @@ func (f *fakeFavoriteRepo) Remove(_ context.Context, userID, chefID int) error {
 	f.set[userID] = out
 	return nil
 }
-func (f *fakeFavoriteRepo) ListChefs(ctx context.Context, userID, limit, offset int) ([]*domain.Chef, error) {
+func (f *fakeFavoriteRepo) ListChefs(ctx context.Context, userID, limit, offset int) ([]*domain.Chef, int, error) {
 	out := make([]*domain.Chef, 0)
 	for _, id := range f.set[userID] {
 		if c, err := f.chefs.FindByID(ctx, id); err == nil {
 			out = append(out, c)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 
 func TestFavorites_Flow(t *testing.T) {
@@ -70,15 +69,14 @@ func TestFavorites_Flow(t *testing.T) {
 		t.Errorf("re-favorite = %d, want 204", rec.Code)
 	}
 
-	// List shows exactly one favorite chef.
+	// List shows exactly one favorite chef, with paging metadata.
 	rec := do(t, srv, http.MethodGet, "/api/v2/favorites", customer, "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list = %d, want 200", rec.Code)
 	}
-	var chefs []domain.Chef
-	_ = json.Unmarshal(rec.Body.Bytes(), &chefs)
-	if len(chefs) != 1 || chefs[0].ID != 1 {
-		t.Errorf("favorites = %+v, want one chef id 1", chefs)
+	p := decodePage[domain.Chef](t, rec.Body.Bytes())
+	if len(p.Data) != 1 || p.Data[0].ID != 1 || p.Total != 1 || p.Limit != 20 {
+		t.Errorf("favorites page = %+v, want one chef id 1 / total 1", p)
 	}
 
 	// Unfavorite -> 204; list is empty.
@@ -86,9 +84,8 @@ func TestFavorites_Flow(t *testing.T) {
 		t.Errorf("unfavorite = %d, want 204", rec.Code)
 	}
 	rec = do(t, srv, http.MethodGet, "/api/v2/favorites", customer, "")
-	_ = json.Unmarshal(rec.Body.Bytes(), &chefs)
-	if len(chefs) != 0 {
-		t.Errorf("favorites after remove = %d, want 0", len(chefs))
+	if p := decodePage[domain.Chef](t, rec.Body.Bytes()); len(p.Data) != 0 || p.Total != 0 {
+		t.Errorf("favorites after remove = %+v, want empty", p)
 	}
 }
 

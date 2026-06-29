@@ -78,20 +78,20 @@ func TestOrderRepository_MultiChefScoping(t *testing.T) {
 	}
 
 	// Customer view: all items.
-	all, _ := repo.ListByUser(ctx(), customer.ID, 20, 0)
+	all, _, _ := repo.ListByUser(ctx(), customer.ID, 20, 0)
 	if len(all) != 1 || len(all[0].Items) != 2 {
 		t.Fatalf("customer view items = %d, want 2", len(all[0].Items))
 	}
 
 	// Chef A view: only chef A's item.
-	aOrders, err := repo.ListByChef(ctx(), chefA.ID, 20, 0)
+	aOrders, _, err := repo.ListByChef(ctx(), chefA.ID, 20, 0)
 	if err != nil {
 		t.Fatalf("list by chef A: %v", err)
 	}
 	if len(aOrders) != 1 || len(aOrders[0].Items) != 1 || aOrders[0].Items[0].ChefID != chefA.ID {
 		t.Errorf("chef A scoping wrong: %+v", aOrders)
 	}
-	bOrders, _ := repo.ListByChef(ctx(), chefB.ID, 20, 0)
+	bOrders, _, _ := repo.ListByChef(ctx(), chefB.ID, 20, 0)
 	if len(bOrders) != 1 || len(bOrders[0].Items) != 1 || bOrders[0].Items[0].ChefID != chefB.ID {
 		t.Errorf("chef B scoping wrong: %+v", bOrders)
 	}

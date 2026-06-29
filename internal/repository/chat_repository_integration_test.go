@@ -43,7 +43,7 @@ func TestChatRepository_ConversationAndMessages(t *testing.T) {
 		t.Fatalf("create message 2: %v", err)
 	}
 
-	msgs, err := repo.ListMessages(ctx(), conv.ID, 50, 0)
+	msgs, _, err := repo.ListMessages(ctx(), conv.ID, 50, 0)
 	if err != nil {
 		t.Fatalf("list messages: %v", err)
 	}

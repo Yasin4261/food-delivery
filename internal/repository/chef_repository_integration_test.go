@@ -105,12 +105,15 @@ func TestChefRepository_List(t *testing.T) {
 			t.Fatalf("create: %v", err)
 		}
 	}
-	chefs, err := repo.List(ctx(), 2, 0, false)
+	chefs, total, err := repo.List(ctx(), 2, 0, false)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
 	if len(chefs) != 2 {
 		t.Fatalf("list limit not applied: got %d, want 2", len(chefs))
+	}
+	if total != 3 {
+		t.Errorf("list total = %d, want 3 (all matching, not just the page)", total)
 	}
 	if chefs[0].Rating < chefs[1].Rating {
 		t.Errorf("list not ordered by rating desc: %v, %v", chefs[0].Rating, chefs[1].Rating)

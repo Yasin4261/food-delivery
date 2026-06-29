@@ -18,6 +18,7 @@ type ChatRepository interface {
 	// CreateMessage persists a message and bumps the conversation's
 	// last_message_at in the same transaction.
 	CreateMessage(ctx context.Context, m *Message) error
-	// ListMessages returns a conversation's messages, oldest first.
-	ListMessages(ctx context.Context, conversationID, limit, offset int) ([]*Message, error)
+	// ListMessages returns a page of a conversation's messages (oldest first)
+	// and the total message count.
+	ListMessages(ctx context.Context, conversationID, limit, offset int) ([]*Message, int, error)
 }

@@ -45,7 +45,7 @@ func (f *fakeChefRepo) FindByUserID(_ context.Context, userID int) (*domain.Chef
 	return nil, domain.ErrChefNotFound
 }
 
-func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, error) {
+func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, int, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
 		if c.IsActive && (!onlineOnly || c.IsOnline) {
@@ -53,14 +53,15 @@ func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly boo
 			out = append(out, &cp)
 		}
 	}
+	total := len(out)
 	if offset >= len(out) {
-		return []*domain.Chef{}, nil
+		return []*domain.Chef{}, total, nil
 	}
 	end := offset + limit
 	if end > len(out) {
 		end = len(out)
 	}
-	return out[offset:end], nil
+	return out[offset:end], total, nil
 }
 
 func (f *fakeChefRepo) SetOnline(_ context.Context, chefID int, online bool) error {

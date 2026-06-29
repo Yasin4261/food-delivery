@@ -39,23 +39,23 @@ func (f *fakeReviewRepo) Create(_ context.Context, rv *domain.Review) error {
 	f.reviews = append(f.reviews, &cp)
 	return nil
 }
-func (f *fakeReviewRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Review, error) {
+func (f *fakeReviewRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Review, int, error) {
 	out := make([]*domain.Review, 0)
 	for _, rv := range f.reviews {
 		if rv.ChefID != nil && *rv.ChefID == chefID {
 			out = append(out, rv)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
-func (f *fakeReviewRepo) ListByMenuItem(_ context.Context, menuItemID, limit, offset int) ([]*domain.Review, error) {
+func (f *fakeReviewRepo) ListByMenuItem(_ context.Context, menuItemID, limit, offset int) ([]*domain.Review, int, error) {
 	out := make([]*domain.Review, 0)
 	for _, rv := range f.reviews {
 		if rv.MenuItemID != nil && *rv.MenuItemID == menuItemID {
 			out = append(out, rv)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 
 // seedDeliveredOrder stores a delivered order owned by userID containing one
@@ -159,7 +159,7 @@ func TestReviewService_ValidationAndDuplicate(t *testing.T) {
 	}
 
 	// Listing reflects the one chef review.
-	list, _ := svc.ListForChef(ctx, chef, 20, 0)
+	list, _, _ := svc.ListForChef(ctx, chef, 20, 0)
 	if len(list) != 1 {
 		t.Errorf("chef reviews = %d, want 1", len(list))
 	}
