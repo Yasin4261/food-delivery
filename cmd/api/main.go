@@ -2,8 +2,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/config"
 	"github.com/Yasin4261/food-delivery/database"
@@ -33,12 +38,35 @@ func main() {
 		log.Println("migrations applied")
 	}
 
-	app := initializeApp(db, cfg)
-
-	log.Printf("starting server on :%s (env=%s)", cfg.Port, cfg.Env)
-	if err := http.ListenAndServe(":"+cfg.Port, app); err != nil {
-		log.Fatalf("server: %v", err)
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           initializeApp(db, cfg),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
+
+	// Listen for SIGINT/SIGTERM so we can drain in-flight requests on deploy.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		log.Printf("starting server on %s (env=%s)", srv.Addr, cfg.Env)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("shutdown signal received; draining in-flight requests")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+	}
+	log.Println("server stopped")
 }
 
 // initializeApp is the composition root: it constructs the concrete adapters
