@@ -2,32 +2,35 @@ package domain
 
 import "time"
 
-// MenuItem represents a dish/meal in a menu
+// MenuItem is an individual dish within a menu (mirrors the menu_items table,
+// migrations/000005_create_menu_items_table.up.sql). It carries chef_id as well
+// as menu_id so order lines and chef-facing views can be filtered by chef
+// without joining through menus.
 type MenuItem struct {
 	ID     int `json:"id"`
 	MenuID int `json:"menu_id"`
 	ChefID int `json:"chef_id"`
-	
-	// Meal information
+
+	// Description
 	Name        string  `json:"name"`
 	Description *string `json:"description,omitempty"`
-	Category    *string `json:"category,omitempty"` // appetizer, main_course, dessert, beverage, soup
-	Cuisine     *string `json:"cuisine,omitempty"`  // turkish, italian, chinese, etc.
-	
+	Category    *string `json:"category,omitempty"`
+	Cuisine     *string `json:"cuisine,omitempty"`
+
 	// Pricing
 	Price         float64  `json:"price"`
 	OriginalPrice *float64 `json:"original_price,omitempty"`
-	
+
 	// Portion and preparation
 	PortionSize     *string `json:"portion_size,omitempty"`
-	PreparationTime *int    `json:"preparation_time,omitempty"` // in minutes
+	PreparationTime *int    `json:"preparation_time,omitempty"` // minutes
 	ServingSize     int     `json:"serving_size"`
-	
+
 	// Stock
 	AvailableQuantity *int `json:"available_quantity,omitempty"`
 	IsUnlimited       bool `json:"is_unlimited"`
 	DailyLimit        *int `json:"daily_limit,omitempty"`
-	
+
 	// Dietary features
 	IsVegetarian bool `json:"is_vegetarian"`
 	IsVegan      bool `json:"is_vegan"`
@@ -35,151 +38,62 @@ type MenuItem struct {
 	IsHalal      bool `json:"is_halal"`
 	IsSpicy      bool `json:"is_spicy"`
 	SpiceLevel   *int `json:"spice_level,omitempty"` // 0-5
-	
-	// Nutritional values
+
+	// Nutrition
 	Calories *int     `json:"calories,omitempty"`
 	Protein  *float64 `json:"protein,omitempty"`
 	Carbs    *float64 `json:"carbs,omitempty"`
 	Fat      *float64 `json:"fat,omitempty"`
-	
+
 	// Media
 	ImageURL *string `json:"image_url,omitempty"`
-	Images   *string `json:"images,omitempty"` // JSON array
-	
+	Images   *string `json:"images,omitempty"` // JSON array of URLs
+
 	// Statistics
 	Rating       float64 `json:"rating"`
 	TotalReviews int     `json:"total_reviews"`
 	TotalOrders  int     `json:"total_orders"`
 	Views        int     `json:"views"`
-	
+
 	// Status
 	IsActive    bool `json:"is_active"`
 	IsFeatured  bool `json:"is_featured"`
 	IsAvailable bool `json:"is_available"`
-	
-	// Timestamps
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Category constants
-const (
-	CategoryAppetizer  = "appetizer"
-	CategoryMainCourse = "main_course"
-	CategoryDessert    = "dessert"
-	CategoryBeverage   = "beverage"
-	CategorySoup       = "soup"
-)
-
-// NewMenuItem creates a new menu item
+// NewMenuItem builds a dish with sensible defaults.
 func NewMenuItem(menuID, chefID int, name string, price float64) *MenuItem {
+	now := time.Now()
 	return &MenuItem{
-		MenuID:       menuID,
-		ChefID:       chefID,
-		Name:         name,
-		Price:        price,
-		ServingSize:  1,
-		IsUnlimited:  false,
-		IsVegetarian: false,
-		IsVegan:      false,
-		IsGlutenFree: false,
-		IsHalal:      false,
-		IsSpicy:      false,
-		Rating:       0.0,
-		IsActive:     true,
-		IsFeatured:   false,
-		IsAvailable:  true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		MenuID:      menuID,
+		ChefID:      chefID,
+		Name:        name,
+		Price:       price,
+		ServingSize: 1,
+		IsActive:    true,
+		IsAvailable: true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 }
 
-// DecrementStock decrements available quantity
-func (m *MenuItem) DecrementStock(quantity int) error {
+// InStock reports whether at least qty units can be ordered. An unlimited item
+// is always in stock; a limited item without a tracked quantity is treated as
+// out of stock.
+func (m *MenuItem) InStock(qty int) bool {
+	if qty <= 0 {
+		return false
+	}
 	if m.IsUnlimited {
-		return nil
+		return true
 	}
-	
-	if m.AvailableQuantity == nil {
-		return ErrStockNotManaged
-	}
-	
-	if *m.AvailableQuantity < quantity {
-		return ErrInsufficientStock
-	}
-	
-	*m.AvailableQuantity -= quantity
-	m.UpdatedAt = time.Now()
-	return nil
+	return m.AvailableQuantity != nil && *m.AvailableQuantity >= qty
 }
 
-// IncrementStock increments available quantity
-func (m *MenuItem) IncrementStock(quantity int) {
-	if m.IsUnlimited {
-		return
-	}
-	
-	if m.AvailableQuantity == nil {
-		qty := quantity
-		m.AvailableQuantity = &qty
-	} else {
-		*m.AvailableQuantity += quantity
-	}
-	m.UpdatedAt = time.Now()
-}
-
-// UpdateRating updates menu item rating
-func (m *MenuItem) UpdateRating(newRating float64) {
-	totalRating := m.Rating * float64(m.TotalReviews)
-	m.TotalReviews++
-	m.Rating = (totalRating + newRating) / float64(m.TotalReviews)
-	m.UpdatedAt = time.Now()
-}
-
-// IncrementViews increments view count
-func (m *MenuItem) IncrementViews() {
-	m.Views++
-	m.UpdatedAt = time.Now()
-}
-
-// IncrementOrders increments order count
-func (m *MenuItem) IncrementOrders() {
-	m.TotalOrders++
-	m.UpdatedAt = time.Now()
-}
-
-// Activate activates the menu item
-func (m *MenuItem) Activate() {
-	m.IsActive = true
-	m.UpdatedAt = time.Now()
-}
-
-// Deactivate deactivates the menu item
-func (m *MenuItem) Deactivate() {
-	m.IsActive = false
-	m.UpdatedAt = time.Now()
-}
-
-// MarkAvailable marks item as available
-func (m *MenuItem) MarkAvailable() {
-	m.IsAvailable = true
-	m.UpdatedAt = time.Now()
-}
-
-// MarkUnavailable marks item as unavailable
-func (m *MenuItem) MarkUnavailable() {
-	m.IsAvailable = false
-	m.UpdatedAt = time.Now()
-}
-
-// Feature marks item as featured
-func (m *MenuItem) Feature() {
-	m.IsFeatured = true
-	m.UpdatedAt = time.Now()
-}
-
-// Unfeature removes featured status
-func (m *MenuItem) Unfeature() {
-	m.IsFeatured = false
-	m.UpdatedAt = time.Now()
+// IsOrderable reports whether a customer can currently order this item.
+func (m *MenuItem) IsOrderable() bool {
+	return m.IsActive && m.IsAvailable && m.InStock(1)
 }

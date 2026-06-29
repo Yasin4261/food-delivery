@@ -1,40 +1,42 @@
 package domain
 
-import (
-	"errors"
-	"math"
-)
+import "errors"
 
-// Domain errors
+// Domain errors. Services return these so handlers can map them to HTTP status
+// codes without depending on storage or transport details.
 var (
-	ErrInvalidStatusTransition = errors.New("invalid status transition")
-	ErrCannotCancelOrder       = errors.New("order cannot be cancelled")
-	ErrInsufficientStock       = errors.New("insufficient stock")
-	ErrStockNotManaged         = errors.New("stock is not managed for this item")
-	ErrInvalidEmail            = errors.New("invalid email format")
-	ErrInvalidPassword         = errors.New("invalid password")
-	ErrUserNotFound            = errors.New("user not found")
-	ErrEmailAlreadyExists      = errors.New("email already exists")
-	ErrUsernameAlreadyExists   = errors.New("username already exists")
+	ErrUserNotFound          = errors.New("user not found")
+	ErrEmailAlreadyExists    = errors.New("email already exists")
+	ErrUsernameAlreadyExists = errors.New("username already exists")
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrAccountInactive       = errors.New("account is deactivated")
+
+	ErrResetTokenNotFound = errors.New("reset token not found")
+	ErrInvalidResetToken  = errors.New("invalid, expired or already-used reset token")
+
+	ErrConversationNotFound = errors.New("conversation not found")
+	ErrEmptyMessage         = errors.New("message body cannot be empty")
+
+	ErrChefNotFound      = errors.New("chef not found")
+	ErrChefProfileExists = errors.New("chef profile already exists for this user")
+
+	ErrMenuNotFound     = errors.New("menu not found")
+	ErrMenuItemNotFound = errors.New("menu item not found")
+
+	ErrOrderNotFound            = errors.New("order not found")
+	ErrEmptyOrder               = errors.New("an order must contain at least one item")
+	ErrItemNotOrderable         = errors.New("item is not available to order")
+	ErrItemOutOfStock           = errors.New("item is out of stock")
+	ErrInvalidStatusTransition  = errors.New("invalid order status transition")
+	ErrInvalidPaymentTransition = errors.New("invalid payment status transition")
+
+	ErrInvalidRating          = errors.New("rating must be between 1 and 5")
+	ErrInvalidReviewTarget    = errors.New("a review must target exactly one of a chef or a dish")
+	ErrOrderNotReviewable     = errors.New("only delivered orders can be reviewed")
+	ErrReviewTargetNotInOrder = errors.New("you can only review a chef or dish from your own order")
+	ErrReviewExists           = errors.New("you have already reviewed this for this order")
+
+	// ErrForbidden marks an authenticated caller acting on a resource they do
+	// not own. Handlers map it to HTTP 403.
+	ErrForbidden = errors.New("you do not have permission to modify this resource")
 )
-
-// CalculateDistance calculates distance between two coordinates in kilometers
-// Uses Haversine formula
-func CalculateDistance(lat1, lon1, lat2, lon2 float64) float64 {
-	const R = 6371 // Earth's radius in kilometers
-	
-	dLat := toRadians(lat2 - lat1)
-	dLon := toRadians(lon2 - lon1)
-	
-	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
-		math.Cos(toRadians(lat1))*math.Cos(toRadians(lat2))*
-			math.Sin(dLon/2)*math.Sin(dLon/2)
-	
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-	
-	return R * c
-}
-
-func toRadians(degrees float64) float64 {
-	return degrees * math.Pi / 180
-}

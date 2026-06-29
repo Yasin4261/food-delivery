@@ -2,233 +2,97 @@ name: 🧪 Test Suite
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop, "rebuild/**"]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 jobs:
   test:
-    name: Run Tests
+    name: Build & Test
     runs-on: ubuntu-latest
-    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: 📦 Download dependencies
+        run: go mod download
+
+      - name: 🔎 Vet
+        run: go vet ./...
+
+      - name: 🎨 Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-ed:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: 🏗️ Build
+        run: go build ./...
+
+      - name: 🧪 Test (race + coverage)
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: 📊 Coverage summary
+        run: go tool cover -func=coverage.out | tail -1
+
+  integration:
+    name: Integration tests (Postgres)
+    runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:16-alpine
         env:
-          POSTGRES_DB: test_ecommerce_db
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: food_delivery_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
         ports:
-          - 5432:5432
+          - 5433:5432
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
+          --health-cmd "pg_isready -U postgres -d food_delivery_test"
+          --health-interval 5s
           --health-timeout 5s
-          --health-retries 5
-
+          --health-retries 10
     steps:
-    - name: 📥 Checkout Code
-      uses: actions/checkout@v4
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
 
-    - name: 🐹 Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
 
-    - name: 📦 Cache Go Modules
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - name: 📦 Download dependencies
+        run: go mod download
 
-    - name: 🔍 Download Dependencies
-      run: go mod download
+      - name: 🧪 Repository integration tests
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5433/food_delivery_test?sslmode=disable
+        run: go test -tags=integration ./internal/repository/...
 
-    - name: 🏗️ Build Application
-      run: go build -o build/main cmd/main.go
-
-    - name: 🔧 Setup Test Environment
-      run: |
-        mkdir -p test-results
-        chmod +x scripts/run-tests.sh
-        chmod +x scripts/docker/run-tests.sh
-        chmod +x scripts/windows/run-tests.ps1
-
-    - name: 🧪 Run Model Tests
-      run: |
-        go test -v ./internal/model/... -coverprofile=test-results/model-coverage.out
-      env:
-        GO_ENV: test
-        GIN_MODE: test
-
-    - name: ⚙️ Run Service Tests
-      run: |
-        go test -v ./internal/service/... -coverprofile=test-results/service-coverage.out
-      env:
-        GO_ENV: test
-        GIN_MODE: test
-
-    - name: 🌐 Run Handler Tests
-      run: |
-        go test -v ./internal/api/handler/... -coverprofile=test-results/handler-coverage.out
-      env:
-        GO_ENV: test
-        GIN_MODE: test
-
-    - name: 🔗 Run Integration Tests
-      run: |
-        go test -v ./tests/... -coverprofile=test-results/integration-coverage.out
-      env:
-        GO_ENV: test
-        GIN_MODE: test
-
-    - name: 📊 Generate Overall Coverage
-      run: |
-        go test -v ./... -coverprofile=test-results/overall-coverage.out
-        go tool cover -html=test-results/overall-coverage.out -o test-results/coverage.html
-      env:
-        GO_ENV: test
-        GIN_MODE: test
-
-    - name: 🏁 Run Race Condition Tests
-      run: |
-        go test -race -v ./internal/service/... 2>&1 | tee test-results/race-test.log
-      env:
-        GO_ENV: test
-        GIN_MODE: test
-
-    - name: ⚡ Run Benchmarks
-      run: |
-        go test -bench=. -benchmem ./internal/api/handler/... 2>&1 | tee test-results/benchmark.log
-      env:
-        GO_ENV: test
-        GIN_MODE: test
-
-    - name: 📈 Upload Coverage Reports
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./test-results/overall-coverage.out
-        flags: unittests
-        name: codecov-umbrella
-
-    - name: 📋 Generate Test Summary
-      run: |
-        COVERAGE=$(go tool cover -func=test-results/overall-coverage.out | grep total | awk '{print $3}')
-        echo "## 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
-        echo "| Test Type | Status | Coverage |" >> $GITHUB_STEP_SUMMARY
-        echo "|-----------|--------|----------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Model Tests | ✅ Passed | - |" >> $GITHUB_STEP_SUMMARY
-        echo "| Service Tests | ✅ Passed | - |" >> $GITHUB_STEP_SUMMARY
-        echo "| Handler Tests | ✅ Passed | - |" >> $GITHUB_STEP_SUMMARY
-        echo "| Integration Tests | ✅ Passed | - |" >> $GITHUB_STEP_SUMMARY
-        echo "| **Overall Coverage** | - | **$COVERAGE** |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📊 Test Artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "- Coverage Report: Available in artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "- Test Logs: Available in artifacts" >> $GITHUB_STEP_SUMMARY
-        echo "- Benchmark Results: Available in artifacts" >> $GITHUB_STEP_SUMMARY
-
-    - name: 📁 Upload Test Artifacts
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: test-results
-        path: test-results/
-        retention-days: 30
-
-    - name: 🚨 Test Results Check
-      run: |
-        if [ -f "test-results/overall-coverage.out" ]; then
-          COVERAGE=$(go tool cover -func=test-results/overall-coverage.out | grep total | awk '{print $3}' | sed 's/%//')
-          echo "Coverage: $COVERAGE%"
-          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
-            echo "❌ Coverage $COVERAGE% is below threshold 70%"
-            exit 1
-          else
-            echo "✅ Coverage $COVERAGE% meets threshold"
-          fi
-        else
-          echo "❌ Coverage file not found"
-          exit 1
-        fi
-
-  docker-test:
-    name: Docker Tests
+  docker:
+    name: Docker build
     runs-on: ubuntu-latest
     needs: test
-    
     steps:
-    - name: 📥 Checkout Code
-      uses: actions/checkout@v4
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
 
-    - name: 🐳 Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: 🐳 Set up Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: 🏗️ Build Test Image
-      run: |
-        docker build -t ecommerce-test -f Dockerfile.test .
-
-    - name: 🧪 Run Tests in Docker
-      run: |
-        docker run --rm -v $(pwd)/test-results:/app/test-results ecommerce-test
-
-    - name: 📁 Upload Docker Test Results
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: docker-test-results
-        path: test-results/
-        retention-days: 30
-
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: test
-    
-    steps:
-    - name: 📥 Checkout Code
-      uses: actions/checkout@v4
-
-    - name: 🐹 Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
-
-    - name: 🔍 Run GoSec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: './...'
-
-    - name: 🔐 Run Nancy Vulnerability Scanner
-      run: |
-        go install github.com/sonatypeoss/nancy@latest
-        go list -json -m all | nancy sleuth
-
-  code-quality:
-    name: Code Quality
-    runs-on: ubuntu-latest
-    needs: test
-    
-    steps:
-    - name: 📥 Checkout Code
-      uses: actions/checkout@v4
-
-    - name: 🐹 Setup Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
-
-    - name: 🔍 Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: latest
-        args: --timeout=10m
-
-    - name: 📊 Run Go Report Card
-      run: |
-        go install github.com/gojp/goreportcard/cmd/goreportcard-cli@latest
-        goreportcard-cli -v
+      - name: 🏗️ Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: food-delivery-api:ci

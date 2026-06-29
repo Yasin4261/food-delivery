@@ -5,33 +5,28 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
+// DB wraps the standard *sql.DB connection pool.
 type DB struct {
 	*sql.DB
 }
 
-// New db connection
+// NewConnection opens a PostgreSQL connection pool and verifies it is reachable.
 func NewConnection(databaseURL string) (*DB, error) {
 	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Set connection pool settings
 	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
+	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	// Verify connection
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &DB{db}, nil
-}
-
-func (db *DB) Close() error {
-	return db.DB.Close()
+	return &DB{DB: db}, nil
 }

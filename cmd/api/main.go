@@ -1,8 +1,16 @@
+// Command api is the entry point for the food-delivery HTTP API.
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/config"
 	"github.com/Yasin4261/food-delivery/database"
@@ -14,69 +22,108 @@ import (
 )
 
 func main() {
-
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Could not load config: %s", err)
+		log.Fatalf("config: %v", err)
 	}
 
-	// Initialize database connection
 	db, err := database.NewConnection(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Could not connect to database: %s", err)
+		log.Fatalf("database: %v", err)
 	}
 	defer db.Close()
 
-	// Run migrations if enabled
 	if cfg.AutoMigrate {
 		if err := database.RunMigrations(db.DB, "./migrations"); err != nil {
-			log.Fatalf("Migration failed: %v", err)
+			log.Fatalf("migrations: %v", err)
 		}
-		log.Println("Migrations completed successfully")
+		log.Println("migrations applied")
 	}
 
-	// Initialize dependencies (Dependency Injection)
-	app := initializeApp(db, cfg)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	slog.SetDefault(logger)
 
-	// Setup and start server
-	log.Printf("Starting server on port %s (environment: %s)", cfg.Port, cfg.Env)
-	log.Printf("API Version: v2")
-	log.Printf("JWT Expiration: %s", cfg.JWTExpiration)
-	
-	if err := http.ListenAndServe(":"+cfg.Port, app); err != nil {
-		log.Fatalf("Could not start server: %s", err)
-	}
-}
-
-// initializeApp sets up all dependencies and returns the configured router
-func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
-	// Repository Layer
-	userRepo := repository.NewUserRepository(db)
-	orderRepo := repository.NewOrderRepository(db)
-	chefRepo := repository.NewChefRepository(db)
-
-	// Service Layer
-	userService := service.NewUserService(userRepo, cfg.JWTSecret)
-	orderService := service.NewOrderService(orderRepo)
-	chefService := service.NewChefService(chefRepo)
-
-	// Middleware
-	authMiddleware := middleware.NewAuthMiddleware(userService)
-
-	// Handler Layer
-	userHandler := handler.NewUserHandler(userService)
-	orderHandler := handler.NewOrderHandler(orderService)
-	chefHandler := handler.NewChefHandler(chefService)
-	healthHandler := handler.NewHealthHandler()
-
-	// Router
-	r := router.NewRouter(
-		authMiddleware,
-		userHandler,
-		orderHandler,
-		chefHandler,
-		healthHandler,
+	// Global middleware (outermost first): CORS, then structured per-request
+	// logging, then the app.
+	app := middleware.CORS(cfg.AllowedOrigins)(
+		middleware.RequestLogger(logger)(initializeApp(db, cfg)),
 	)
 
-	return r.SetupRoutes()
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           app,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	// Listen for SIGINT/SIGTERM so we can drain in-flight requests on deploy.
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		log.Printf("starting server on %s (env=%s)", srv.Addr, cfg.Env)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Println("shutdown signal received; draining in-flight requests")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+	}
+	log.Println("server stopped")
+}
+
+// initializeApp is the composition root: it constructs the concrete adapters
+// and wires them into the core. As features are added, new repositories,
+// services and handlers are assembled here.
+func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
+	// Repositories (driven adapters).
+	userRepo := repository.NewUserRepository(db.DB)
+	chefRepo := repository.NewChefRepository(db.DB)
+	menuRepo := repository.NewMenuRepository(db.DB)
+	menuItemRepo := repository.NewMenuItemRepository(db.DB)
+	orderRepo := repository.NewOrderRepository(db.DB)
+	favoriteRepo := repository.NewFavoriteRepository(db.DB)
+	reviewRepo := repository.NewReviewRepository(db.DB)
+	earningsRepo := repository.NewEarningsRepository(db.DB)
+	searchRepo := repository.NewSearchRepository(db.DB)
+	passwordResetRepo := repository.NewPasswordResetRepository(db.DB)
+	chatRepo := repository.NewChatRepository(db.DB)
+
+	// Services (use cases).
+	authService := service.NewAuthService(userRepo, passwordResetRepo, cfg.JWTSecret, cfg.JWTExpiration)
+	chefService := service.NewChefService(chefRepo)
+	menuService := service.NewMenuService(chefRepo, menuRepo, menuItemRepo)
+	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo)
+	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
+	reviewService := service.NewReviewService(reviewRepo, orderRepo)
+	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
+	searchService := service.NewSearchService(searchRepo)
+	chatService := service.NewChatService(chatRepo, chefRepo)
+	tokenDenylist := service.NewTokenDenylist()
+
+	// Middleware.
+	authMiddleware := middleware.NewAuth(authService, tokenDenylist)
+
+	// Handlers (driving adapters).
+	healthHandler := handler.NewHealthHandler(db)
+	authHandler := handler.NewAuthHandler(authService, tokenDenylist, cfg.Env != "production")
+	chefHandler := handler.NewChefHandler(chefService)
+	menuHandler := handler.NewMenuHandler(menuService)
+	orderHandler := handler.NewOrderHandler(orderService)
+	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
+	reviewHandler := handler.NewReviewHandler(reviewService)
+	earningsHandler := handler.NewEarningsHandler(earningsService)
+	searchHandler := handler.NewSearchHandler(searchService)
+	chatHandler := handler.NewChatHandler(chatService)
+
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler)
+	return r.Setup()
 }

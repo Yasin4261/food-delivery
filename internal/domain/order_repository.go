@@ -1,40 +1,22 @@
 package domain
 
-// OrderRepository defines the interface for order data operations
+import "context"
+
+// OrderRepository is the port for order persistence. Lookups return
+// ErrOrderNotFound when no row matches.
 type OrderRepository interface {
-	// Create creates a new order with order items
-	Create(order *Order, items []OrderItem) error
-	
-	// FindByID finds an order by ID
-	FindByID(id int) (*Order, error)
-	
-	// FindByOrderCode finds an order by order code
-	FindByOrderCode(orderCode string) (*Order, error)
-	
-	// Update updates order information
-	Update(order *Order) error
-	
-	// UpdateStatus updates order status
-	UpdateStatus(id int, status string) error
-	
-	// FindByUserID finds orders by user ID
-	FindByUserID(userID int, offset, limit int) ([]*Order, error)
-	
-	// FindByChefID finds orders containing items from a chef
-	FindByChefID(chefID int, offset, limit int) ([]*Order, error)
-	
-	// FindByStatus finds orders by status
-	FindByStatus(status string, offset, limit int) ([]*Order, error)
-	
-	// FindActiveOrders finds all non-completed/non-cancelled orders
-	FindActiveOrders(offset, limit int) ([]*Order, error)
-	
-	// FindOrderItems finds items for an order
-	FindOrderItems(orderID int) ([]OrderItem, error)
-	
-	// CountByStatus counts orders by status
-	CountByStatus(status string) (int, error)
-	
-	// GetTotalRevenue calculates total revenue for a chef
-	GetTotalRevenue(chefID int) (float64, error)
+	// Create persists an order together with its items atomically (in a single
+	// transaction) and back-fills generated ids and timestamps.
+	Create(ctx context.Context, order *Order) error
+	// FindByID returns an order with all of its items.
+	FindByID(ctx context.Context, id int) (*Order, error)
+	// ListByUser returns a page of a customer's orders (newest first, each with
+	// all its items) and the total order count.
+	ListByUser(ctx context.Context, userID, limit, offset int) ([]*Order, int, error)
+	// ListByChef returns a page of orders containing at least one of the chef's
+	// items (newest first, items filtered to that chef) and the total count.
+	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Order, int, error)
+	// UpdateStatus persists the mutable status/payment/timestamp fields of an
+	// order after a transition.
+	UpdateStatus(ctx context.Context, order *Order) error
 }

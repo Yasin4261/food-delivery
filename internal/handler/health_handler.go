@@ -1,36 +1,41 @@
 package handler
 
 import (
-	"encoding/json"
+	"context"
 	"net/http"
+	"time"
 )
 
-type HealthHandler struct{}
-
-func NewHealthHandler() *HealthHandler {
-	return &HealthHandler{}
+// Pinger is the minimal contract the health check needs from the database.
+// Keeping it an interface here means the handler does not depend on the
+// concrete database package.
+type Pinger interface {
+	PingContext(ctx context.Context) error
 }
 
-// HealthCheck handles health check requests
-// GET /health
+// HealthHandler reports service liveness and database reachability.
+type HealthHandler struct {
+	db Pinger
+}
+
+// NewHealthHandler builds a HealthHandler.
+func NewHealthHandler(db Pinger) *HealthHandler {
+	return &HealthHandler{db: db}
+}
+
+// HealthCheck returns 200 when the API and database are healthy, otherwise 503.
 func (h *HealthHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
-	respondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"status":  "healthy",
-		"service": "food-delivery-api",
-		"version": "1.0.0",
-	})
-}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
 
-// respondWithJSON sends a JSON response
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
-	response, err := json.Marshal(payload)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"internal server error"}`))
-		return
+	resp := map[string]string{"status": "ok", "database": "ok"}
+	code := http.StatusOK
+
+	if err := h.db.PingContext(ctx); err != nil {
+		resp["status"] = "degraded"
+		resp["database"] = "unreachable"
+		code = http.StatusServiceUnavailable
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(response)
+	respondJSON(w, code, resp)
 }

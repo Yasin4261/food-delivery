@@ -2,139 +2,95 @@ package middleware
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
 
-// contextKey is a custom type for context keys to avoid collisions
+// TokenParser is the slice of AuthService the middleware needs. Declaring it as
+// an interface keeps the middleware decoupled from the concrete service.
+type TokenParser interface {
+	ParseToken(token string) (*service.Claims, error)
+}
+
+// Denylist reports whether a token id (jti) has been revoked.
+type Denylist interface {
+	IsRevoked(jti string) bool
+}
+
 type contextKey string
 
-const (
-	// UserClaimsKey is the context key for storing user claims
-	UserClaimsKey contextKey = "user_claims"
-)
+const claimsKey contextKey = "auth_claims"
 
-// AuthMiddleware validates JWT tokens from requests
-type AuthMiddleware struct {
-	userService *service.UserService
+// Auth holds the dependencies for authentication middleware.
+type Auth struct {
+	parser   TokenParser
+	denylist Denylist
 }
 
-// NewAuthMiddleware creates a new auth middleware instance
-func NewAuthMiddleware(userService *service.UserService) *AuthMiddleware {
-	return &AuthMiddleware{
-		userService: userService,
-	}
+// NewAuth builds the auth middleware. denylist may be nil to disable revocation
+// checks.
+func NewAuth(parser TokenParser, denylist Denylist) *Auth {
+	return &Auth{parser: parser, denylist: denylist}
 }
 
-// Authenticate is a middleware that validates JWT tokens
-func (m *AuthMiddleware) Authenticate(next http.Handler) http.Handler {
+// Require rejects requests without a valid "Authorization: Bearer <token>"
+// header. On success it stores the claims in the request context.
+func (a *Auth) Require(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract token from Authorization header
-		token, err := extractToken(r)
-		if err != nil {
-			respondWithError(w, http.StatusUnauthorized, "missing or invalid authorization header")
+		header := r.Header.Get("Authorization")
+		token, ok := strings.CutPrefix(header, "Bearer ")
+		if !ok || strings.TrimSpace(token) == "" {
+			writeError(w, http.StatusUnauthorized, "missing or malformed bearer token")
 			return
 		}
 
-		// Validate token
-		claims, err := m.userService.ValidateJWT(token)
+		claims, err := a.parser.ParseToken(strings.TrimSpace(token))
 		if err != nil {
-			respondWithError(w, http.StatusUnauthorized, "invalid or expired token")
+			writeError(w, http.StatusUnauthorized, "invalid or expired token")
+			return
+		}
+		if a.denylist != nil && a.denylist.IsRevoked(claims.ID) {
+			writeError(w, http.StatusUnauthorized, "token has been revoked")
 			return
 		}
 
-		// Store claims in request context
-		ctx := context.WithValue(r.Context(), UserClaimsKey, claims)
+		ctx := context.WithValue(r.Context(), claimsKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// RequireRole is a middleware that checks if user has required role
-func (m *AuthMiddleware) RequireRole(roles ...string) func(http.Handler) http.Handler {
+// RequireRole wraps Require and additionally enforces that the caller has one
+// of the allowed roles.
+func (a *Auth) RequireRole(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Get claims from context
-			claims, ok := r.Context().Value(UserClaimsKey).(*service.JWTClaims)
+		return a.Require(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := ClaimsFromContext(r.Context())
 			if !ok {
-				respondWithError(w, http.StatusUnauthorized, "unauthorized: no claims found")
+				writeError(w, http.StatusUnauthorized, "unauthenticated")
 				return
 			}
-
-			// Check if user has required role
-			hasRole := false
 			for _, role := range roles {
 				if claims.Role == role {
-					hasRole = true
-					break
+					next.ServeHTTP(w, r)
+					return
 				}
 			}
-
-			if !hasRole {
-				respondWithError(w, http.StatusForbidden, "forbidden: insufficient permissions")
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
+			writeError(w, http.StatusForbidden, "insufficient permissions")
+		}))
 	}
 }
 
-// OptionalAuth is a middleware that validates JWT if present but doesn't require it
-func (m *AuthMiddleware) OptionalAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Try to extract token
-		token, err := extractToken(r)
-		if err != nil {
-			// No token present, continue without claims
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Validate token
-		claims, err := m.userService.ValidateJWT(token)
-		if err != nil {
-			// Invalid token, continue without claims
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Store claims in request context
-		ctx := context.WithValue(r.Context(), UserClaimsKey, claims)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+// ClaimsFromContext returns the authenticated claims stored by Require.
+func ClaimsFromContext(ctx context.Context) (*service.Claims, bool) {
+	claims, ok := ctx.Value(claimsKey).(*service.Claims)
+	return claims, ok
 }
 
-// extractToken extracts the JWT token from the Authorization header
-func extractToken(r *http.Request) (string, error) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return "", errors.New("authorization header is required")
-	}
-
-	// Expected format: "Bearer <token>"
-	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		return "", errors.New("invalid authorization header format")
-	}
-
-	return parts[1], nil
-}
-
-// GetUserClaims retrieves user claims from request context
-func GetUserClaims(ctx context.Context) (*service.JWTClaims, error) {
-	claims, ok := ctx.Value(UserClaimsKey).(*service.JWTClaims)
-	if !ok {
-		return nil, errors.New("no user claims found in context")
-	}
-	return claims, nil
-}
-
-// respondWithError sends a JSON error response
-func respondWithError(w http.ResponseWriter, code int, message string) {
+func writeError(w http.ResponseWriter, status int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write([]byte(`{"error":"` + message + `"}`))
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }

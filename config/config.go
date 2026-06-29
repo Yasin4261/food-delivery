@@ -3,131 +3,85 @@ package config
 import (
 	"fmt"
 	"os"
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 )
 
-// Config holds all application configuration
+// Config holds all runtime configuration, loaded from environment variables.
 type Config struct {
-	// Server
-	Port string
-	Env  string
-
-	// Database
-	DatabaseURL string
-
-	// JWT
-	JWTSecret     string
-	JWTExpiration time.Duration
-
-	// CORS
+	Port           string
+	Env            string
+	DatabaseURL    string
+	JWTSecret      string
+	JWTExpiration  time.Duration
+	AutoMigrate    bool
 	AllowedOrigins []string
-
-	// Migration
-	AutoMigrate bool
 }
 
-// LoadConfig loads configuration from environment variables
+// LoadConfig reads configuration from the environment (and a local .env file
+// if present). In Docker the variables come from the environment directly, so
+// a missing .env file is not an error.
 func LoadConfig() (*Config, error) {
-	// Load .env file if it exists (development)
-	if err := godotenv.Load(); err != nil {
-		// .env file not found is okay (production might use real env vars)
-		fmt.Println("No .env file found, using environment variables")
-	}
+	_ = godotenv.Load()
 
-	// Parse JWT expiration
-	jwtExpStr := getEnv("JWT_EXPIRATION", "24h")
-	jwtExpiration, err := time.ParseDuration(jwtExpStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid JWT_EXPIRATION format: %w", err)
-	}
-
-	config := &Config{
+	cfg := &Config{
 		Port:           getEnv("PORT", "8080"),
 		Env:            getEnv("ENV", "development"),
-		DatabaseURL:    getEnv("DATABASE_URL", "postgres://postgres:postgres123@localhost:5432/food_delivery?sslmode=disable"),
+		DatabaseURL:    getEnv("DATABASE_URL", ""),
 		JWTSecret:      getEnv("JWT_SECRET", ""),
-		JWTExpiration:  jwtExpiration,
-		AllowedOrigins: parseCommaSeparated(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8080")),
-		AutoMigrate:    getEnvBool("AUTO_MIGRATE", true),
+		AutoMigrate:    getEnv("AUTO_MIGRATE", "false") == "true",
+		AllowedOrigins: splitAndTrim(getEnv("ALLOWED_ORIGINS", "")),
 	}
 
-	// Validate required fields
-	if config.JWTSecret == "" {
-		return nil, fmt.Errorf("JWT_SECRET environment variable is required")
+	if cfg.DatabaseURL == "" {
+		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
-	return config, nil
+	if err := validateJWTSecret(cfg); err != nil {
+		return nil, err
+	}
+
+	exp, err := time.ParseDuration(getEnv("JWT_EXPIRATION", "24h"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid JWT_EXPIRATION: %w", err)
+	}
+	cfg.JWTExpiration = exp
+
+	return cfg, nil
 }
 
-// getEnv retrieves an environment variable or returns a default value
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+// placeholderJWTSecret is the value historically committed to compose files. It
+// must never be used outside development.
+const placeholderJWTSecret = "change-me-in-production"
+
+// validateJWTSecret fails fast on a missing secret, and on the known weak
+// placeholder in any non-development environment.
+func validateJWTSecret(cfg *Config) error {
+	if cfg.JWTSecret == "" {
+		return fmt.Errorf("JWT_SECRET is required")
 	}
-	return defaultValue
+	if cfg.Env != "development" && cfg.JWTSecret == placeholderJWTSecret {
+		return fmt.Errorf("JWT_SECRET is set to the insecure placeholder; set a strong secret in env=%q", cfg.Env)
+	}
+	return nil
 }
 
-// getEnvBool retrieves a boolean environment variable
-func getEnvBool(key string, defaultValue bool) bool {
-	if value := os.Getenv(key); value != "" {
-		boolVal, err := strconv.ParseBool(value)
-		if err != nil {
-			return defaultValue
-		}
-		return boolVal
+func getEnv(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		return v
 	}
-	return defaultValue
+	return fallback
 }
 
-// parseCommaSeparated splits a comma-separated string into a slice
-func parseCommaSeparated(s string) []string {
-	if s == "" {
-		return []string{}
-	}
-	
-	var result []string
-	for _, item := range splitByComma(s) {
-		if trimmed := trimSpace(item); trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
-}
-
-// splitByComma splits a string by comma
-func splitByComma(s string) []string {
-	var result []string
-	var current string
-	
-	for _, ch := range s {
-		if ch == ',' {
-			result = append(result, current)
-			current = ""
-		} else {
-			current += string(ch)
+// splitAndTrim parses a comma-separated list, dropping blanks.
+func splitAndTrim(s string) []string {
+	out := make([]string, 0)
+	for _, part := range strings.Split(s, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
 		}
 	}
-	if current != "" {
-		result = append(result, current)
-	}
-	
-	return result
-}
-
-// trimSpace removes leading and trailing spaces
-func trimSpace(s string) string {
-	start := 0
-	end := len(s)
-	
-	for start < end && s[start] == ' ' {
-		start++
-	}
-	for end > start && s[end-1] == ' ' {
-		end--
-	}
-	
-	return s[start:end]
+	return out
 }

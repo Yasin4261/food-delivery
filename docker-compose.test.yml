@@ -1,0 +1,20 @@
+# Ephemeral PostgreSQL for the integration test suite. It runs on a separate
+# host port (5433) so it never clashes with the dev stack (5432), and keeps no
+# named volume — the data is throwaway.
+services:
+  db-test:
+    image: postgres:16-alpine
+    container_name: food_delivery_db_test
+    environment:
+      POSTGRES_DB: food_delivery_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d food_delivery_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

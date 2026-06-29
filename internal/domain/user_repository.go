@@ -1,34 +1,15 @@
 package domain
 
-// UserRepository defines the interface for user data operations
+import "context"
+
+// UserRepository is the port the core needs for user persistence. The Postgres
+// adapter lives in internal/repository. Lookups return ErrUserNotFound when no
+// row matches.
 type UserRepository interface {
-	// Create creates a new user
-	Create(user *User) error
-	
-	// FindByID finds a user by ID
-	FindByID(id int) (*User, error)
-	
-	// FindByEmail finds a user by email
-	FindByEmail(email string) (*User, error)
-	
-	// FindByUsername finds a user by username
-	FindByUsername(username string) (*User, error)
-	
-	// Update updates user information
-	Update(user *User) error
-	
-	// Delete deletes a user (soft delete)
-	Delete(id int) error
-	
-	// UpdateLocation updates user's location
-	UpdateLocation(id int, lat, lng float64, address, city, state, zipCode string) error
-	
-	// List returns paginated users
-	List(offset, limit int) ([]*User, error)
-	
-	// CountByRole counts users by role
-	CountByRole(role string) (int, error)
-	
-	// FindNearby finds users within radius (km) from a location
-	FindNearby(lat, lng, radiusKm float64, limit int) ([]*User, error)
+	Create(ctx context.Context, user *User) error
+	FindByID(ctx context.Context, id int) (*User, error)
+	FindByEmail(ctx context.Context, email string) (*User, error)
+	FindByUsername(ctx context.Context, username string) (*User, error)
+	// UpdatePassword sets a user's password hash.
+	UpdatePassword(ctx context.Context, userID int, passwordHash string) error
 }
