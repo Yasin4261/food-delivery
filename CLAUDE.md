@@ -197,8 +197,9 @@ already in the repo — copy it for every new feature:
 - **Domain tests** (`internal/domain/*_test.go`): pure, no deps — defaults, validation, entity rule methods.
 - **Service tests** (`internal/service/*_test.go`): black-box `package <pkg>_test`, a fake implementing the domain port, **table-driven** cases for success + each error path. See `auth_service_test.go` (`fakeUserRepo`).
 - **Handler tests** (`internal/handler/*_test.go`): drive the **real router + middleware** with `httptest` over a fake repo; assert status codes and that secrets (e.g. password hash) never leak. See `auth_handler_test.go`.
+- **Repository integration tests** (`internal/repository/*_integration_test.go`): the only tests that hit a **real Postgres** — they exercise the actual SQL (Haversine `FindNearby`, decimal scanning, the order transaction + multi-chef scoping, `ON CONFLICT` idempotency, atomic `DecrementStock`) and the migration files. Gated behind the **`//go:build integration`** tag, so the default `go test ./...` skips them and needs no database. `TestMain` (`main_test.go`) connects via `TEST_DATABASE_URL`, runs migrations, and shares `testDB`; `helpers_test.go` provides `resetDB` (TRUNCATE … RESTART IDENTITY CASCADE) and seed helpers. The DB is a throwaway `postgres:16-alpine` from `docker-compose.test.yml` (host port 5433); CI runs them in a separate job with a Postgres service container.
 
-Run: `go test ./...`, or `go test -race -cover ./...`. **A feature is not done until its tests are green.**
+Run: `go test ./...` (unit, no DB), `go test -race -cover ./...`, or `make test-integration` (spins up Dockerized Postgres, runs the tagged suite, tears down). **A feature is not done until its tests are green** — repository work should ship an integration test.
 
 ## 8. Common commands
 
@@ -206,7 +207,8 @@ Run: `go test ./...`, or `go test -race -cover ./...`. **A feature is not done u
 make run            # run locally (go run ./cmd/api), needs Postgres + env
 make dev            # full stack via docker-compose.dev.yml (hot reload via air)
 make build          # build binary to bin/
-make test           # go test ./...
+make test           # go test ./...  (unit + handler; no database needed)
+make test-integration  # Dockerized Postgres + repository integration tests (-tags=integration)
 make migrate-up     # apply migrations   (DB_URL overridable)
 make migrate-down   # roll back last migration
 make migrate-create name=create_favorites_table   # scaffold a new migration

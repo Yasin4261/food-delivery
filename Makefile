@@ -1,4 +1,4 @@
-.PHONY: help dev prod build clean test migrate-up migrate-down
+.PHONY: help dev prod build clean test test-integration migrate-up migrate-down
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -40,6 +40,18 @@ test: ## Run tests
 test-coverage: ## Run tests with coverage
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out
+
+# Integration tests run the real Postgres adapters against a throwaway database
+# in Docker. They are gated behind the `integration` build tag, so the plain
+# `make test` above never needs a database.
+TEST_DB_URL ?= postgres://postgres:postgres@localhost:5433/food_delivery_test?sslmode=disable
+
+test-integration: ## Run repository integration tests against a Dockerized Postgres
+	docker compose -f docker-compose.test.yml up -d --wait
+	@TEST_DATABASE_URL="$(TEST_DB_URL)" go test -tags=integration ./internal/repository/... ; \
+		status=$$? ; \
+		docker compose -f docker-compose.test.yml down -v ; \
+		exit $$status
 
 # Database migrations
 DB_URL ?= postgres://postgres:postgres123@localhost:5432/food_delivery?sslmode=disable
