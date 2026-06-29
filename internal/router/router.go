@@ -16,6 +16,7 @@ type Router struct {
 	authHandler   *handler.AuthHandler
 	chefHandler   *handler.ChefHandler
 	menuHandler   *handler.MenuHandler
+	orderHandler  *handler.OrderHandler
 }
 
 // NewRouter creates a Router with its handler and middleware dependencies.
@@ -25,6 +26,7 @@ func NewRouter(
 	authHandler *handler.AuthHandler,
 	chefHandler *handler.ChefHandler,
 	menuHandler *handler.MenuHandler,
+	orderHandler *handler.OrderHandler,
 ) *Router {
 	return &Router{
 		mux:           http.NewServeMux(),
@@ -33,6 +35,7 @@ func NewRouter(
 		authHandler:   authHandler,
 		chefHandler:   chefHandler,
 		menuHandler:   menuHandler,
+		orderHandler:  orderHandler,
 	}
 }
 
@@ -71,7 +74,21 @@ func (r *Router) Setup() http.Handler {
 	r.handleRole("PUT /api/v2/menu-items/{id}", r.menuHandler.UpdateItem)
 	r.handleRole("DELETE /api/v2/menu-items/{id}", r.menuHandler.DeleteItem)
 
+	// Orders: customers place and track their own orders (any authenticated
+	// user); the chef-scoped views and status actions require the chef role.
+	r.handleAuth("POST /api/v2/orders", r.orderHandler.Place)
+	r.handleAuth("GET /api/v2/orders", r.orderHandler.List)
+	r.handleAuth("GET /api/v2/orders/{id}", r.orderHandler.Get)
+	r.handleAuth("POST /api/v2/orders/{id}/cancel", r.orderHandler.Cancel)
+	r.handleRole("GET /api/v2/chef/orders", r.orderHandler.ChefList)
+	r.handleRole("POST /api/v2/chef/orders/{id}/status", r.orderHandler.ChefAdvance)
+
 	return r.mux
+}
+
+// handleAuth registers a route that requires a valid bearer token.
+func (r *Router) handleAuth(pattern string, h http.HandlerFunc) {
+	r.mux.Handle(pattern, r.auth.Require(http.HandlerFunc(h)))
 }
 
 // handleRole registers a chef-only route: it requires a valid token whose role

@@ -160,6 +160,24 @@ func (r *MenuItemRepository) Deactivate(ctx context.Context, id int) error {
 	return nil
 }
 
+// DecrementStock atomically reduces a limited item's available_quantity,
+// refusing to go negative. It returns ErrItemOutOfStock when no row matches
+// (insufficient stock, or the item is unlimited / has no tracked quantity).
+func (r *MenuItemRepository) DecrementStock(ctx context.Context, id, qty int) error {
+	res, err := r.db.ExecContext(ctx, `
+		UPDATE menu_items
+		SET available_quantity = available_quantity - $2, updated_at = now()
+		WHERE id = $1 AND is_unlimited = false
+		  AND available_quantity IS NOT NULL AND available_quantity >= $2`, id, qty)
+	if err != nil {
+		return fmt.Errorf("decrement stock: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrItemOutOfStock
+	}
+	return nil
+}
+
 func collectMenuItems(rows *sql.Rows) ([]*domain.MenuItem, error) {
 	items := make([]*domain.MenuItem, 0)
 	for rows.Next() {

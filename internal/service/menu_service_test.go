@@ -120,6 +120,14 @@ func (f *fakeMenuItemRepo) Deactivate(_ context.Context, id int) error {
 	m.IsActive = false
 	return nil
 }
+func (f *fakeMenuItemRepo) DecrementStock(_ context.Context, id, qty int) error {
+	m, ok := f.items[id]
+	if !ok || m.IsUnlimited || m.AvailableQuantity == nil || *m.AvailableQuantity < qty {
+		return domain.ErrItemOutOfStock
+	}
+	*m.AvailableQuantity -= qty
+	return nil
+}
 
 // menuFixture wires a MenuService over fakes and seeds chef profiles for the
 // given user ids (chef.ID is assigned in order). It returns the service and the

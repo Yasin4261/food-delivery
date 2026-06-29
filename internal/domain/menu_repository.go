@@ -26,4 +26,9 @@ type MenuItemRepository interface {
 	Update(ctx context.Context, item *MenuItem) error
 	// Deactivate soft-deletes an item (is_active = false).
 	Deactivate(ctx context.Context, id int) error
+	// DecrementStock atomically reduces a limited item's available_quantity by
+	// qty, failing with ErrItemOutOfStock if not enough stock remains. It is a
+	// no-op error (ErrItemOutOfStock) for unlimited items, which the caller
+	// should skip.
+	DecrementStock(ctx context.Context, id, qty int) error
 }

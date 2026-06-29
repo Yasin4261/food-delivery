@@ -120,6 +120,14 @@ func (f *fakeMenuItemRepo) Deactivate(_ context.Context, id int) error {
 	m.IsActive = false
 	return nil
 }
+func (f *fakeMenuItemRepo) DecrementStock(_ context.Context, id, qty int) error {
+	m, ok := f.items[id]
+	if !ok || m.IsUnlimited || m.AvailableQuantity == nil || *m.AvailableQuantity < qty {
+		return domain.ErrItemOutOfStock
+	}
+	*m.AvailableQuantity -= qty
+	return nil
+}
 
 // registerCustomerToken registers a customer (non-chef) and returns its token.
 func registerCustomerToken(t *testing.T, srv http.Handler, username, email string) string {
