@@ -63,13 +63,18 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	return r.findOne(ctx, `SELECT`+userColumns+` FROM users WHERE username = $1`, username)
 }
 
-func (r *UserRepository) findOne(ctx context.Context, query string, arg any) (*domain.User, error) {
+func scanUser(s interface{ Scan(...any) error }) (*domain.User, error) {
 	u := &domain.User{}
-	err := r.db.QueryRowContext(ctx, query, arg).Scan(
+	err := s.Scan(
 		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.PhoneNumber,
 		&u.Address, &u.City, &u.State, &u.ZipCode, &u.Latitude, &u.Longitude,
 		&u.Role, &u.IsVerified, &u.IsActive, &u.CreatedAt, &u.UpdatedAt,
 	)
+	return u, err
+}
+
+func (r *UserRepository) findOne(ctx context.Context, query string, arg any) (*domain.User, error) {
+	u, err := scanUser(r.db.QueryRowContext(ctx, query, arg))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrUserNotFound
 	}
