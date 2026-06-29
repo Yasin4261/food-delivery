@@ -1,0 +1,154 @@
+package handler_test
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"testing"
+
+	"github.com/Yasin4261/food-delivery/internal/domain"
+)
+
+// fakeReviewRepo is an in-memory domain.ReviewRepository for HTTP tests
+// (no aggregate recompute; that is covered by the repository integration tests).
+type fakeReviewRepo struct {
+	reviews []*domain.Review
+	nextID  int
+}
+
+func newFakeReviewRepo() *fakeReviewRepo { return &fakeReviewRepo{nextID: 1} }
+
+func sameTarget(a, b *int) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+func (f *fakeReviewRepo) Create(_ context.Context, rv *domain.Review) error {
+	for _, ex := range f.reviews {
+		if ex.UserID == rv.UserID && ex.OrderID == rv.OrderID &&
+			sameTarget(ex.ChefID, rv.ChefID) && sameTarget(ex.MenuItemID, rv.MenuItemID) {
+			return domain.ErrReviewExists
+		}
+	}
+	rv.ID = f.nextID
+	f.nextID++
+	cp := *rv
+	f.reviews = append(f.reviews, &cp)
+	return nil
+}
+func (f *fakeReviewRepo) ListByChef(_ context.Context, chefID, limit, offset int) ([]*domain.Review, error) {
+	out := make([]*domain.Review, 0)
+	for _, rv := range f.reviews {
+		if rv.ChefID != nil && *rv.ChefID == chefID {
+			out = append(out, rv)
+		}
+	}
+	return out, nil
+}
+func (f *fakeReviewRepo) ListByMenuItem(_ context.Context, menuItemID, limit, offset int) ([]*domain.Review, error) {
+	out := make([]*domain.Review, 0)
+	for _, rv := range f.reviews {
+		if rv.MenuItemID != nil && *rv.MenuItemID == menuItemID {
+			out = append(out, rv)
+		}
+	}
+	return out, nil
+}
+
+// placeAndDeliverOrder places an order for the customer containing the chef's
+// item, then advances it to delivered via the chef. Returns the order id.
+func placeAndDeliverOrder(t *testing.T, srv http.Handler, chefToken, customerToken string, itemID int) int {
+	t.Helper()
+	body := `{"delivery_address":"123 St","payment_method":"cash","items":[{"menu_item_id":` + itoa(itemID) + `,"quantity":1}]}`
+	rec := do(t, srv, http.MethodPost, "/api/v2/orders", customerToken, body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("place order = %d (%s)", rec.Code, rec.Body)
+	}
+	var order domain.Order
+	_ = json.Unmarshal(rec.Body.Bytes(), &order)
+	for _, action := range []string{"confirm", "preparing", "ready", "delivering", "delivered"} {
+		if rec := do(t, srv, http.MethodPost, "/api/v2/chef/orders/"+itoa(order.ID)+"/status", chefToken, `{"action":"`+action+`"}`); rec.Code != http.StatusOK {
+			t.Fatalf("advance %q = %d (%s)", action, rec.Code, rec.Body)
+		}
+	}
+	return order.ID
+}
+
+func TestReview_Flow(t *testing.T) {
+	srv := newTestServer()
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	orderID := placeAndDeliverOrder(t, srv, chefToken, customer, itemID)
+
+	// No token -> 401.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", "", `{}`); rec.Code != http.StatusUnauthorized {
+		t.Errorf("review without token = %d, want 401", rec.Code)
+	}
+
+	// Chef review, then product review.
+	chefReview := `{"order_id":` + itoa(orderID) + `,"chef_id":1,"rating":5,"comment":"great"}`
+	if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", customer, chefReview); rec.Code != http.StatusCreated {
+		t.Fatalf("chef review = %d, want 201 (%s)", rec.Code, rec.Body)
+	}
+	productReview := `{"order_id":` + itoa(orderID) + `,"menu_item_id":` + itoa(itemID) + `,"rating":4}`
+	if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", customer, productReview); rec.Code != http.StatusCreated {
+		t.Fatalf("product review = %d, want 201 (%s)", rec.Code, rec.Body)
+	}
+
+	// Duplicate chef review -> 409.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", customer, chefReview); rec.Code != http.StatusConflict {
+		t.Errorf("duplicate review = %d, want 409", rec.Code)
+	}
+
+	// Public reads.
+	rec := do(t, srv, http.MethodGet, "/api/v2/chefs/1/reviews", "", "")
+	var chefReviews []domain.Review
+	_ = json.Unmarshal(rec.Body.Bytes(), &chefReviews)
+	if rec.Code != http.StatusOK || len(chefReviews) != 1 {
+		t.Errorf("chef reviews = %d/%d, want 200/1", rec.Code, len(chefReviews))
+	}
+	rec = do(t, srv, http.MethodGet, "/api/v2/menu-items/"+itoa(itemID)+"/reviews", "", "")
+	var itemReviews []domain.Review
+	_ = json.Unmarshal(rec.Body.Bytes(), &itemReviews)
+	if rec.Code != http.StatusOK || len(itemReviews) != 1 {
+		t.Errorf("item reviews = %d/%d, want 200/1", rec.Code, len(itemReviews))
+	}
+}
+
+func TestReview_Guards(t *testing.T) {
+	srv := newTestServer()
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	orderID := placeAndDeliverOrder(t, srv, chefToken, customer, itemID)
+
+	// Another customer cannot review someone else's order -> 403.
+	other := registerCustomerToken(t, srv, "other", "other@example.com")
+	if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", other,
+		`{"order_id":`+itoa(orderID)+`,"chef_id":1,"rating":5}`); rec.Code != http.StatusForbidden {
+		t.Errorf("non-owner review = %d, want 403", rec.Code)
+	}
+
+	// Bad rating -> 400.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", customer,
+		`{"order_id":`+itoa(orderID)+`,"chef_id":1,"rating":9}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad rating = %d, want 400", rec.Code)
+	}
+
+	// Reviewing a chef not in the order -> 422.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", customer,
+		`{"order_id":`+itoa(orderID)+`,"chef_id":999,"rating":5}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("foreign chef review = %d, want 422", rec.Code)
+	}
+
+	// A pending (undelivered) order cannot be reviewed -> 422.
+	body := `{"delivery_address":"x","payment_method":"cash","items":[{"menu_item_id":` + itoa(itemID) + `,"quantity":1}]}`
+	rec := do(t, srv, http.MethodPost, "/api/v2/orders", customer, body)
+	var pending domain.Order
+	_ = json.Unmarshal(rec.Body.Bytes(), &pending)
+	if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", customer,
+		`{"order_id":`+itoa(pending.ID)+`,"chef_id":1,"rating":5}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("pending order review = %d, want 422", rec.Code)
+	}
+}

@@ -24,6 +24,12 @@ var (
 	ErrInvalidStatusTransition  = errors.New("invalid order status transition")
 	ErrInvalidPaymentTransition = errors.New("invalid payment status transition")
 
+	ErrInvalidRating          = errors.New("rating must be between 1 and 5")
+	ErrInvalidReviewTarget    = errors.New("a review must target exactly one of a chef or a dish")
+	ErrOrderNotReviewable     = errors.New("only delivered orders can be reviewed")
+	ErrReviewTargetNotInOrder = errors.New("you can only review a chef or dish from your own order")
+	ErrReviewExists           = errors.New("you have already reviewed this for this order")
+
 	// ErrForbidden marks an authenticated caller acting on a resource they do
 	// not own. Handlers map it to HTTP 403.
 	ErrForbidden = errors.New("you do not have permission to modify this resource")

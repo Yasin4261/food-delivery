@@ -40,15 +40,21 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		respondError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, domain.ErrForbidden):
 		respondError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, domain.ErrInvalidRating),
+		errors.Is(err, domain.ErrInvalidReviewTarget):
+		respondError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrEmptyOrder),
 		errors.Is(err, domain.ErrItemNotOrderable),
 		errors.Is(err, domain.ErrItemOutOfStock),
 		errors.Is(err, domain.ErrInvalidStatusTransition),
-		errors.Is(err, domain.ErrInvalidPaymentTransition):
+		errors.Is(err, domain.ErrInvalidPaymentTransition),
+		errors.Is(err, domain.ErrOrderNotReviewable),
+		errors.Is(err, domain.ErrReviewTargetNotInOrder):
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, domain.ErrEmailAlreadyExists),
 		errors.Is(err, domain.ErrUsernameAlreadyExists),
-		errors.Is(err, domain.ErrChefProfileExists):
+		errors.Is(err, domain.ErrChefProfileExists),
+		errors.Is(err, domain.ErrReviewExists):
 		respondError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrInvalidCredentials),
 		errors.Is(err, domain.ErrAccountInactive):

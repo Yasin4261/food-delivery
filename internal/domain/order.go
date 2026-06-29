@@ -165,6 +165,17 @@ func (o *Order) HasChef(chefID int) bool {
 	return false
 }
 
+// HasMenuItem reports whether the order contains the given dish. It backs the
+// "you can only review what you ordered" rule for product reviews.
+func (o *Order) HasMenuItem(menuItemID int) bool {
+	for _, it := range o.Items {
+		if it.MenuItemID == menuItemID {
+			return true
+		}
+	}
+	return false
+}
+
 // transition enforces a single legal status move.
 func (o *Order) transition(from, to string) error {
 	if o.Status != from {

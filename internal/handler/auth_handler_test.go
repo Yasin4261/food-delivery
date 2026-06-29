@@ -72,8 +72,10 @@ func newTestServer() http.Handler {
 	authService := service.NewAuthService(newFakeUserRepo(), "test-secret", time.Hour)
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, newFakeMenuRepo(), itemRepo)
-	orderService := service.NewOrderService(newFakeOrderRepo(), itemRepo, chefRepo)
+	orderRepo := newFakeOrderRepo()
+	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo)
 	favoriteService := service.NewFavoriteService(newFakeFavoriteRepo(chefRepo), chefRepo)
+	reviewService := service.NewReviewService(newFakeReviewRepo(), orderRepo)
 	authMiddleware := middleware.NewAuth(authService)
 	healthHandler := handler.NewHealthHandler(okPinger{})
 	authHandler := handler.NewAuthHandler(authService)
@@ -81,7 +83,8 @@ func newTestServer() http.Handler {
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler).Setup()
+	reviewHandler := handler.NewReviewHandler(reviewService)
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler).Setup()
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.
