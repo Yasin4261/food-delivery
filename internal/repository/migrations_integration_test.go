@@ -11,7 +11,11 @@ import (
 // TestMigrations_SchemaApplied confirms every expected table exists after the
 // migrations run in TestMain.
 func TestMigrations_SchemaApplied(t *testing.T) {
-	want := []string{"users", "chefs", "menus", "menu_items", "orders", "order_items", "favorites"}
+	want := []string{
+		"users", "chefs", "menus", "menu_items", "orders", "order_items",
+		"favorites", "reviews", "password_reset_tokens",
+		"chat_conversations", "chat_messages",
+	}
 	for _, table := range want {
 		var exists bool
 		err := testDB.QueryRow(

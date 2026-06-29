@@ -21,6 +21,7 @@ type Router struct {
 	reviewHandler   *handler.ReviewHandler
 	earningsHandler *handler.EarningsHandler
 	searchHandler   *handler.SearchHandler
+	chatHandler     *handler.ChatHandler
 }
 
 // NewRouter creates a Router with its handler and middleware dependencies.
@@ -35,6 +36,7 @@ func NewRouter(
 	reviewHandler *handler.ReviewHandler,
 	earningsHandler *handler.EarningsHandler,
 	searchHandler *handler.SearchHandler,
+	chatHandler *handler.ChatHandler,
 ) *Router {
 	return &Router{
 		mux:             http.NewServeMux(),
@@ -48,6 +50,7 @@ func NewRouter(
 		reviewHandler:   reviewHandler,
 		earningsHandler: earningsHandler,
 		searchHandler:   searchHandler,
+		chatHandler:     chatHandler,
 	}
 }
 
@@ -112,6 +115,14 @@ func (r *Router) Setup() http.Handler {
 
 	// Search: dishes/chefs for any authenticated user; users for admins only.
 	r.handleAuth("GET /api/v2/search", r.searchHandler.Search)
+
+	// Chat: customer <-> chef messaging (auth; only participants may access a
+	// conversation). The /ws route upgrades to a WebSocket for live delivery.
+	r.handleAuth("POST /api/v2/chat/conversations", r.chatHandler.StartConversation)
+	r.handleAuth("GET /api/v2/chat/conversations", r.chatHandler.ListConversations)
+	r.handleAuth("POST /api/v2/chat/conversations/{id}/messages", r.chatHandler.PostMessage)
+	r.handleAuth("GET /api/v2/chat/conversations/{id}/messages", r.chatHandler.ListMessages)
+	r.handleAuth("GET /api/v2/chat/conversations/{id}/ws", r.chatHandler.WebSocket)
 
 	return r.mux
 }

@@ -36,13 +36,15 @@ func respondDomainError(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrChefNotFound),
 		errors.Is(err, domain.ErrMenuNotFound),
 		errors.Is(err, domain.ErrMenuItemNotFound),
-		errors.Is(err, domain.ErrOrderNotFound):
+		errors.Is(err, domain.ErrOrderNotFound),
+		errors.Is(err, domain.ErrConversationNotFound):
 		respondError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, domain.ErrForbidden):
 		respondError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, domain.ErrInvalidRating),
 		errors.Is(err, domain.ErrInvalidReviewTarget),
-		errors.Is(err, domain.ErrInvalidResetToken):
+		errors.Is(err, domain.ErrInvalidResetToken),
+		errors.Is(err, domain.ErrEmptyMessage):
 		respondError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrEmptyOrder),
 		errors.Is(err, domain.ErrItemNotOrderable),

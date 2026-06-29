@@ -14,6 +14,9 @@ var (
 	ErrResetTokenNotFound = errors.New("reset token not found")
 	ErrInvalidResetToken  = errors.New("invalid, expired or already-used reset token")
 
+	ErrConversationNotFound = errors.New("conversation not found")
+	ErrEmptyMessage         = errors.New("message body cannot be empty")
+
 	ErrChefNotFound      = errors.New("chef not found")
 	ErrChefProfileExists = errors.New("chef profile already exists for this user")
 

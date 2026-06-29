@@ -119,6 +119,7 @@ func newTestServer() http.Handler {
 	reviewService := service.NewReviewService(newFakeReviewRepo(), orderRepo)
 	earningsService := service.NewEarningsService(newFakeEarningsRepo(), chefRepo)
 	searchService := service.NewSearchService(newFakeSearchRepo())
+	chatService := service.NewChatService(newFakeChatRepo(), chefRepo)
 	authMiddleware := middleware.NewAuth(authService)
 	healthHandler := handler.NewHealthHandler(okPinger{})
 	authHandler := handler.NewAuthHandler(authService, true)
@@ -129,7 +130,8 @@ func newTestServer() http.Handler {
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	earningsHandler := handler.NewEarningsHandler(earningsService)
 	searchHandler := handler.NewSearchHandler(searchService)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler).Setup()
+	chatHandler := handler.NewChatHandler(chatService)
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler).Setup()
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.
