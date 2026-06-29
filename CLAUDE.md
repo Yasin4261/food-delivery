@@ -243,7 +243,8 @@ Tag history:
 | `v0.1.0` | early "move to DDD" of the original project |
 | `v1.0.0` | original project, documented |
 | `v2.0.0` | original gin-based v2 (pre-rebuild) |
-| `v3.0.0` | **this hexagonal rebuild** — full product brief + hardening (PR #19, closes #1–#18) |
+| `v3.0.0` | the hexagonal rebuild — full product brief + hardening (PR #19, closes #1–#18) |
+| `v3.1.0` | **email delivery** — `domain.Mailer` (SMTP + dev logging); password reset emails the link (PR #21, closes #20) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
