@@ -15,18 +15,25 @@ type TokenParser interface {
 	ParseToken(token string) (*service.Claims, error)
 }
 
+// Denylist reports whether a token id (jti) has been revoked.
+type Denylist interface {
+	IsRevoked(jti string) bool
+}
+
 type contextKey string
 
 const claimsKey contextKey = "auth_claims"
 
 // Auth holds the dependencies for authentication middleware.
 type Auth struct {
-	parser TokenParser
+	parser   TokenParser
+	denylist Denylist
 }
 
-// NewAuth builds the auth middleware.
-func NewAuth(parser TokenParser) *Auth {
-	return &Auth{parser: parser}
+// NewAuth builds the auth middleware. denylist may be nil to disable revocation
+// checks.
+func NewAuth(parser TokenParser, denylist Denylist) *Auth {
+	return &Auth{parser: parser, denylist: denylist}
 }
 
 // Require rejects requests without a valid "Authorization: Bearer <token>"
@@ -43,6 +50,10 @@ func (a *Auth) Require(next http.Handler) http.Handler {
 		claims, err := a.parser.ParseToken(strings.TrimSpace(token))
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "invalid or expired token")
+			return
+		}
+		if a.denylist != nil && a.denylist.IsRevoked(claims.ID) {
+			writeError(w, http.StatusUnauthorized, "token has been revoked")
 			return
 		}
 

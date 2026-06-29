@@ -13,7 +13,8 @@ import (
 // AuthHandler exposes the authentication endpoints. It is a thin transport
 // layer: parse the request, call the service, translate the result to HTTP.
 type AuthHandler struct {
-	auth *service.AuthService
+	auth     *service.AuthService
+	denylist *service.TokenDenylist
 	// exposeResetToken returns the raw reset token in the forgot-password
 	// response. It is a development affordance (until email delivery exists,
 	// see #email-infra) and must be false in production.
@@ -22,8 +23,8 @@ type AuthHandler struct {
 
 // NewAuthHandler builds an AuthHandler. exposeResetToken should be false in
 // production, where the token is delivered by email instead.
-func NewAuthHandler(auth *service.AuthService, exposeResetToken bool) *AuthHandler {
-	return &AuthHandler{auth: auth, exposeResetToken: exposeResetToken}
+func NewAuthHandler(auth *service.AuthService, denylist *service.TokenDenylist, exposeResetToken bool) *AuthHandler {
+	return &AuthHandler{auth: auth, denylist: denylist, exposeResetToken: exposeResetToken}
 }
 
 type registerRequest struct {
@@ -84,11 +85,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, result)
 }
 
-// Logout handles POST /api/v2/auth/logout. JWTs are stateless, so logout is a
-// client-side action (discard the token). This endpoint exists to give the
-// client a definite call to make; with a token blocklist it would revoke here.
+// Logout handles POST /api/v2/auth/logout (auth). It revokes the presented
+// token by adding its jti to the denylist until it would expire, so a stolen
+// token can be invalidated before expiry.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	respondJSON(w, http.StatusOK, map[string]string{"message": "logged out; discard your token"})
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if h.denylist != nil && claims.ExpiresAt != nil {
+		h.denylist.Revoke(claims.ID, claims.ExpiresAt.Time)
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"message": "logged out; token revoked"})
 }
 
 type forgotPasswordRequest struct {

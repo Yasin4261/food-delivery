@@ -69,7 +69,8 @@ func (r *Router) Setup() http.Handler {
 	limited("POST /api/v2/auth/login", r.authHandler.Login)
 	limited("POST /api/v2/auth/forgot-password", r.authHandler.ForgotPassword)
 	limited("POST /api/v2/auth/reset-password", r.authHandler.ResetPassword)
-	r.mux.HandleFunc("POST /api/v2/auth/logout", r.authHandler.Logout)
+	// Logout requires a valid token so it can revoke that exact token.
+	r.handleAuth("POST /api/v2/auth/logout", r.authHandler.Logout)
 
 	// Protected: requires a valid bearer token.
 	r.mux.Handle("GET /api/v2/auth/me", r.auth.Require(http.HandlerFunc(r.authHandler.Me)))

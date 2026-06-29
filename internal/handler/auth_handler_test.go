@@ -120,9 +120,10 @@ func newTestServer() http.Handler {
 	earningsService := service.NewEarningsService(newFakeEarningsRepo(), chefRepo)
 	searchService := service.NewSearchService(newFakeSearchRepo())
 	chatService := service.NewChatService(newFakeChatRepo(), chefRepo)
-	authMiddleware := middleware.NewAuth(authService)
+	denylist := service.NewTokenDenylist()
+	authMiddleware := middleware.NewAuth(authService, denylist)
 	healthHandler := handler.NewHealthHandler(okPinger{})
-	authHandler := handler.NewAuthHandler(authService, true)
+	authHandler := handler.NewAuthHandler(authService, denylist, true)
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)
@@ -203,6 +204,31 @@ func TestAuthFlow_HTTP(t *testing.T) {
 	}
 	if me.PasswordHash != "" {
 		t.Error("/me must not expose the password hash")
+	}
+}
+
+func TestLogout_RevokesToken(t *testing.T) {
+	srv := newTestServer()
+	token := registerAndToken(t, srv, "yasin", "yasin@example.com")
+
+	// The token works before logout.
+	if rec := do(t, srv, http.MethodGet, "/api/v2/auth/me", token, ""); rec.Code != http.StatusOK {
+		t.Fatalf("/me before logout = %d, want 200", rec.Code)
+	}
+
+	// Logout (authenticated) revokes this token.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/auth/logout", token, ""); rec.Code != http.StatusOK {
+		t.Fatalf("logout = %d, want 200 (%s)", rec.Code, rec.Body)
+	}
+
+	// The same token is now rejected before its natural expiry.
+	if rec := do(t, srv, http.MethodGet, "/api/v2/auth/me", token, ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("/me after logout = %d, want 401 (revoked)", rec.Code)
+	}
+
+	// Logout itself now requires a valid token.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/auth/logout", "", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("logout without token = %d, want 401", rec.Code)
 	}
 }
 

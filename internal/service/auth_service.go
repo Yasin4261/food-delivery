@@ -234,11 +234,16 @@ func (s *AuthService) ParseToken(tokenString string) (*Claims, error) {
 func (s *AuthService) issue(user *domain.User) (*AuthResult, error) {
 	expiresAt := time.Now().Add(s.jwtExpiry)
 
+	jti, err := randomToken()
+	if err != nil {
+		return nil, err
+	}
 	claims := Claims{
 		UserID: user.ID,
 		Email:  user.Email,
 		Role:   user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti, // enables per-token revocation (see TokenDenylist)
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "food-delivery-api",

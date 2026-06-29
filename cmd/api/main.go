@@ -107,13 +107,14 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
 	searchService := service.NewSearchService(searchRepo)
 	chatService := service.NewChatService(chatRepo, chefRepo)
+	tokenDenylist := service.NewTokenDenylist()
 
 	// Middleware.
-	authMiddleware := middleware.NewAuth(authService)
+	authMiddleware := middleware.NewAuth(authService, tokenDenylist)
 
 	// Handlers (driving adapters).
 	healthHandler := handler.NewHealthHandler(db)
-	authHandler := handler.NewAuthHandler(authService, cfg.Env != "production")
+	authHandler := handler.NewAuthHandler(authService, tokenDenylist, cfg.Env != "production")
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)
