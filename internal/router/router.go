@@ -10,13 +10,14 @@ import (
 
 // Router builds the application's HTTP route table.
 type Router struct {
-	mux           *http.ServeMux
-	auth          *middleware.Auth
-	healthHandler *handler.HealthHandler
-	authHandler   *handler.AuthHandler
-	chefHandler   *handler.ChefHandler
-	menuHandler   *handler.MenuHandler
-	orderHandler  *handler.OrderHandler
+	mux             *http.ServeMux
+	auth            *middleware.Auth
+	healthHandler   *handler.HealthHandler
+	authHandler     *handler.AuthHandler
+	chefHandler     *handler.ChefHandler
+	menuHandler     *handler.MenuHandler
+	orderHandler    *handler.OrderHandler
+	favoriteHandler *handler.FavoriteHandler
 }
 
 // NewRouter creates a Router with its handler and middleware dependencies.
@@ -27,15 +28,17 @@ func NewRouter(
 	chefHandler *handler.ChefHandler,
 	menuHandler *handler.MenuHandler,
 	orderHandler *handler.OrderHandler,
+	favoriteHandler *handler.FavoriteHandler,
 ) *Router {
 	return &Router{
-		mux:           http.NewServeMux(),
-		auth:          auth,
-		healthHandler: healthHandler,
-		authHandler:   authHandler,
-		chefHandler:   chefHandler,
-		menuHandler:   menuHandler,
-		orderHandler:  orderHandler,
+		mux:             http.NewServeMux(),
+		auth:            auth,
+		healthHandler:   healthHandler,
+		authHandler:     authHandler,
+		chefHandler:     chefHandler,
+		menuHandler:     menuHandler,
+		orderHandler:    orderHandler,
+		favoriteHandler: favoriteHandler,
 	}
 }
 
@@ -82,6 +85,11 @@ func (r *Router) Setup() http.Handler {
 	r.handleAuth("POST /api/v2/orders/{id}/cancel", r.orderHandler.Cancel)
 	r.handleRole("GET /api/v2/chef/orders", r.orderHandler.ChefList)
 	r.handleRole("POST /api/v2/chef/orders/{id}/status", r.orderHandler.ChefAdvance)
+
+	// Favorites: a customer favoriting chefs (any authenticated user).
+	r.handleAuth("GET /api/v2/favorites", r.favoriteHandler.List)
+	r.handleAuth("POST /api/v2/favorites/{chefId}", r.favoriteHandler.Add)
+	r.handleAuth("DELETE /api/v2/favorites/{chefId}", r.favoriteHandler.Remove)
 
 	return r.mux
 }
