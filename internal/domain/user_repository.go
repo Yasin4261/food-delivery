@@ -10,4 +10,6 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id int) (*User, error)
 	FindByEmail(ctx context.Context, email string) (*User, error)
 	FindByUsername(ctx context.Context, username string) (*User, error)
+	// UpdatePassword sets a user's password hash.
+	UpdatePassword(ctx context.Context, userID int, passwordHash string) error
 }

@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -12,19 +15,24 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/domain"
 )
 
-// AuthService implements the authentication use cases: register, login and
-// token issuing/validation. It depends only on the domain.UserRepository port,
-// so it can be unit-tested with a fake repository.
+// passwordResetTTL is how long a reset token stays valid.
+const passwordResetTTL = time.Hour
+
+// AuthService implements the authentication use cases: register, login, token
+// issuing/validation and password reset. It depends only on domain ports, so
+// it can be unit-tested with fakes.
 type AuthService struct {
 	users     domain.UserRepository
+	resets    domain.PasswordResetRepository
 	jwtSecret []byte
 	jwtExpiry time.Duration
 }
 
 // NewAuthService builds an AuthService.
-func NewAuthService(users domain.UserRepository, jwtSecret string, jwtExpiry time.Duration) *AuthService {
+func NewAuthService(users domain.UserRepository, resets domain.PasswordResetRepository, jwtSecret string, jwtExpiry time.Duration) *AuthService {
 	return &AuthService{
 		users:     users,
+		resets:    resets,
 		jwtSecret: []byte(jwtSecret),
 		jwtExpiry: jwtExpiry,
 	}
@@ -131,6 +139,77 @@ func (s *AuthService) Profile(ctx context.Context, userID int) (*domain.User, er
 	}
 	user.PasswordHash = ""
 	return user, nil
+}
+
+// RequestPasswordReset issues a single-use reset token for the account with the
+// given email and returns the raw token (to be delivered out of band, e.g. by
+// email). To avoid leaking which emails are registered it returns ("", nil)
+// when no account matches — the caller responds identically either way.
+func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+
+	user, err := s.users.FindByEmail(ctx, email)
+	if err == domain.ErrUserNotFound {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+
+	raw, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+	token := &domain.PasswordResetToken{
+		UserID:    user.ID,
+		TokenHash: hashToken(raw),
+		ExpiresAt: time.Now().Add(passwordResetTTL),
+	}
+	if err := s.resets.Create(ctx, token); err != nil {
+		return "", err
+	}
+	return raw, nil
+}
+
+// ResetPassword redeems a reset token and sets a new password. The token must
+// be unknown-free, unexpired and unused; it is consumed on success.
+func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword string) error {
+	if len(newPassword) < 6 {
+		return ValidationError{Msg: "password must be at least 6 characters"}
+	}
+
+	token, err := s.resets.FindByHash(ctx, hashToken(rawToken))
+	if err == domain.ErrResetTokenNotFound {
+		return domain.ErrInvalidResetToken
+	} else if err != nil {
+		return err
+	}
+	if !token.Usable(time.Now()) {
+		return domain.ErrInvalidResetToken
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	if err := s.users.UpdatePassword(ctx, token.UserID, string(hash)); err != nil {
+		return err
+	}
+	return s.resets.MarkUsed(ctx, token.ID)
+}
+
+// randomToken returns a 32-byte random token, hex-encoded.
+func randomToken() (string, error) {
+	var b [32]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("generate token: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
+// hashToken returns the sha256 hex digest stored for a raw token.
+func hashToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
 }
 
 // ParseToken validates a signed token and returns its claims.

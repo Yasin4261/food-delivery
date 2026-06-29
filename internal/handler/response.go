@@ -41,7 +41,8 @@ func respondDomainError(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrForbidden):
 		respondError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, domain.ErrInvalidRating),
-		errors.Is(err, domain.ErrInvalidReviewTarget):
+		errors.Is(err, domain.ErrInvalidReviewTarget),
+		errors.Is(err, domain.ErrInvalidResetToken):
 		respondError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrEmptyOrder),
 		errors.Is(err, domain.ErrItemNotOrderable),

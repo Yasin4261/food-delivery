@@ -58,6 +58,47 @@ func (f *fakeUserRepo) FindByUsername(_ context.Context, username string) (*doma
 	}
 	return nil, domain.ErrUserNotFound
 }
+func (f *fakeUserRepo) UpdatePassword(_ context.Context, userID int, passwordHash string) error {
+	if u, ok := f.users[userID]; ok {
+		u.PasswordHash = passwordHash
+		return nil
+	}
+	return domain.ErrUserNotFound
+}
+
+// fakeResetRepo is an in-memory domain.PasswordResetRepository for HTTP tests.
+type fakeResetRepo struct {
+	byHash map[string]*domain.PasswordResetToken
+	nextID int
+}
+
+func newFakeResetRepo() *fakeResetRepo {
+	return &fakeResetRepo{byHash: map[string]*domain.PasswordResetToken{}, nextID: 1}
+}
+
+func (f *fakeResetRepo) Create(_ context.Context, t *domain.PasswordResetToken) error {
+	t.ID = f.nextID
+	f.nextID++
+	f.byHash[t.TokenHash] = t
+	return nil
+}
+func (f *fakeResetRepo) FindByHash(_ context.Context, hash string) (*domain.PasswordResetToken, error) {
+	if t, ok := f.byHash[hash]; ok {
+		cp := *t
+		return &cp, nil
+	}
+	return nil, domain.ErrResetTokenNotFound
+}
+func (f *fakeResetRepo) MarkUsed(_ context.Context, id int) error {
+	for _, t := range f.byHash {
+		if t.ID == id {
+			now := time.Now()
+			t.UsedAt = &now
+			return nil
+		}
+	}
+	return domain.ErrResetTokenNotFound
+}
 
 // healthHandler needs a Pinger; this one always reports healthy.
 type okPinger struct{}
@@ -69,7 +110,7 @@ func (okPinger) PingContext(context.Context) error { return nil }
 func newTestServer() http.Handler {
 	chefRepo := newFakeChefRepo()
 	itemRepo := newFakeMenuItemRepo()
-	authService := service.NewAuthService(newFakeUserRepo(), "test-secret", time.Hour)
+	authService := service.NewAuthService(newFakeUserRepo(), newFakeResetRepo(), "test-secret", time.Hour)
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, newFakeMenuRepo(), itemRepo)
 	orderRepo := newFakeOrderRepo()
@@ -80,7 +121,7 @@ func newTestServer() http.Handler {
 	searchService := service.NewSearchService(newFakeSearchRepo())
 	authMiddleware := middleware.NewAuth(authService)
 	healthHandler := handler.NewHealthHandler(okPinger{})
-	authHandler := handler.NewAuthHandler(authService)
+	authHandler := handler.NewAuthHandler(authService, true)
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)

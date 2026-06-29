@@ -63,6 +63,19 @@ func (r *UserRepository) FindByUsername(ctx context.Context, username string) (*
 	return r.findOne(ctx, `SELECT`+userColumns+` FROM users WHERE username = $1`, username)
 }
 
+// UpdatePassword sets a user's password hash.
+func (r *UserRepository) UpdatePassword(ctx context.Context, userID int, passwordHash string) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1`, userID, passwordHash)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
 func scanUser(s interface{ Scan(...any) error }) (*domain.User, error) {
 	u := &domain.User{}
 	err := s.Scan(

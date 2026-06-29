@@ -59,9 +59,56 @@ func (f *fakeUserRepo) FindByUsername(_ context.Context, username string) (*doma
 	}
 	return nil, domain.ErrUserNotFound
 }
+func (f *fakeUserRepo) UpdatePassword(_ context.Context, userID int, passwordHash string) error {
+	if u, ok := f.users[userID]; ok {
+		u.PasswordHash = passwordHash
+		return nil
+	}
+	return domain.ErrUserNotFound
+}
+
+// fakeResetRepo is an in-memory domain.PasswordResetRepository for tests.
+type fakeResetRepo struct {
+	byHash map[string]*domain.PasswordResetToken
+	nextID int
+}
+
+func newFakeResetRepo() *fakeResetRepo {
+	return &fakeResetRepo{byHash: map[string]*domain.PasswordResetToken{}, nextID: 1}
+}
+
+func (f *fakeResetRepo) Create(_ context.Context, t *domain.PasswordResetToken) error {
+	t.ID = f.nextID
+	f.nextID++
+	f.byHash[t.TokenHash] = t
+	return nil
+}
+func (f *fakeResetRepo) FindByHash(_ context.Context, hash string) (*domain.PasswordResetToken, error) {
+	if t, ok := f.byHash[hash]; ok {
+		cp := *t
+		return &cp, nil
+	}
+	return nil, domain.ErrResetTokenNotFound
+}
+func (f *fakeResetRepo) MarkUsed(_ context.Context, id int) error {
+	for _, t := range f.byHash {
+		if t.ID == id {
+			now := time.Now()
+			t.UsedAt = &now
+			return nil
+		}
+	}
+	return domain.ErrResetTokenNotFound
+}
 
 func newService(repo domain.UserRepository) *service.AuthService {
-	return service.NewAuthService(repo, "test-secret", time.Hour)
+	return service.NewAuthService(repo, newFakeResetRepo(), "test-secret", time.Hour)
+}
+
+// newServiceWithResets builds an AuthService over the given fakes so reset tests
+// can reach into the token store.
+func newServiceWithResets(repo domain.UserRepository, resets domain.PasswordResetRepository) *service.AuthService {
+	return service.NewAuthService(repo, resets, "test-secret", time.Hour)
 }
 
 func validRegister() service.RegisterInput {
@@ -253,6 +300,74 @@ func TestParseToken_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestPasswordReset_Flow(t *testing.T) {
+	repo := newFakeUserRepo()
+	resets := newFakeResetRepo()
+	svc := newServiceWithResets(repo, resets)
+	ctx := context.Background()
+	if _, err := svc.Register(ctx, validRegister()); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	// Unknown email is silent (no token, no error) to avoid enumeration.
+	if tok, err := svc.RequestPasswordReset(ctx, "ghost@example.com"); err != nil || tok != "" {
+		t.Errorf("unknown email = %q,%v, want \"\",nil", tok, err)
+	}
+
+	token, err := svc.RequestPasswordReset(ctx, "yasin@example.com")
+	if err != nil || token == "" {
+		t.Fatalf("request reset = %q,%v, want a token", token, err)
+	}
+
+	if err := svc.ResetPassword(ctx, token, "newsecret"); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	// New password works; old one no longer does.
+	if _, err := svc.Login(ctx, "yasin@example.com", "newsecret"); err != nil {
+		t.Errorf("login with new password failed: %v", err)
+	}
+	if _, err := svc.Login(ctx, "yasin@example.com", "secret123"); !errors.Is(err, domain.ErrInvalidCredentials) {
+		t.Errorf("old password still works: %v", err)
+	}
+
+	// Single-use: the same token cannot be redeemed twice.
+	if err := svc.ResetPassword(ctx, token, "another1"); !errors.Is(err, domain.ErrInvalidResetToken) {
+		t.Errorf("reused token = %v, want ErrInvalidResetToken", err)
+	}
+}
+
+func TestPasswordReset_RejectsBadTokens(t *testing.T) {
+	repo := newFakeUserRepo()
+	resets := newFakeResetRepo()
+	svc := newServiceWithResets(repo, resets)
+	ctx := context.Background()
+	_, _ = svc.Register(ctx, validRegister())
+
+	// Unknown token.
+	if err := svc.ResetPassword(ctx, "garbage", "newsecret"); !errors.Is(err, domain.ErrInvalidResetToken) {
+		t.Errorf("unknown token = %v, want ErrInvalidResetToken", err)
+	}
+
+	// Expired token.
+	token, _ := svc.RequestPasswordReset(ctx, "yasin@example.com")
+	for _, stored := range resets.byHash {
+		stored.ExpiresAt = time.Now().Add(-time.Minute)
+	}
+	if err := svc.ResetPassword(ctx, token, "newsecret"); !errors.Is(err, domain.ErrInvalidResetToken) {
+		t.Errorf("expired token = %v, want ErrInvalidResetToken", err)
+	}
+
+	// Short password is a validation error.
+	token2, _ := svc.RequestPasswordReset(ctx, "yasin@example.com")
+	if _, err := svc.RequestPasswordReset(ctx, "yasin@example.com"); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	var ve service.ValidationError
+	if err := svc.ResetPassword(ctx, token2, "123"); !errors.As(err, &ve) {
+		t.Errorf("short password = %v, want ValidationError", err)
+	}
+}
+
 func TestParseToken_Rejected(t *testing.T) {
 	svc := newService(newFakeUserRepo())
 
@@ -261,7 +376,7 @@ func TestParseToken_Rejected(t *testing.T) {
 	}
 
 	// A token signed with a different secret must be rejected.
-	other := service.NewAuthService(newFakeUserRepo(), "different-secret", time.Hour)
+	other := service.NewAuthService(newFakeUserRepo(), newFakeResetRepo(), "different-secret", time.Hour)
 	res, _ := other.Register(context.Background(), validRegister())
 	if _, err := svc.ParseToken(res.Token); err == nil {
 		t.Error("expected rejection of a token signed with another secret")

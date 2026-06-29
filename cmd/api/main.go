@@ -55,9 +55,10 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	reviewRepo := repository.NewReviewRepository(db.DB)
 	earningsRepo := repository.NewEarningsRepository(db.DB)
 	searchRepo := repository.NewSearchRepository(db.DB)
+	passwordResetRepo := repository.NewPasswordResetRepository(db.DB)
 
 	// Services (use cases).
-	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiration)
+	authService := service.NewAuthService(userRepo, passwordResetRepo, cfg.JWTSecret, cfg.JWTExpiration)
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, menuRepo, menuItemRepo)
 	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo)
@@ -71,7 +72,7 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 
 	// Handlers (driving adapters).
 	healthHandler := handler.NewHealthHandler(db)
-	authHandler := handler.NewAuthHandler(authService)
+	authHandler := handler.NewAuthHandler(authService, cfg.Env != "production")
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)

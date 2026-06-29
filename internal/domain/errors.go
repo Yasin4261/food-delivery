@@ -11,6 +11,9 @@ var (
 	ErrInvalidCredentials    = errors.New("invalid credentials")
 	ErrAccountInactive       = errors.New("account is deactivated")
 
+	ErrResetTokenNotFound = errors.New("reset token not found")
+	ErrInvalidResetToken  = errors.New("invalid, expired or already-used reset token")
+
 	ErrChefNotFound      = errors.New("chef not found")
 	ErrChefProfileExists = errors.New("chef profile already exists for this user")
 
