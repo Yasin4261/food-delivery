@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/handler"
@@ -58,12 +59,17 @@ func NewRouter(
 func (r *Router) Setup() http.Handler {
 	r.mux.HandleFunc("GET /health", r.healthHandler.HealthCheck)
 
-	// Public auth routes.
-	r.mux.HandleFunc("POST /api/v2/auth/register", r.authHandler.Register)
-	r.mux.HandleFunc("POST /api/v2/auth/login", r.authHandler.Login)
+	// Public auth routes. The credential/secret-bearing endpoints are rate
+	// limited per IP to blunt brute-force / credential-stuffing attempts.
+	authLimit := middleware.NewRateLimiter(10, time.Minute)
+	limited := func(pattern string, h http.HandlerFunc) {
+		r.mux.Handle(pattern, authLimit.Middleware(http.HandlerFunc(h)))
+	}
+	limited("POST /api/v2/auth/register", r.authHandler.Register)
+	limited("POST /api/v2/auth/login", r.authHandler.Login)
+	limited("POST /api/v2/auth/forgot-password", r.authHandler.ForgotPassword)
+	limited("POST /api/v2/auth/reset-password", r.authHandler.ResetPassword)
 	r.mux.HandleFunc("POST /api/v2/auth/logout", r.authHandler.Logout)
-	r.mux.HandleFunc("POST /api/v2/auth/forgot-password", r.authHandler.ForgotPassword)
-	r.mux.HandleFunc("POST /api/v2/auth/reset-password", r.authHandler.ResetPassword)
 
 	// Protected: requires a valid bearer token.
 	r.mux.Handle("GET /api/v2/auth/me", r.auth.Require(http.HandlerFunc(r.authHandler.Me)))
