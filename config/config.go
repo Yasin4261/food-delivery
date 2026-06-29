@@ -39,6 +39,10 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
 
+	if err := validateJWTSecret(cfg); err != nil {
+		return nil, err
+	}
+
 	exp, err := time.ParseDuration(getEnv("JWT_EXPIRATION", "24h"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid JWT_EXPIRATION: %w", err)
@@ -46,6 +50,22 @@ func LoadConfig() (*Config, error) {
 	cfg.JWTExpiration = exp
 
 	return cfg, nil
+}
+
+// placeholderJWTSecret is the value historically committed to compose files. It
+// must never be used outside development.
+const placeholderJWTSecret = "change-me-in-production"
+
+// validateJWTSecret fails fast on a missing secret, and on the known weak
+// placeholder in any non-development environment.
+func validateJWTSecret(cfg *Config) error {
+	if cfg.JWTSecret == "" {
+		return fmt.Errorf("JWT_SECRET is required")
+	}
+	if cfg.Env != "development" && cfg.JWTSecret == placeholderJWTSecret {
+		return fmt.Errorf("JWT_SECRET is set to the insecure placeholder; set a strong secret in env=%q", cfg.Env)
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {

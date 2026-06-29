@@ -36,8 +36,12 @@ services:
       PORT: "8080"
       ENV: "development"
       DATABASE_URL: "postgres://postgres:postgres123@db:5432/food_delivery?sslmode=disable"
-      JWT_SECRET: "change-me-in-production"
+      # Read from the environment (.env); the fallback is a clearly insecure
+      # dev-only value, never a production secret. Generate one with
+      # `openssl rand -hex 32`.
+      JWT_SECRET: "${JWT_SECRET:-dev-secret-key-not-for-production}"
       JWT_EXPIRATION: "24h"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:3000}"
       AUTO_MIGRATE: "true"
     networks:
       - food_delivery_network

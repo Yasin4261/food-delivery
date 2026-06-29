@@ -86,9 +86,21 @@ if present). See [`.env.example`](./.env.example).
 | `PORT` | `8080` | HTTP listen port |
 | `ENV` | `development` | environment name |
 | `DATABASE_URL` | — | PostgreSQL DSN (**required**) |
-| `JWT_SECRET` | — | secret used to sign JWTs |
+| `JWT_SECRET` | — | secret used to sign JWTs (**required**) |
 | `JWT_EXPIRATION` | `24h` | token lifetime (Go duration) |
+| `ALLOWED_ORIGINS` | — | comma-separated CORS origins (`*` allows any) |
 | `AUTO_MIGRATE` | `false` | run migrations on startup when `true` |
+
+**JWT secret:** generate a strong one and never commit it:
+
+```bash
+openssl rand -hex 32
+```
+
+`JWT_SECRET` is required; the app **refuses to boot** when it is empty, and in
+any non-`development` environment when it is left as the `change-me-in-production`
+placeholder. Provide it via the environment / your secret manager (the compose
+files read `${JWT_SECRET}`), not as a literal in version control.
 
 ## API
 
