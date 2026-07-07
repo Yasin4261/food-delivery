@@ -22,6 +22,12 @@ const routes = [
     component: () => import('@/views/ChefDashboardView.vue'),
     meta: { requiresAuth: true, role: 'chef' },
   },
+  {
+    path: '/chef/menus',
+    name: 'chef-menus',
+    component: () => import('@/views/ChefMenusView.vue'),
+    meta: { requiresAuth: true, role: 'chef' },
+  },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

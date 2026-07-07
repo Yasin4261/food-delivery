@@ -69,6 +69,23 @@ func (h *ChefHandler) Create(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, chef)
 }
 
+// Me handles GET /api/v2/chefs/me (chef) — the caller's own chef profile. The
+// UI uses it to discover the chef id and current status; 404 means "no profile
+// yet" and drives the onboarding flow.
+func (h *ChefHandler) Me(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	chef, err := h.chefs.MyProfile(r.Context(), claims.UserID)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, chef)
+}
+
 // Get handles GET /api/v2/chefs/{id}.
 func (h *ChefHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))

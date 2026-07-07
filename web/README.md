@@ -40,13 +40,17 @@ src/
   views/               # Login, Register, Chefs, ChefDetail, Cart, Orders, ChefDashboard
 ```
 
-## What's covered (first pass)
+## What's covered
 
-- Auth: register / login / logout (JWT in `localStorage`; 401 ⇒ auto logout).
+- Auth: register / login / logout (JWT in `localStorage`; 401 ⇒ auto logout);
+  login shows first for anonymous visitors.
 - Customer: browse chefs, find nearby, view a chef's menu, multi-chef cart,
   place an order (cash/card), see order history, cancel pending/confirmed.
-- Chef: dashboard with earnings, incoming orders, and status actions
-  (accept → preparing → ready → delivering → delivered, or decline).
+- Chef: **onboarding** (create the kitchen profile when none exists), dashboard
+  with earnings + online/offline toggle, incoming orders with status actions
+  (accept → preparing → ready → delivering → delivered, or decline), and
+  **My menus** — create/delete menus and add/remove dishes (price, stock or
+  unlimited).
 
-Not yet built (follow-ups): favorites, reviews, search UI, real-time chat
-(WebSocket), menu/dish management for chefs, password reset screens.
+Not yet built (see issues #27–#31): favorites, reviews, search UI, real-time
+chat (WebSocket), password reset screens.
