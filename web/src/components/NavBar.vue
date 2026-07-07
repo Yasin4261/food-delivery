@@ -30,6 +30,13 @@ async function logout() {
         Chef dashboard
       </RouterLink>
       <RouterLink
+        v-if="auth.isAuthenticated && auth.isChef"
+        to="/chef/menus"
+        class="text-sm text-gray-600 hover:text-gray-900"
+      >
+        My menus
+      </RouterLink>
+      <RouterLink
         v-if="auth.isAuthenticated && !auth.isChef"
         to="/orders"
         class="text-sm text-gray-600 hover:text-gray-900"

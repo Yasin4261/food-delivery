@@ -70,6 +70,34 @@ func (f *fakeChefRepo) FindNearby(_ context.Context, lat, lng float64, limit int
 	return out, nil
 }
 
+func TestChef_MeProfile(t *testing.T) {
+	srv := newTestServer()
+
+	// Customers are rejected (chef-only endpoint).
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	if rec := do(t, srv, http.MethodGet, "/api/v2/chefs/me", customer, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("customer /chefs/me = %d, want 403", rec.Code)
+	}
+
+	// A chef without a profile gets 404 (drives onboarding).
+	token := registerAndToken(t, srv, "yasin", "yasin@example.com")
+	if rec := do(t, srv, http.MethodGet, "/api/v2/chefs/me", token, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("/chefs/me without profile = %d, want 404", rec.Code)
+	}
+
+	// After creating a profile, /chefs/me returns it.
+	createChefProfile(t, srv, token)
+	rec := do(t, srv, http.MethodGet, "/api/v2/chefs/me", token, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/chefs/me = %d, want 200 (%s)", rec.Code, rec.Body)
+	}
+	var chef domain.Chef
+	_ = json.Unmarshal(rec.Body.Bytes(), &chef)
+	if chef.ID == 0 || chef.BusinessName != "Kitchen" {
+		t.Errorf("unexpected profile: %+v", chef)
+	}
+}
+
 func TestChef_OnlineStatusToggleAndFilter(t *testing.T) {
 	srv := newTestServer()
 	token := registerAndToken(t, srv, "yasin", "yasin@example.com")

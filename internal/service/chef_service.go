@@ -76,6 +76,12 @@ func (s *ChefService) Get(ctx context.Context, id int) (*domain.Chef, error) {
 	return s.chefs.FindByID(ctx, id)
 }
 
+// MyProfile returns the chef profile owned by userID, or ErrChefNotFound when
+// the user has not opened one yet.
+func (s *ChefService) MyProfile(ctx context.Context, userID int) (*domain.Chef, error) {
+	return s.chefs.FindByUserID(ctx, userID)
+}
+
 // List returns a page of chefs. limit is clamped to a sane range. onlineOnly
 // restricts the result to chefs currently online.
 func (s *ChefService) List(ctx context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, int, error) {
