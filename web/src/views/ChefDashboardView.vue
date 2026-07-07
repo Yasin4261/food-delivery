@@ -104,8 +104,12 @@ onMounted(load)
     </div>
 
     <h2 class="text-lg font-semibold">Incoming orders</h2>
-    <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
-    <p v-if="!orders.length" class="text-gray-500">No orders yet.</p>
+    <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
+    <div v-if="!orders.length" class="empty-state">
+      <span class="empty-state-emoji">👨‍🍳</span>
+      <p class="font-medium text-gray-600">No orders yet</p>
+      <p class="text-sm">Go online and make sure your menus are stocked — orders will land here.</p>
+    </div>
 
     <div v-for="order in orders" :key="order.id" class="card space-y-2">
       <div class="flex items-center justify-between">

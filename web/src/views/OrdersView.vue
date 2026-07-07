@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api, page } from '@/api/client'
 import { statusClass } from '@/lib/status'
 
@@ -34,10 +35,17 @@ onMounted(load)
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-2xl font-bold">My orders</h1>
-    <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
-    <p v-if="loading" class="text-gray-500">Loading…</p>
-    <p v-else-if="!orders.length" class="text-gray-500">You have no orders yet.</p>
+    <div>
+      <h1 class="page-title">My orders</h1>
+      <p class="page-subtitle">Track your deliveries and past orders.</p>
+    </div>
+    <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
+    <div v-if="loading" class="space-y-3"><div class="skeleton h-24"></div><div class="skeleton h-24"></div></div>
+    <div v-else-if="!orders.length" class="empty-state">
+      <span class="empty-state-emoji">🍽️</span>
+      <p class="font-medium text-gray-600">No orders yet</p>
+      <p class="text-sm">Hungry? <RouterLink to="/" class="text-brand-600 hover:underline">Browse chefs</RouterLink> and place your first order.</p>
+    </div>
 
     <div v-for="order in orders" :key="order.id" class="card space-y-2">
       <div class="flex items-center justify-between">

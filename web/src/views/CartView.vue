@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { useCartStore } from '@/stores/cart'
 
@@ -35,9 +35,18 @@ async function placeOrder() {
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-2xl font-bold">Your cart</h1>
+    <div>
+      <h1 class="page-title">Your cart</h1>
+      <p class="page-subtitle">One checkout, even across several chefs.</p>
+    </div>
 
-    <p v-if="!cart.lines.length" class="text-gray-500">Your cart is empty.</p>
+    <div v-if="!cart.lines.length" class="empty-state">
+      <span class="empty-state-emoji">🛒</span>
+      <p class="font-medium text-gray-600">Your cart is empty</p>
+      <p class="text-sm">
+        <RouterLink to="/" class="text-brand-600 hover:underline">Browse chefs</RouterLink> to add something tasty.
+      </p>
+    </div>
 
     <template v-else>
       <!-- One section per chef (a single order can span multiple chefs). -->
