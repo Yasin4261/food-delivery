@@ -10,10 +10,12 @@ const error = ref('')
 // Optional "deliver to me" filter by coordinates.
 const lat = ref('')
 const lng = ref('')
+const nearbyActive = ref(false)
 
 async function loadAll() {
   loading.value = true
   error.value = ''
+  nearbyActive.value = false
   try {
     chefs.value = page(await api.get('/chefs?limit=50')).items
   } catch (e) {
@@ -29,6 +31,7 @@ async function loadNearby() {
   error.value = ''
   try {
     chefs.value = page(await api.get(`/chefs/nearby?lat=${lat.value}&lng=${lng.value}&limit=50`)).items
+    nearbyActive.value = true
   } catch (e) {
     error.value = e.message
   } finally {
@@ -36,13 +39,18 @@ async function loadNearby() {
   }
 }
 
+const initial = (chef) => (chef.business_name || '?')[0].toUpperCase()
+
 onMounted(loadAll)
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="flex flex-wrap items-end justify-between gap-3">
-      <h1 class="text-2xl font-bold">Chefs near you</h1>
+  <div class="space-y-6">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="page-title">Discover home chefs 🧑‍🍳</h1>
+        <p class="page-subtitle">Homemade food, cooked nearby and delivered to you.</p>
+      </div>
       <form class="flex items-end gap-2" @submit.prevent="loadNearby">
         <div>
           <label class="label">Lat</label>
@@ -52,23 +60,44 @@ onMounted(loadAll)
           <label class="label">Lng</label>
           <input v-model="lng" class="input w-28" placeholder="28.9784" />
         </div>
-        <button class="btn-ghost">Find nearby</button>
+        <button class="btn-ghost">📍 Nearby</button>
+        <button v-if="nearbyActive" type="button" class="btn-ghost" @click="loadAll">Show all</button>
       </form>
     </div>
 
-    <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
-    <p v-if="loading" class="text-gray-500">Loading…</p>
-    <p v-else-if="!chefs.length" class="text-gray-500">No chefs found.</p>
+    <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
+
+    <!-- Loading skeletons -->
+    <div v-if="loading" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-for="n in 6" :key="n" class="skeleton h-36"></div>
+    </div>
+
+    <div v-else-if="!chefs.length" class="empty-state">
+      <span class="empty-state-emoji">🍳</span>
+      <p class="font-medium text-gray-600">No chefs found here yet</p>
+      <p class="text-sm">Try widening your search, or check back soon.</p>
+    </div>
 
     <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <RouterLink v-for="chef in chefs" :key="chef.id" :to="`/chefs/${chef.id}`" class="card hover:border-brand-500">
-        <div class="flex items-start justify-between">
-          <h2 class="font-semibold">{{ chef.business_name }}</h2>
-          <span v-if="chef.is_online" class="badge bg-green-100 text-green-700">online</span>
+      <RouterLink v-for="chef in chefs" :key="chef.id" :to="`/chefs/${chef.id}`" class="card-hover">
+        <div class="flex items-start gap-3">
+          <div class="avatar relative">
+            {{ initial(chef) }}
+            <span
+              v-if="chef.is_online"
+              class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-green-500"
+              title="online"
+            ></span>
+          </div>
+          <div class="min-w-0">
+            <h2 class="truncate font-semibold">{{ chef.business_name }}</h2>
+            <p v-if="chef.specialty" class="truncate text-sm text-gray-500">{{ chef.specialty }}</p>
+          </div>
         </div>
-        <p v-if="chef.specialty" class="text-sm text-gray-500">{{ chef.specialty }}</p>
-        <p class="mt-2 text-sm text-gray-600">{{ chef.kitchen_city || chef.kitchen_address }}</p>
-        <p class="mt-1 text-sm text-amber-600">★ {{ chef.rating?.toFixed(1) ?? '—' }} ({{ chef.total_reviews }})</p>
+        <div class="mt-3 flex items-center justify-between text-sm">
+          <span class="truncate text-gray-500">📍 {{ chef.kitchen_city || chef.kitchen_address }}</span>
+          <span class="badge bg-amber-50 text-amber-700">★ {{ chef.rating?.toFixed(1) ?? '—' }} ({{ chef.total_reviews }})</span>
+        </div>
       </RouterLink>
     </div>
   </div>

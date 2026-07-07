@@ -9,6 +9,7 @@ const cart = useCartStore()
 const router = useRouter()
 
 const cartCount = computed(() => cart.count)
+const initial = computed(() => (auth.user?.username || auth.user?.email || '?')[0].toUpperCase())
 
 async function logout() {
   await auth.logout()
@@ -17,49 +18,63 @@ async function logout() {
 </script>
 
 <template>
-  <header class="border-b border-gray-200 bg-white">
-    <nav class="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3">
-      <RouterLink to="/" class="text-lg font-bold text-brand-600">🍲 Home Chef</RouterLink>
+  <header class="sticky top-0 z-40 border-b border-gray-200 bg-white/80 backdrop-blur">
+    <nav class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+      <RouterLink to="/" class="flex items-center gap-2 text-lg font-bold tracking-tight text-gray-900">
+        <span class="text-xl">🍲</span>
+        <span>Home<span class="text-brand-600">Chef</span></span>
+      </RouterLink>
 
-      <RouterLink to="/" class="text-sm text-gray-600 hover:text-gray-900">Browse</RouterLink>
-      <RouterLink
-        v-if="auth.isAuthenticated && auth.isChef"
-        to="/chef"
-        class="text-sm text-gray-600 hover:text-gray-900"
-      >
-        Chef dashboard
-      </RouterLink>
-      <RouterLink
-        v-if="auth.isAuthenticated && auth.isChef"
-        to="/chef/menus"
-        class="text-sm text-gray-600 hover:text-gray-900"
-      >
-        My menus
-      </RouterLink>
-      <RouterLink
-        v-if="auth.isAuthenticated && !auth.isChef"
-        to="/orders"
-        class="text-sm text-gray-600 hover:text-gray-900"
-      >
-        My orders
-      </RouterLink>
+      <div class="flex items-center gap-1">
+        <RouterLink v-if="!auth.isChef" to="/" class="nav-link" exact-active-class="router-link-active bg-brand-50">
+          Browse
+        </RouterLink>
+        <template v-if="auth.isAuthenticated && auth.isChef">
+          <RouterLink to="/chef" class="nav-link" exact-active-class="router-link-active bg-brand-50">
+            Dashboard
+          </RouterLink>
+          <RouterLink to="/chef/menus" class="nav-link" exact-active-class="router-link-active bg-brand-50">
+            My menus
+          </RouterLink>
+        </template>
+        <RouterLink
+          v-if="auth.isAuthenticated && !auth.isChef"
+          to="/orders"
+          class="nav-link"
+          exact-active-class="router-link-active bg-brand-50"
+        >
+          My orders
+        </RouterLink>
+      </div>
 
       <div class="ml-auto flex items-center gap-3">
-        <RouterLink v-if="!auth.isChef" to="/cart" class="relative text-sm text-gray-600 hover:text-gray-900">
-          Cart
+        <RouterLink
+          v-if="auth.isAuthenticated && !auth.isChef"
+          to="/cart"
+          class="nav-link relative"
+          exact-active-class="router-link-active bg-brand-50"
+        >
+          🛒 Cart
           <span
             v-if="cartCount"
-            class="absolute -right-3 -top-2 rounded-full bg-brand-600 px-1.5 text-xs text-white"
+            class="absolute -right-2 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white shadow-sm"
             >{{ cartCount }}</span
           >
         </RouterLink>
 
         <template v-if="auth.isAuthenticated">
-          <span class="text-sm text-gray-500">{{ auth.user?.email }}</span>
+          <span
+            class="hidden items-center gap-2 rounded-full border border-gray-200 bg-white py-1 pl-1 pr-3 text-sm text-gray-600 sm:flex"
+          >
+            <span class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+              {{ initial }}
+            </span>
+            {{ auth.user?.username || auth.user?.email }}
+          </span>
           <button class="btn-ghost" @click="logout">Log out</button>
         </template>
         <template v-else>
-          <RouterLink to="/login" class="text-sm text-gray-600 hover:text-gray-900">Log in</RouterLink>
+          <RouterLink to="/login" class="nav-link">Log in</RouterLink>
           <RouterLink to="/register" class="btn-primary">Sign up</RouterLink>
         </template>
       </div>

@@ -29,22 +29,33 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-sm">
-    <h1 class="mb-4 text-2xl font-bold">Log in</h1>
-    <form class="card space-y-4" @submit.prevent="submit">
+  <div class="mx-auto mt-6 max-w-sm">
+    <div class="mb-6 text-center">
+      <div class="text-4xl">🍲</div>
+      <h1 class="mt-2 text-2xl font-bold tracking-tight">Welcome back</h1>
+      <p class="page-subtitle">Log in to order homemade food near you.</p>
+    </div>
+    <form class="card space-y-4 shadow-md" @submit.prevent="submit">
       <div>
         <label class="label">Email</label>
-        <input v-model="email" type="email" class="input" required autocomplete="email" />
+        <input v-model="email" type="email" class="input" required autocomplete="email" placeholder="you@example.com" />
       </div>
       <div>
         <label class="label">Password</label>
-        <input v-model="password" type="password" class="input" required autocomplete="current-password" />
+        <input
+          v-model="password"
+          type="password"
+          class="input"
+          required
+          autocomplete="current-password"
+          placeholder="••••••••"
+        />
       </div>
-      <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+      <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
       <button class="btn-primary w-full" :disabled="loading">{{ loading ? 'Logging in…' : 'Log in' }}</button>
       <p class="text-center text-sm text-gray-500">
         No account?
-        <RouterLink to="/register" class="text-brand-600 hover:underline">Sign up</RouterLink>
+        <RouterLink to="/register" class="font-medium text-brand-600 hover:underline">Sign up</RouterLink>
       </p>
     </form>
   </div>
