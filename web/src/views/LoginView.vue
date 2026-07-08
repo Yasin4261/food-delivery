@@ -41,7 +41,12 @@ async function submit() {
         <input v-model="email" type="email" class="input" required autocomplete="email" placeholder="you@example.com" />
       </div>
       <div>
-        <label class="label">Password</label>
+        <div class="mb-1 flex items-center justify-between">
+          <label class="label !mb-0">Password</label>
+          <RouterLink to="/forgot-password" class="text-xs font-medium text-brand-600 hover:underline">
+            Forgot password?
+          </RouterLink>
+        </div>
         <input
           v-model="password"
           type="password"
