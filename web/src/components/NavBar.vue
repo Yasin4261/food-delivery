@@ -29,6 +29,14 @@ async function logout() {
         <RouterLink v-if="!auth.isChef" to="/" class="nav-link" exact-active-class="router-link-active bg-brand-50">
           Browse
         </RouterLink>
+        <RouterLink
+          v-if="auth.isAuthenticated && !auth.isChef"
+          to="/search"
+          class="nav-link"
+          exact-active-class="router-link-active bg-brand-50"
+        >
+          🔍 Search
+        </RouterLink>
         <template v-if="auth.isAuthenticated && auth.isChef">
           <RouterLink to="/chef" class="nav-link" exact-active-class="router-link-active bg-brand-50">
             Dashboard
