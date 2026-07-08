@@ -3,6 +3,10 @@ import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api, page } from '@/api/client'
 import { statusClass } from '@/lib/status'
+import OrderReviewPanel from '@/components/OrderReviewPanel.vue'
+
+// Which orders have their review panel open, keyed by order id.
+const reviewing = ref({})
 
 const orders = ref([])
 const loading = ref(true)
@@ -58,9 +62,17 @@ onMounted(load)
       <ul class="text-sm text-gray-600">
         <li v-for="it in order.items" :key="it.id">{{ it.quantity }}× {{ it.item_name }}</li>
       </ul>
-      <div class="flex justify-end">
+      <div class="flex justify-end gap-2">
+        <button
+          v-if="order.status === 'delivered'"
+          class="btn-ghost"
+          @click="reviewing[order.id] = !reviewing[order.id]"
+        >
+          {{ reviewing[order.id] ? 'Hide rating' : '⭐ Rate order' }}
+        </button>
         <button v-if="cancellable(order.status)" class="btn-ghost" @click="cancel(order)">Cancel</button>
       </div>
+      <OrderReviewPanel v-if="reviewing[order.id]" :order="order" />
     </div>
   </div>
 </template>

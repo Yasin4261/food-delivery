@@ -53,9 +53,11 @@ src/
   unlimited).
 
 - Favorites: heart toggle on browse/chef detail and a Favorites page.
+- Reviews: rate delivered orders (chef + dishes, stars + comment) from My
+  orders; chef detail shows the reviews list and per-dish ratings.
 - Password reset: "Forgot password?" on login → emailed link opens
   `/reset-password?token=…` (in dev the link is printed by the API's logging
   mailer — `docker logs food_delivery_api`).
 
-Not yet built (see issues #28–#30): reviews, search UI, real-time chat
+Not yet built (see issues #29–#30): search UI, real-time chat
 (WebSocket).

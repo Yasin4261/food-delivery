@@ -24,9 +24,14 @@ async function toggleFavorite() {
 
 const chef = ref(null)
 const items = ref([])
+const reviews = ref([])
+const reviewsTotal = ref(0)
 const loading = ref(true)
 const error = ref('')
 const justAdded = ref(0) // menu item id flashed after add
+
+const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n)
+const when = (iso) => new Date(iso).toLocaleDateString()
 
 function addToCart(item) {
   if (!auth.isAuthenticated) {
@@ -42,6 +47,9 @@ onMounted(async () => {
   try {
     chef.value = await api.get(`/chefs/${props.id}`)
     items.value = page(await api.get(`/chefs/${props.id}/menu-items?limit=100`)).items
+    const rp = page(await api.get(`/chefs/${props.id}/reviews?limit=20`))
+    reviews.value = rp.items
+    reviewsTotal.value = rp.total
     if (canFavorite) await favorites.load().catch(() => {})
   } catch (e) {
     error.value = e.message
@@ -97,7 +105,12 @@ onMounted(async () => {
             <div class="min-w-0">
               <h3 class="font-medium">{{ item.name }}</h3>
               <p v-if="item.description" class="truncate text-sm text-gray-500">{{ item.description }}</p>
-              <p class="mt-1.5"><span class="badge bg-brand-50 text-brand-700">${{ item.price?.toFixed(2) }}</span></p>
+              <p class="mt-1.5">
+                <span class="badge bg-brand-50 text-brand-700">${{ item.price?.toFixed(2) }}</span>
+                <span v-if="item.total_reviews" class="badge ml-1 bg-amber-50 text-amber-700">
+                  ★ {{ item.rating?.toFixed(1) }}
+                </span>
+              </p>
             </div>
             <button
               class="btn-primary shrink-0"
@@ -107,6 +120,24 @@ onMounted(async () => {
             >
               {{ justAdded === item.id ? '✓ Added' : item.is_available ? '+ Add' : 'Sold out' }}
             </button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 class="mb-3 text-lg font-semibold">Reviews <span class="text-sm font-normal text-gray-400">({{ reviewsTotal }})</span></h2>
+        <div v-if="!reviews.length" class="empty-state">
+          <span class="empty-state-emoji">⭐</span>
+          <p class="font-medium text-gray-600">No reviews yet</p>
+          <p class="text-sm">Order from this chef and be the first to rate them.</p>
+        </div>
+        <div v-else class="space-y-3">
+          <div v-for="r in reviews" :key="r.id" class="card py-3">
+            <div class="flex items-center justify-between">
+              <span class="text-amber-400">{{ stars(r.rating) }}</span>
+              <span class="text-xs text-gray-400">{{ when(r.created_at) }}</span>
+            </div>
+            <p v-if="r.comment" class="mt-1 text-sm text-gray-600">{{ r.comment }}</p>
           </div>
         </div>
       </div>
