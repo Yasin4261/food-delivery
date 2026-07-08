@@ -4,11 +4,23 @@ import { useRouter } from 'vue-router'
 import { api, page } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
+import { useFavoritesStore } from '@/stores/favorites'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
 const cart = useCartStore()
+const favorites = useFavoritesStore()
 const router = useRouter()
+
+const canFavorite = auth.isAuthenticated && !auth.isChef
+
+async function toggleFavorite() {
+  try {
+    await favorites.toggle(chef.value.id)
+  } catch (e) {
+    error.value = e.message
+  }
+}
 
 const chef = ref(null)
 const items = ref([])
@@ -30,6 +42,7 @@ onMounted(async () => {
   try {
     chef.value = await api.get(`/chefs/${props.id}`)
     items.value = page(await api.get(`/chefs/${props.id}/menu-items?limit=100`)).items
+    if (canFavorite) await favorites.load().catch(() => {})
   } catch (e) {
     error.value = e.message
   } finally {
@@ -50,10 +63,18 @@ onMounted(async () => {
     <template v-else-if="chef">
       <div class="card flex items-start gap-4">
         <div class="avatar h-14 w-14 text-2xl">{{ (chef.business_name || '?')[0].toUpperCase() }}</div>
-        <div class="min-w-0">
+        <div class="min-w-0 grow">
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="page-title">{{ chef.business_name }}</h1>
             <span v-if="chef.is_online" class="badge bg-green-100 text-green-700">● online</span>
+            <button
+              v-if="canFavorite"
+              class="ml-auto text-2xl transition hover:scale-110"
+              :title="favorites.has(chef.id) ? 'Remove from favorites' : 'Add to favorites'"
+              @click="toggleFavorite"
+            >
+              {{ favorites.has(chef.id) ? '❤️' : '🤍' }}
+            </button>
           </div>
           <p v-if="chef.bio" class="mt-1 text-gray-600">{{ chef.bio }}</p>
           <p class="mt-1 text-sm text-gray-500">📍 {{ chef.kitchen_address }}</p>

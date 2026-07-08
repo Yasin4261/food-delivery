@@ -17,6 +17,12 @@ const routes = [
   { path: '/cart', name: 'cart', component: () => import('@/views/CartView.vue'), meta: { requiresAuth: true } },
   { path: '/orders', name: 'orders', component: () => import('@/views/OrdersView.vue'), meta: { requiresAuth: true } },
   {
+    path: '/favorites',
+    name: 'favorites',
+    component: () => import('@/views/FavoritesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/chef',
     name: 'chef-dashboard',
     component: () => import('@/views/ChefDashboardView.vue'),
