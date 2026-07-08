@@ -55,6 +55,46 @@ func TestMenuItemRepository_CRUDAndScan(t *testing.T) {
 	}
 }
 
+func TestMenuItemRepository_Update(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewMenuItemRepository(testDB)
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+	menu := seedMenu(t, chef.ID)
+	it := seedItem(t, menu.ID, chef.ID, 5, 10)
+
+	// Change the editable fields and persist.
+	it.Name = "Renamed Soup"
+	it.Price = 6.75
+	qty := 4
+	it.AvailableQuantity = &qty
+	it.IsVegan = true
+	prev := it.UpdatedAt
+	if err := repo.Update(ctx(), it); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	got, err := repo.FindByID(ctx(), it.ID)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got.Name != "Renamed Soup" || got.Price != 6.75 || !got.IsVegan {
+		t.Errorf("update not persisted: %+v", got)
+	}
+	if got.AvailableQuantity == nil || *got.AvailableQuantity != 4 {
+		t.Errorf("quantity = %v, want 4", got.AvailableQuantity)
+	}
+	if !got.UpdatedAt.After(prev) {
+		t.Errorf("updated_at did not advance: %v !> %v", got.UpdatedAt, prev)
+	}
+
+	// Updating a missing item reports not-found.
+	missing := domain.NewMenuItem(menu.ID, chef.ID, "ghost", 1)
+	missing.ID = 9999
+	if err := repo.Update(ctx(), missing); !errors.Is(err, domain.ErrMenuItemNotFound) {
+		t.Errorf("update missing = %v, want ErrMenuItemNotFound", err)
+	}
+}
+
 func TestMenuItemRepository_DecrementStock(t *testing.T) {
 	resetDB(t)
 	repo := repository.NewMenuItemRepository(testDB)
