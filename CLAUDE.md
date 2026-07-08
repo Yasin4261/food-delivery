@@ -261,3 +261,30 @@ git push origin vX.Y.Z
 ```
 
 `git describe --tags` then yields human-readable build versions; wire it into the binary via ldflags if/when a `version` endpoint is added.
+
+---
+
+## 10. Security policy (OWASP Top 10 analysis)
+
+Security posture is tracked against the **OWASP Top 10 (2021)**. The table maps each category to this codebase's mitigations; the policies below it are **binding for all new code**.
+
+| OWASP | Where this project stands |
+|---|---|
+| **A01 Broken Access Control** | Role guards at the router (`handleAuth` / `handleRole(chef)`); **per-resource ownership enforced in services** (`domain.ErrForbidden` → 403): chefs own their menus/dishes, customers their orders/reviews, chat is participant-only. `admin` cannot be self-assigned at registration. |
+| **A02 Cryptographic Failures** | Passwords: bcrypt. Reset tokens: only the **sha256** stored; raw token never in an API response. JWTs: HS256 with a required strong secret; `PasswordHash` cleared before any response. |
+| **A03 Injection** | `database/sql` with **parameterized placeholders (`$1…`) only** — SQL lives exclusively in `internal/repository/`. Search uses bound `ILIKE` args, never concatenated input. |
+| **A04 Insecure Design** | State machines for order/payment transitions (illegal moves rejected); single-use, expiring reset tokens; forgot-password is silent for unknown emails (no account enumeration); price/name **snapshots** on order items. |
+| **A05 Security Misconfiguration** | Config **fails fast**: missing/placeholder `JWT_SECRET` outside dev, missing SMTP outside dev. No committed secrets (compose reads env). CORS allowlist via `ALLOWED_ORIGINS`; HTTP server timeouts + graceful shutdown. |
+| **A06 Vulnerable Components** | CI runs `npm audit` (production deps, high+) for the web app; Go deps are version-pinned via modules. Keep dependencies current. |
+| **A07 Identification & Auth Failures** | Per-IP **rate limiting** on register/login/forgot/reset (429); logout revokes the token's `jti` via the denylist; login errors are generic (`invalid credentials`). |
+| **A08 Software & Data Integrity** | Protected flow: feature branch → PR → **green CI** (vet, gofmt, `-race` tests, Postgres integration, web build) → merge; versioned SQL migrations. |
+| **A09 Logging & Monitoring Failures** | Structured `slog` request logs (request id, status, latency). **Never log credentials, JWTs or reset tokens** — the dev logging mailer prints reset links *in development only* by design. |
+| **A10 SSRF** | The API makes no user-controlled outbound requests (SMTP target is operator config). Any future webhook/URL-fetch feature must allowlist destinations. |
+
+**Policies for new code (non-negotiable):**
+1. Every new endpoint declares its access level in the router (`public` is an explicit choice, not a default) and enforces **ownership in the service layer**, never only in the handler.
+2. SQL only in `repository/` and only with placeholders — string-built SQL with user input never passes review.
+3. Secrets never in code, compose files, fixtures or logs; new required config must fail fast outside development.
+4. New auth-adjacent endpoints (anything unauthenticated that writes or reveals account state) get rate limiting and enumeration-safe responses.
+5. Every feature ships with tests for its authorization paths (401/403 cases), per §7a.
+6. Run `/security-review` on branches touching auth, payments, file handling or new dependencies before opening the PR.
