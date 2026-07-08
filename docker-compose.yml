@@ -42,6 +42,8 @@ services:
       JWT_SECRET: "${JWT_SECRET:-dev-secret-key-not-for-production}"
       JWT_EXPIRATION: "24h"
       ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:3000}"
+      # Emailed links (password reset) open the SPA, not the API.
+      APP_BASE_URL: "${APP_BASE_URL:-http://localhost:5173}"
       AUTO_MIGRATE: "true"
     networks:
       - food_delivery_network

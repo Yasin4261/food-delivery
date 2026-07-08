@@ -53,6 +53,9 @@ src/
   unlimited).
 
 - Favorites: heart toggle on browse/chef detail and a Favorites page.
+- Password reset: "Forgot password?" on login → emailed link opens
+  `/reset-password?token=…` (in dev the link is printed by the API's logging
+  mailer — `docker logs food_delivery_api`).
 
-Not yet built (see issues #28–#31): reviews, search UI, real-time chat
-(WebSocket), password reset screens.
+Not yet built (see issues #28–#30): reviews, search UI, real-time chat
+(WebSocket).
