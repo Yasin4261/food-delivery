@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { api } from '@/api/client'
+import { useFavoritesStore } from '@/stores/favorites'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -35,14 +36,14 @@ export const useAuthStore = defineStore('auth', {
       } catch {
         // best-effort; clear locally regardless
       }
-      this.token = ''
-      this.user = null
-      this.persist()
+      this.clear()
     },
     clear() {
       this.token = ''
       this.user = null
       this.persist()
+      // Per-user caches must not leak into the next session.
+      useFavoritesStore().reset()
     },
   },
 })

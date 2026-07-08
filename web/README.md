@@ -52,5 +52,7 @@ src/
   **My menus** — create/delete menus and add/remove dishes (price, stock or
   unlimited).
 
-Not yet built (see issues #27–#31): favorites, reviews, search UI, real-time
-chat (WebSocket), password reset screens.
+- Favorites: heart toggle on browse/chef detail and a Favorites page.
+
+Not yet built (see issues #28–#31): reviews, search UI, real-time chat
+(WebSocket), password reset screens.

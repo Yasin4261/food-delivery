@@ -2,10 +2,26 @@
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api, page } from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
+import { useFavoritesStore } from '@/stores/favorites'
+
+const auth = useAuthStore()
+const favorites = useFavoritesStore()
 
 const chefs = ref([])
 const loading = ref(true)
 const error = ref('')
+
+// Customers see and use the favorite hearts; chefs don't favorite themselves.
+const canFavorite = auth.isAuthenticated && !auth.isChef
+
+async function toggleFavorite(chef) {
+  try {
+    await favorites.toggle(chef.id)
+  } catch (e) {
+    error.value = e.message
+  }
+}
 
 // Optional "deliver to me" filter by coordinates.
 const lat = ref('')
@@ -41,7 +57,10 @@ async function loadNearby() {
 
 const initial = (chef) => (chef.business_name || '?')[0].toUpperCase()
 
-onMounted(loadAll)
+onMounted(() => {
+  loadAll()
+  if (canFavorite) favorites.load().catch(() => {})
+})
 </script>
 
 <template>
@@ -79,8 +98,16 @@ onMounted(loadAll)
     </div>
 
     <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <RouterLink v-for="chef in chefs" :key="chef.id" :to="`/chefs/${chef.id}`" class="card-hover">
-        <div class="flex items-start gap-3">
+      <RouterLink v-for="chef in chefs" :key="chef.id" :to="`/chefs/${chef.id}`" class="card-hover relative">
+        <button
+          v-if="canFavorite"
+          class="absolute right-3 top-3 text-lg transition hover:scale-110"
+          :title="favorites.has(chef.id) ? 'Remove from favorites' : 'Add to favorites'"
+          @click.prevent.stop="toggleFavorite(chef)"
+        >
+          {{ favorites.has(chef.id) ? '❤️' : '🤍' }}
+        </button>
+        <div class="flex items-start gap-3" :class="canFavorite && 'pr-7'">
           <div class="avatar relative">
             {{ initial(chef) }}
             <span

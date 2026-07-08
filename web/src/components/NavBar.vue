@@ -45,6 +45,14 @@ async function logout() {
         >
           My orders
         </RouterLink>
+        <RouterLink
+          v-if="auth.isAuthenticated && !auth.isChef"
+          to="/favorites"
+          class="nav-link"
+          exact-active-class="router-link-active bg-brand-50"
+        >
+          Favorites
+        </RouterLink>
       </div>
 
       <div class="ml-auto flex items-center gap-3">
