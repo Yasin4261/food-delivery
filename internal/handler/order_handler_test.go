@@ -148,6 +148,14 @@ func TestOrder_FullLifecycle(t *testing.T) {
 		}
 	}
 
+	// Delivered cash order settles to paid (counts toward chef earnings).
+	rec = do(t, srv, http.MethodGet, "/api/v2/orders/1", customer, "")
+	var delivered domain.Order
+	_ = json.Unmarshal(rec.Body.Bytes(), &delivered)
+	if delivered.PaymentStatus != "paid" {
+		t.Errorf("delivered cash payment_status = %q, want paid", delivered.PaymentStatus)
+	}
+
 	// An illegal transition (confirm after delivered) is rejected.
 	if rec := do(t, srv, http.MethodPost, "/api/v2/chef/orders/1/status", chefToken, `{"action":"confirm"}`); rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("confirm after delivered = %d, want 422", rec.Code)

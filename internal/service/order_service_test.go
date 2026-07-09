@@ -198,6 +198,49 @@ func TestOrderService_CustomerOwnership(t *testing.T) {
 	}
 }
 
+// TestOrderService_CashSettlesOnDelivery: delivering a cash order marks it
+// paid (so it counts toward earnings); card orders stay pending for the
+// gateway (#42 phase 2).
+func TestOrderService_CashSettlesOnDelivery(t *testing.T) {
+	svc, items, _ := orderFixture(t, 1)
+	item := seedItem(t, items, 1, 5, 10)
+	ctx := context.Background()
+
+	place := func(method string) *domain.Order {
+		t.Helper()
+		order, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
+			DeliveryAddress: "x", PaymentMethod: method,
+			Lines: []service.OrderLineInput{{MenuItemID: item.ID, Quantity: 1}},
+		})
+		if err != nil {
+			t.Fatalf("place %s order: %v", method, err)
+		}
+		return order
+	}
+	deliver := func(orderID int) *domain.Order {
+		t.Helper()
+		var out *domain.Order
+		for _, action := range []string{"confirm", "preparing", "ready", "delivering", "delivered"} {
+			o, err := svc.AdvanceForChef(ctx, 1, orderID, action)
+			if err != nil {
+				t.Fatalf("advance %s: %v", action, err)
+			}
+			out = o
+		}
+		return out
+	}
+
+	cash := deliver(place(domain.PaymentMethodCash).ID)
+	if cash.PaymentStatus != domain.PaymentStatusPaid {
+		t.Errorf("delivered cash order payment = %q, want paid", cash.PaymentStatus)
+	}
+
+	card := deliver(place(domain.PaymentMethodCard).ID)
+	if card.PaymentStatus != domain.PaymentStatusPending {
+		t.Errorf("delivered card order payment = %q, want pending (gateway drives it)", card.PaymentStatus)
+	}
+}
+
 func TestOrderService_AdvanceForChef(t *testing.T) {
 	svc, items, _ := orderFixture(t, 1, 2) // user1->chef1, user2->chef2
 	item := seedItem(t, items, 1, 5, 10)
