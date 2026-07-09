@@ -186,6 +186,10 @@ func (s *OrderService) AdvanceForChef(ctx context.Context, userID, orderID int, 
 	if err := applyChefAction(order, action); err != nil {
 		return nil, err
 	}
+	// Cash settles at the door: a delivered cash order counts as paid, so it
+	// flows into chef earnings (delivered & paid). Card payment will be driven
+	// by the gateway integration (#42 phase 2).
+	order.SettleCashOnDelivery()
 	if err := s.orders.UpdateStatus(ctx, order); err != nil {
 		return nil, err
 	}

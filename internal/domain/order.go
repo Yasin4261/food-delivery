@@ -134,6 +134,23 @@ func (o *Order) Cancel() error {
 	return nil
 }
 
+// SettleCashOnDelivery marks payment as paid for a delivered cash order —
+// cash changes hands at the door, so delivery settles the payment. It is a
+// no-op for card orders (a gateway drives those), undelivered orders, and
+// orders whose payment is already paid/failed/refunded.
+func (o *Order) SettleCashOnDelivery() {
+	if o.Status != OrderStatusDelivered {
+		return
+	}
+	if o.PaymentMethod == nil || *o.PaymentMethod != PaymentMethodCash {
+		return
+	}
+	if o.PaymentStatus != PaymentStatusPending {
+		return
+	}
+	_ = o.MarkPaid()
+}
+
 // MarkPaid records a successful payment (pending → paid).
 func (o *Order) MarkPaid() error {
 	if o.PaymentStatus != PaymentStatusPending {

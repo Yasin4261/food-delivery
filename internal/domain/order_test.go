@@ -74,6 +74,63 @@ func TestOrder_Cancel(t *testing.T) {
 	}
 }
 
+func TestOrder_SettleCashOnDelivery(t *testing.T) {
+	cash, card := domain.PaymentMethodCash, domain.PaymentMethodCard
+	deliver := func(o *domain.Order) {
+		_ = o.Confirm()
+		_ = o.StartPreparing()
+		_ = o.MarkReady()
+		_ = o.StartDelivering()
+		_ = o.MarkDelivered()
+	}
+
+	// Delivered cash order settles to paid.
+	o := domain.NewOrder(1, "addr")
+	o.PaymentMethod = &cash
+	deliver(o)
+	o.SettleCashOnDelivery()
+	if o.PaymentStatus != domain.PaymentStatusPaid {
+		t.Errorf("delivered cash = %q, want paid", o.PaymentStatus)
+	}
+
+	// Card orders are untouched (the gateway drives them).
+	o = domain.NewOrder(1, "addr")
+	o.PaymentMethod = &card
+	deliver(o)
+	o.SettleCashOnDelivery()
+	if o.PaymentStatus != domain.PaymentStatusPending {
+		t.Errorf("delivered card = %q, want pending", o.PaymentStatus)
+	}
+
+	// Not delivered yet -> no-op.
+	o = domain.NewOrder(1, "addr")
+	o.PaymentMethod = &cash
+	_ = o.Confirm()
+	o.SettleCashOnDelivery()
+	if o.PaymentStatus != domain.PaymentStatusPending {
+		t.Errorf("confirmed cash = %q, want pending", o.PaymentStatus)
+	}
+
+	// Already refunded -> never overwritten.
+	o = domain.NewOrder(1, "addr")
+	o.PaymentMethod = &cash
+	_ = o.MarkPaid()
+	_ = o.Refund()
+	deliver(o)
+	o.SettleCashOnDelivery()
+	if o.PaymentStatus != domain.PaymentStatusRefunded {
+		t.Errorf("refunded cash = %q, want refunded", o.PaymentStatus)
+	}
+
+	// No payment method recorded -> no-op.
+	o = domain.NewOrder(1, "addr")
+	deliver(o)
+	o.SettleCashOnDelivery()
+	if o.PaymentStatus != domain.PaymentStatusPending {
+		t.Errorf("no method = %q, want pending", o.PaymentStatus)
+	}
+}
+
 func TestOrder_PaymentTransitions(t *testing.T) {
 	o := domain.NewOrder(1, "addr")
 	if err := o.MarkPaid(); err != nil {
