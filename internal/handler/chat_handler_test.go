@@ -174,6 +174,32 @@ func dialWS(t *testing.T, serverURL, path, token string) (*websocket.Conn, *http
 	return websocket.DefaultDialer.Dial(wsURL(serverURL, path), header)
 }
 
+// TestChat_WebSocketQueryTokenAuth covers the browser path: the WebSocket API
+// cannot set an Authorization header, so the token travels as ?access_token=.
+func TestChat_WebSocketQueryTokenAuth(t *testing.T) {
+	srv := newTestServer()
+	chefToken := registerAndToken(t, srv, "chefa", "chefa@example.com")
+	createChefProfile(t, srv, chefToken)
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	convID := startConversation(t, srv, customer)
+
+	server := httptest.NewServer(srv)
+	defer server.Close()
+	base := "/api/v2/chat/conversations/" + itoa(convID) + "/ws"
+
+	// No header, token in the query -> handshake succeeds.
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL(server.URL, base+"?access_token="+customer), nil)
+	if err != nil {
+		t.Fatalf("query-token dial failed: %v", err)
+	}
+	conn.Close()
+
+	// Garbage query token -> 401 at the handshake.
+	if _, resp, err := websocket.DefaultDialer.Dial(wsURL(server.URL, base+"?access_token=garbage"), nil); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("garbage query token should fail with 401, got err=%v resp=%v", err, resp)
+	}
+}
+
 func TestChat_WebSocketLiveDelivery(t *testing.T) {
 	srv := newTestServer()
 	chefToken := registerAndToken(t, srv, "chefa", "chefa@example.com")

@@ -1,0 +1,197 @@
+<script setup>
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { api, page } from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+
+const conversations = ref([])
+const active = ref(null)
+const messages = ref([])
+const draft = ref('')
+const loading = ref(true)
+const error = ref('')
+const live = ref(false)
+const listEl = ref(null)
+
+let socket = null
+const myId = auth.user?.id
+
+const mine = (m) => m.sender_id === myId
+const when = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+async function loadConversations() {
+  const items = page(await api.get('/chat/conversations')).items
+  // Label each thread from the *other* participant's perspective.
+  await Promise.all(
+    items.map(async (c) => {
+      if (c.user_id === myId) {
+        try {
+          c._label = `👨‍🍳 ${(await api.get(`/chefs/${c.chef_id}`)).business_name}`
+        } catch {
+          c._label = `👨‍🍳 Chef #${c.chef_id}`
+        }
+      } else {
+        c._label = `🧑 Customer #${c.user_id}`
+      }
+    }),
+  )
+  conversations.value = items
+}
+
+function appendUnique(msg) {
+  if (!messages.value.some((m) => m.id === msg.id)) {
+    messages.value.push(msg)
+    scrollDown()
+  }
+}
+
+function connect(conv) {
+  disconnect()
+  // Browsers can't set headers on WS handshakes; the token goes in the query
+  // (accepted by the API for upgrade requests only).
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  socket = new WebSocket(
+    `${proto}//${location.host}/api/v2/chat/conversations/${conv.id}/ws?access_token=${encodeURIComponent(auth.token)}`,
+  )
+  socket.onopen = () => (live.value = true)
+  socket.onclose = () => (live.value = false)
+  socket.onmessage = (ev) => {
+    try {
+      appendUnique(JSON.parse(ev.data))
+    } catch {
+      // ignore malformed frames
+    }
+  }
+}
+
+function disconnect() {
+  socket?.close()
+  socket = null
+  live.value = false
+}
+
+async function open(conv) {
+  active.value = conv
+  router.replace({ query: { c: conv.id } })
+  error.value = ''
+  try {
+    messages.value = page(await api.get(`/chat/conversations/${conv.id}/messages?limit=100`)).items
+    scrollDown()
+    connect(conv)
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+async function send() {
+  const body = draft.value.trim()
+  if (!body || !active.value) return
+  draft.value = ''
+  try {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      // The server persists and broadcasts back to everyone in the room,
+      // including us — appendUnique picks it up.
+      socket.send(JSON.stringify({ body }))
+    } else {
+      appendUnique(await api.post(`/chat/conversations/${active.value.id}/messages`, { body }))
+    }
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+async function scrollDown() {
+  await nextTick()
+  if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight
+}
+
+onMounted(async () => {
+  try {
+    await loadConversations()
+    const wanted = Number(route.query.c)
+    const target = conversations.value.find((c) => c.id === wanted)
+    if (target) await open(target)
+    else if (conversations.value.length === 1) await open(conversations.value[0])
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
+})
+
+onBeforeUnmount(disconnect)
+</script>
+
+<template>
+  <div class="space-y-4">
+    <div>
+      <h1 class="page-title">Messages 💬</h1>
+      <p class="page-subtitle">Chat directly with {{ auth.isChef ? 'your customers' : 'your chefs' }}.</p>
+    </div>
+
+    <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
+    <div v-if="loading" class="skeleton h-64"></div>
+
+    <div v-else-if="!conversations.length" class="empty-state">
+      <span class="empty-state-emoji">💬</span>
+      <p class="font-medium text-gray-600">No conversations yet</p>
+      <p class="text-sm">
+        {{ auth.isChef ? 'Customers can start a chat from your kitchen page.' : 'Open a chef page and hit "Chat with chef".' }}
+      </p>
+    </div>
+
+    <div v-else class="grid gap-4 md:grid-cols-3">
+      <!-- Thread list -->
+      <div class="card space-y-1 p-2 md:col-span-1">
+        <button
+          v-for="c in conversations"
+          :key="c.id"
+          class="w-full rounded-lg px-3 py-2 text-left text-sm transition"
+          :class="active?.id === c.id ? 'bg-brand-50 font-semibold text-brand-700' : 'hover:bg-gray-50'"
+          @click="open(c)"
+        >
+          {{ c._label }}
+        </button>
+      </div>
+
+      <!-- Active thread -->
+      <div class="card flex h-[28rem] flex-col p-0 md:col-span-2">
+        <template v-if="active">
+          <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
+            <span class="font-semibold">{{ active._label }}</span>
+            <span class="badge" :class="live ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'">
+              {{ live ? '● live' : 'offline' }}
+            </span>
+          </div>
+
+          <div ref="listEl" class="grow space-y-2 overflow-y-auto px-4 py-3">
+            <p v-if="!messages.length" class="pt-10 text-center text-sm text-gray-400">
+              Say hello 👋 — messages are delivered live.
+            </p>
+            <div v-for="m in messages" :key="m.id" class="flex" :class="mine(m) ? 'justify-end' : 'justify-start'">
+              <div
+                class="max-w-[75%] rounded-2xl px-3 py-1.5 text-sm"
+                :class="mine(m) ? 'rounded-br-sm bg-brand-600 text-white' : 'rounded-bl-sm bg-gray-100 text-gray-800'"
+              >
+                <p class="whitespace-pre-wrap break-words">{{ m.body }}</p>
+                <p class="mt-0.5 text-right text-[10px] opacity-60">{{ when(m.created_at) }}</p>
+              </div>
+            </div>
+          </div>
+
+          <form class="flex gap-2 border-t border-gray-100 p-3" @submit.prevent="send">
+            <input v-model="draft" class="input" placeholder="Type a message…" />
+            <button class="btn-primary shrink-0" :disabled="!draft.trim()">Send</button>
+          </form>
+        </template>
+        <div v-else class="flex grow items-center justify-center text-sm text-gray-400">
+          Pick a conversation to start chatting
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

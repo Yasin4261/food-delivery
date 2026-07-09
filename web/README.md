@@ -60,5 +60,9 @@ src/
 - Password reset: "Forgot password?" on login → emailed link opens
   `/reset-password?token=…` (in dev the link is printed by the API's logging
   mailer — `docker logs food_delivery_api`).
+- Chat: `/chat` — conversation list + live thread over WebSocket ("Chat with
+  chef" on the chef page; chefs answer from the same screen). The WS handshake
+  authenticates via `?access_token=` (browsers can't set headers there);
+  falls back to REST posting when the socket is down.
 
-Not yet built (see issue #30): real-time chat (WebSocket).
+The full product brief is covered in the UI. 🎉

@@ -89,6 +89,43 @@ func TestRequire_TokenHandling(t *testing.T) {
 	}
 }
 
+// TestRequire_WebSocketQueryToken: browsers cannot set headers on WebSocket
+// handshakes, so `?access_token=` is accepted — but only for upgrade requests.
+func TestRequire_WebSocketQueryToken(t *testing.T) {
+	var saw bool
+	auth := middleware.NewAuth(fakeParser{claims: chefClaims("jti-1")}, fakeDenylist{})
+	h := auth.Require(echo(t, &saw))
+
+	// Upgrade request with a query token -> allowed.
+	req := httptest.NewRequest(http.MethodGet, "/ws?access_token=tok", nil)
+	req.Header.Set("Upgrade", "websocket")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !saw {
+		t.Errorf("ws query token = %d (handler ran: %v), want 200", rec.Code, saw)
+	}
+
+	// The same query token WITHOUT the upgrade header must be rejected —
+	// query-string auth is a WebSocket-only affordance.
+	saw = false
+	req = httptest.NewRequest(http.MethodGet, "/api?access_token=tok", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized || saw {
+		t.Errorf("plain request with query token = %d (handler ran: %v), want 401", rec.Code, saw)
+	}
+
+	// Header still wins when both are present.
+	req = httptest.NewRequest(http.MethodGet, "/ws?access_token=ignored", nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Authorization", "Bearer header-token")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("header+query = %d, want 200", rec.Code)
+	}
+}
+
 func TestRequire_RevokedTokenRejected(t *testing.T) {
 	var saw bool
 	auth := middleware.NewAuth(fakeParser{claims: chefClaims("revoked-jti")}, fakeDenylist{revokedJTI: "revoked-jti"})
