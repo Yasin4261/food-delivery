@@ -22,6 +22,20 @@ async function toggleFavorite() {
   }
 }
 
+// Opens (or reuses) the thread with this chef and jumps into it.
+async function startChat() {
+  if (!auth.isAuthenticated) {
+    router.push({ name: 'login', query: { redirect: `/chefs/${props.id}` } })
+    return
+  }
+  try {
+    const conv = await api.post('/chat/conversations', { chef_id: chef.value.id })
+    router.push({ path: '/chat', query: { c: conv.id } })
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
 const chef = ref(null)
 const items = ref([])
 const reviews = ref([])
@@ -90,6 +104,7 @@ onMounted(async () => {
             <span class="badge bg-amber-50 text-amber-700">★ {{ chef.rating?.toFixed(1) ?? '—' }}</span>
             <span class="ml-1 text-gray-400">{{ chef.total_reviews }} reviews</span>
           </p>
+          <button v-if="!auth.isChef" class="btn-ghost mt-3" @click="startChat">💬 Chat with chef</button>
         </div>
       </div>
 

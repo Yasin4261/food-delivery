@@ -36,18 +36,37 @@ func NewAuth(parser TokenParser, denylist Denylist) *Auth {
 	return &Auth{parser: parser, denylist: denylist}
 }
 
-// Require rejects requests without a valid "Authorization: Bearer <token>"
-// header. On success it stores the claims in the request context.
+// bearerToken extracts the caller's token. Normally it comes from the
+// "Authorization: Bearer <token>" header. For WebSocket upgrade requests only,
+// an `access_token` query parameter is accepted as a fallback, because the
+// browser WebSocket API cannot set headers. The request logger records only
+// the path (never the query), so the token does not reach logs.
+func bearerToken(r *http.Request) string {
+	if header := r.Header.Get("Authorization"); header != "" {
+		token, ok := strings.CutPrefix(header, "Bearer ")
+		if !ok {
+			return ""
+		}
+		return strings.TrimSpace(token)
+	}
+	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return strings.TrimSpace(r.URL.Query().Get("access_token"))
+	}
+	return ""
+}
+
+// Require rejects requests without a valid bearer token (see bearerToken for
+// where it may come from). On success it stores the claims in the request
+// context.
 func (a *Auth) Require(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get("Authorization")
-		token, ok := strings.CutPrefix(header, "Bearer ")
-		if !ok || strings.TrimSpace(token) == "" {
+		token := bearerToken(r)
+		if token == "" {
 			writeError(w, http.StatusUnauthorized, "missing or malformed bearer token")
 			return
 		}
 
-		claims, err := a.parser.ParseToken(strings.TrimSpace(token))
+		claims, err := a.parser.ParseToken(token)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "invalid or expired token")
 			return

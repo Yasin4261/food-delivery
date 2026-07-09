@@ -61,6 +61,14 @@ async function logout() {
         >
           Favorites
         </RouterLink>
+        <RouterLink
+          v-if="auth.isAuthenticated"
+          to="/chat"
+          class="nav-link"
+          exact-active-class="router-link-active bg-brand-50"
+        >
+          💬 Chat
+        </RouterLink>
       </div>
 
       <div class="ml-auto flex items-center gap-3">
