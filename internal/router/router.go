@@ -23,6 +23,7 @@ type Router struct {
 	earningsHandler *handler.EarningsHandler
 	searchHandler   *handler.SearchHandler
 	chatHandler     *handler.ChatHandler
+	versionHandler  *handler.VersionHandler
 }
 
 // NewRouter creates a Router with its handler and middleware dependencies.
@@ -38,6 +39,7 @@ func NewRouter(
 	earningsHandler *handler.EarningsHandler,
 	searchHandler *handler.SearchHandler,
 	chatHandler *handler.ChatHandler,
+	versionHandler *handler.VersionHandler,
 ) *Router {
 	return &Router{
 		mux:             http.NewServeMux(),
@@ -52,12 +54,14 @@ func NewRouter(
 		earningsHandler: earningsHandler,
 		searchHandler:   searchHandler,
 		chatHandler:     chatHandler,
+		versionHandler:  versionHandler,
 	}
 }
 
 // Setup registers all routes and returns the configured handler.
 func (r *Router) Setup() http.Handler {
 	r.mux.HandleFunc("GET /health", r.healthHandler.HealthCheck)
+	r.mux.HandleFunc("GET /version", r.versionHandler.Version)
 
 	// Public auth routes. The credential/secret-bearing endpoints are rate
 	// limited per IP to blunt brute-force / credential-stuffing attempts.

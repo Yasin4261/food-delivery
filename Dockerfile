@@ -8,9 +8,11 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Build the static binary.
+# Build the static binary. VERSION is stamped into GET /version — pass
+# --build-arg VERSION=$(git describe --tags); defaults to "dev".
+ARG VERSION=dev
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags='-w -s' -o /app/bin/api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.version=${VERSION}" -o /app/bin/api ./cmd/api
 
 # ---- Runtime stage ----
 FROM alpine:3.20

@@ -162,7 +162,8 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	earningsHandler := handler.NewEarningsHandler(earningsService)
 	searchHandler := handler.NewSearchHandler(searchService)
 	chatHandler := handler.NewChatHandler(chatService)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler).Setup(), mail
+	versionHandler := handler.NewVersionHandler("v-test")
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler).Setup(), mail
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.
