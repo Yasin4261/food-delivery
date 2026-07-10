@@ -18,3 +18,16 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+
+  # Throwaway Redis for the redisstore integration tests (host port 6380 to
+  # avoid clashing with any local Redis).
+  redis-test:
+    image: redis:7-alpine
+    container_name: food_delivery_redis_test
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

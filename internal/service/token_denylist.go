@@ -5,12 +5,21 @@ import (
 	"time"
 )
 
+// TokenRevoker is the revocation contract shared by the logout handler
+// (Revoke) and the auth middleware (IsRevoked). Implementations: the in-memory
+// TokenDenylist below (single instance) and redisstore.Denylist (shared across
+// instances).
+type TokenRevoker interface {
+	Revoke(jti string, exp time.Time)
+	IsRevoked(jti string) bool
+}
+
 // TokenDenylist is an in-memory store of revoked JWT ids (jti). A logged-out or
 // otherwise revoked token is rejected by the auth middleware until it would
 // have expired anyway, so entries are kept only until their expiry.
 //
-// This is process-local; a multi-instance deployment would back it with a
-// shared store (e.g. Redis) implementing the same IsRevoked/Revoke contract.
+// This is process-local; multi-instance deployments set REDIS_URL to use the
+// Redis-backed implementation instead.
 type TokenDenylist struct {
 	mu      sync.Mutex
 	revoked map[string]time.Time // jti -> expiry

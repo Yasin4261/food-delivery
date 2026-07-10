@@ -43,14 +43,16 @@ test-coverage: ## Run tests with coverage
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out
 
-# Integration tests run the real Postgres adapters against a throwaway database
-# in Docker. They are gated behind the `integration` build tag, so the plain
-# `make test` above never needs a database.
+# Integration tests run the real Postgres + Redis adapters against throwaway
+# containers in Docker. They are gated behind the `integration` build tag, so
+# the plain `make test` above never needs services.
 TEST_DB_URL ?= postgres://postgres:postgres@localhost:5433/food_delivery_test?sslmode=disable
+TEST_REDIS_URL ?= redis://localhost:6380/0
 
-test-integration: ## Run repository integration tests against a Dockerized Postgres
+test-integration: ## Run repository + redisstore integration tests against Dockerized Postgres + Redis
 	docker compose -f docker-compose.test.yml up -d --wait
-	@TEST_DATABASE_URL="$(TEST_DB_URL)" go test -tags=integration ./internal/repository/... ; \
+	@TEST_DATABASE_URL="$(TEST_DB_URL)" TEST_REDIS_URL="$(TEST_REDIS_URL)" \
+		go test -tags=integration ./internal/repository/... ./internal/redisstore/... ; \
 		status=$$? ; \
 		docker compose -f docker-compose.test.yml down -v ; \
 		exit $$status

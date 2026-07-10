@@ -32,6 +32,11 @@ type Config struct {
 	IyzicoAPIKey    string
 	IyzicoSecretKey string
 	IyzicoBaseURL   string
+
+	// Redis backs the token denylist and auth rate limiter so they are shared
+	// across API instances. Empty keeps the in-memory implementations
+	// (correct for a single instance).
+	RedisURL string
 }
 
 // LoadConfig reads configuration from the environment (and a local .env file
@@ -58,6 +63,8 @@ func LoadConfig() (*Config, error) {
 		IyzicoAPIKey:    getEnv("IYZICO_API_KEY", ""),
 		IyzicoSecretKey: getEnv("IYZICO_SECRET_KEY", ""),
 		IyzicoBaseURL:   getEnv("IYZICO_BASE_URL", "https://sandbox-api.iyzipay.com"),
+
+		RedisURL: getEnv("REDIS_URL", ""),
 	}
 
 	if cfg.DatabaseURL == "" {

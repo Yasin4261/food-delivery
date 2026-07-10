@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/Yasin4261/food-delivery/config"
 	"github.com/Yasin4261/food-delivery/database"
 	"github.com/Yasin4261/food-delivery/internal/domain"
@@ -19,6 +21,7 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/mailer"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/payment"
+	"github.com/Yasin4261/food-delivery/internal/redisstore"
 	"github.com/Yasin4261/food-delivery/internal/repository"
 	"github.com/Yasin4261/food-delivery/internal/router"
 	"github.com/Yasin4261/food-delivery/internal/service"
@@ -138,14 +141,34 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
 	searchService := service.NewSearchService(searchRepo)
 	chatService := service.NewChatService(chatRepo, chefRepo)
-	tokenDenylist := service.NewTokenDenylist()
+
+	// Token denylist + auth rate limiter: in-memory by default (correct for a
+	// single instance); Redis-backed when REDIS_URL is set, so revocation and
+	// limits are shared across instances.
+	var revoker service.TokenRevoker = service.NewTokenDenylist()
+	var authLimiter middleware.Limiter = middleware.NewRateLimiter(10, time.Minute)
+	if cfg.RedisURL != "" {
+		opts, err := redis.ParseURL(cfg.RedisURL)
+		if err != nil {
+			log.Fatalf("redis: parse REDIS_URL: %v", err)
+		}
+		rdb := redis.NewClient(opts)
+		pingCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := rdb.Ping(pingCtx).Err(); err != nil {
+			log.Fatalf("redis: ping %s: %v", opts.Addr, err)
+		}
+		revoker = redisstore.NewDenylist(rdb)
+		authLimiter = redisstore.NewRateLimiter(rdb, 10, time.Minute)
+		slog.Info("redis-backed token denylist and rate limiter active", "addr", opts.Addr)
+	}
 
 	// Middleware.
-	authMiddleware := middleware.NewAuth(authService, tokenDenylist)
+	authMiddleware := middleware.NewAuth(authService, revoker)
 
 	// Handlers (driving adapters).
 	healthHandler := handler.NewHealthHandler(db)
-	authHandler := handler.NewAuthHandler(authService, tokenDenylist)
+	authHandler := handler.NewAuthHandler(authService, revoker)
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)
@@ -157,6 +180,6 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	versionHandler := handler.NewVersionHandler(version)
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
 	return r.Setup()
 }
