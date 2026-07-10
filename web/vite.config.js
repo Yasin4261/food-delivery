@@ -19,4 +19,7 @@ export default defineConfig({
       '/health': { target: apiTarget, changeOrigin: true },
     },
   },
+  test: {
+    environment: 'jsdom',
+  },
 })
