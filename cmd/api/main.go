@@ -23,6 +23,13 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
 
+// version is stamped at build time via:
+//
+//	go build -ldflags "-X main.version=$(git describe --tags --always --dirty)"
+//
+// It defaults to "dev" for plain `go run` / `go build`.
+var version = "dev"
+
 func main() {
 	cfg, err := config.LoadConfig()
 	if err != nil {
@@ -48,7 +55,7 @@ func main() {
 	// Global middleware (outermost first): CORS, then structured per-request
 	// logging, then the app.
 	app := middleware.CORS(cfg.AllowedOrigins)(
-		middleware.RequestLogger(logger)(initializeApp(db, cfg)),
+		middleware.RequestLogger(logger)(initializeApp(db, cfg, version)),
 	)
 
 	srv := &http.Server{
@@ -65,7 +72,7 @@ func main() {
 	defer stop()
 
 	go func() {
-		log.Printf("starting server on %s (env=%s)", srv.Addr, cfg.Env)
+		log.Printf("starting server on %s (env=%s, version=%s)", srv.Addr, cfg.Env, version)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server: %v", err)
 		}
@@ -85,7 +92,7 @@ func main() {
 // initializeApp is the composition root: it constructs the concrete adapters
 // and wires them into the core. As features are added, new repositories,
 // services and handlers are assembled here.
-func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
+func initializeApp(db *database.DB, cfg *config.Config, version string) http.Handler {
 	// Repositories (driven adapters).
 	userRepo := repository.NewUserRepository(db.DB)
 	chefRepo := repository.NewChefRepository(db.DB)
@@ -134,7 +141,8 @@ func initializeApp(db *database.DB, cfg *config.Config) http.Handler {
 	earningsHandler := handler.NewEarningsHandler(earningsService)
 	searchHandler := handler.NewSearchHandler(searchService)
 	chatHandler := handler.NewChatHandler(chatService)
+	versionHandler := handler.NewVersionHandler(version)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler)
 	return r.Setup()
 }

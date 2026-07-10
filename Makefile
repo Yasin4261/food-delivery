@@ -30,8 +30,10 @@ prod-logs: ## View production logs
 run: ## Run locally without Docker
 	go run ./cmd/api
 
-build: ## Build binary
-	go build -o bin/food-delivery ./cmd/api
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
+build: ## Build binary (version stamped from git describe)
+	go build -ldflags "-X main.version=$(VERSION)" -o bin/food-delivery ./cmd/api
 
 # Testing
 test: ## Run tests
