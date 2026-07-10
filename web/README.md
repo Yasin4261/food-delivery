@@ -20,12 +20,17 @@ npm run dev        # http://localhost:5173
 
 Point at a different backend with `VITE_API_TARGET=http://host:port npm run dev`.
 
-## Build
+## Test & build
 
 ```bash
+npm test           # Vitest (jsdom): stores, router guards, api client, components
+npm run test:watch # watch mode
 npm run build      # outputs dist/
 npm run preview    # serve the production build
 ```
+
+Tests live next to the code as `*.test.js` and run in CI (web job) before the
+build.
 
 ## Layout
 
