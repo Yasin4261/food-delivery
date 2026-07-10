@@ -1,77 +1,96 @@
+# Production stack: Postgres (internal only) + Go API (internal only) + Caddy
+# serving the built SPA and proxying /api — everything on ONE public origin.
+#
+#   cp .env.prod.example .env.prod   # fill the required values
+#   make prod                        # builds with the git version stamped
+#
+# Compose fails fast (${VAR:?...}) on missing secrets; the API additionally
+# fail-fasts in ENV=production on weak/missing config.
 services:
-  # PostgreSQL Database (Production)
   db:
     image: postgres:16-alpine
     container_name: food_delivery_db_prod
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME}
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${DB_NAME:-food_delivery}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.prod}
+    # No host port: the database is reachable only on the internal network.
     volumes:
       - postgres_data_prod:/var/lib/postgresql/data
-    networks:
-      - food_delivery_network_prod
+    networks: [prod]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '1'
-          memory: 1G
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-food_delivery}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  # Go API Application (Production)
   api:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-prod}
     container_name: food_delivery_api_prod
-    restart: always
-    ports:
-      - "8080:8080"
+    restart: unless-stopped
+    # No host port: only Caddy talks to the API.
     depends_on:
       db:
         condition: service_healthy
     environment:
       PORT: "8080"
-      DATABASE_URL: "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=require"
       ENV: "production"
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      # In-network Postgres traffic; the container network is not TLS-enabled.
+      DATABASE_URL: "postgres://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-food_delivery}?sslmode=disable"
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.prod (openssl rand -hex 32)}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL to the public origin}
+      ALLOWED_ORIGINS: ${APP_BASE_URL}
+      SMTP_HOST: ${SMTP_HOST:?set SMTP_HOST in .env.prod}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:?set MAIL_FROM in .env.prod}
+      IYZICO_API_KEY: ${IYZICO_API_KEY:?set IYZICO_API_KEY in .env.prod}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:?set IYZICO_SECRET_KEY in .env.prod}
+      IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}
       AUTO_MIGRATE: "true"
-    networks:
-      - food_delivery_network_prod
-    volumes:
-      - ./migrations:/app/migrations
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-    # Security
+    networks: [prod]
     security_opt:
       - no-new-privileges:true
     read_only: true
     tmpfs:
       - /tmp
 
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: food_delivery_web_prod
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      # ":80" = plain HTTP (local test / behind a load balancer);
+      # "your-domain.com" = automatic HTTPS via Let's Encrypt.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [prod]
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   postgres_data_prod:
     driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
 
 networks:
-  food_delivery_network_prod:
+  prod:
     driver: bridge

@@ -1,0 +1,16 @@
+# syntax=docker/dockerfile:1
+# Production web image: build the Vue SPA, serve it with Caddy, which also
+# terminates TLS and proxies /api to the Go service (see deploy/Caddyfile).
+
+# ---- Build stage ----
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ .
+RUN npm run build
+
+# ---- Runtime stage ----
+FROM caddy:2-alpine
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv

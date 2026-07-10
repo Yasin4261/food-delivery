@@ -62,3 +62,7 @@ tmp/
 
 # Makefile (not needed in container)
 Makefile
+
+# Web build inputs are copied explicitly in Dockerfile.web; never ship these.
+web/node_modules/
+web/dist/
