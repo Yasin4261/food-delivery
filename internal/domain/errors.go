@@ -17,6 +17,9 @@ var (
 	ErrConversationNotFound = errors.New("conversation not found")
 	ErrEmptyMessage         = errors.New("message body cannot be empty")
 
+	ErrPaymentSessionNotFound = errors.New("payment session not found")
+	ErrOrderNotPayable        = errors.New("only pending card orders can be paid online")
+
 	ErrChefNotFound      = errors.New("chef not found")
 	ErrChefProfileExists = errors.New("chef profile already exists for this user")
 

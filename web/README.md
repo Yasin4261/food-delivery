@@ -69,5 +69,9 @@ src/
   chef" on the chef page; chefs answer from the same screen). The WS handshake
   authenticates via `?access_token=` (browsers can't set headers there);
   falls back to REST posting when the socket is down.
+- Card payments: "💳 Pay now" on pending card orders → hosted checkout
+  (iyzico in production; in dev the mock gateway sends you to `/mock-pay`, a
+  simulated sandbox page) → redirected back to `/orders` with a result banner.
+  Payment badges on every order; paid card orders refund on cancel.
 
 The full product brief is covered in the UI. 🎉

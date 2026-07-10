@@ -18,6 +18,7 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/handler"
 	"github.com/Yasin4261/food-delivery/internal/mailer"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
+	"github.com/Yasin4261/food-delivery/internal/payment"
 	"github.com/Yasin4261/food-delivery/internal/repository"
 	"github.com/Yasin4261/food-delivery/internal/router"
 	"github.com/Yasin4261/food-delivery/internal/service"
@@ -105,6 +106,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	searchRepo := repository.NewSearchRepository(db.DB)
 	passwordResetRepo := repository.NewPasswordResetRepository(db.DB)
 	chatRepo := repository.NewChatRepository(db.DB)
+	paymentSessionRepo := repository.NewPaymentSessionRepository(db.DB)
 
 	// Mailer (driven adapter): real SMTP when configured, else the dev logger.
 	var mail domain.Mailer
@@ -115,11 +117,22 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 		mail = mailer.NewLogging(slog.Default())
 	}
 
+	// Payment gateway (driven adapter): iyzico when configured, else the dev
+	// mock that simulates the hosted-checkout dance.
+	var gateway domain.PaymentGateway
+	if cfg.IyzicoAPIKey != "" {
+		gateway = payment.NewIyzico(cfg.IyzicoAPIKey, cfg.IyzicoSecretKey, cfg.IyzicoBaseURL)
+	} else {
+		slog.Warn("IYZICO_API_KEY not set; using the dev mock payment gateway (no real charges)")
+		gateway = payment.NewMock(cfg.AppBaseURL)
+	}
+
 	// Services (use cases).
 	authService := service.NewAuthService(userRepo, passwordResetRepo, mail, cfg.JWTSecret, cfg.JWTExpiration, cfg.AppBaseURL)
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, menuRepo, menuItemRepo)
-	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo)
+	paymentService := service.NewPaymentService(paymentSessionRepo, orderRepo, userRepo, gateway, cfg.AppBaseURL)
+	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, paymentService)
 	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
 	reviewService := service.NewReviewService(reviewRepo, orderRepo)
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
@@ -142,7 +155,8 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	searchHandler := handler.NewSearchHandler(searchService)
 	chatHandler := handler.NewChatHandler(chatService)
 	versionHandler := handler.NewVersionHandler(version)
+	paymentHandler := handler.NewPaymentHandler(paymentService)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler)
 	return r.Setup()
 }

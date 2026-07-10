@@ -121,10 +121,23 @@ func (o *Order) MarkDelivered() error {
 	return nil
 }
 
+// CanCancel reports whether the order may still be cancelled: only pending or
+// confirmed orders (before preparation starts).
+func (o *Order) CanCancel() bool {
+	return o.Status == OrderStatusPending || o.Status == OrderStatusConfirmed
+}
+
+// IsCardPaid reports whether the order was paid by card — the case that needs
+// a gateway refund when the order is cancelled.
+func (o *Order) IsCardPaid() bool {
+	return o.PaymentStatus == PaymentStatusPaid &&
+		o.PaymentMethod != nil && *o.PaymentMethod == PaymentMethodCard
+}
+
 // Cancel cancels an order. Only pending or confirmed orders may be cancelled
 // (a chef declining, or a customer changing their mind before preparation).
 func (o *Order) Cancel() error {
-	if o.Status != OrderStatusPending && o.Status != OrderStatusConfirmed {
+	if !o.CanCancel() {
 		return ErrInvalidStatusTransition
 	}
 	now := time.Now()
