@@ -24,6 +24,7 @@ type Router struct {
 	searchHandler   *handler.SearchHandler
 	chatHandler     *handler.ChatHandler
 	versionHandler  *handler.VersionHandler
+	paymentHandler  *handler.PaymentHandler
 }
 
 // NewRouter creates a Router with its handler and middleware dependencies.
@@ -40,6 +41,7 @@ func NewRouter(
 	searchHandler *handler.SearchHandler,
 	chatHandler *handler.ChatHandler,
 	versionHandler *handler.VersionHandler,
+	paymentHandler *handler.PaymentHandler,
 ) *Router {
 	return &Router{
 		mux:             http.NewServeMux(),
@@ -55,6 +57,7 @@ func NewRouter(
 		searchHandler:   searchHandler,
 		chatHandler:     chatHandler,
 		versionHandler:  versionHandler,
+		paymentHandler:  paymentHandler,
 	}
 }
 
@@ -114,6 +117,13 @@ func (r *Router) Setup() http.Handler {
 	r.handleAuth("POST /api/v2/orders/{id}/cancel", r.orderHandler.Cancel)
 	r.handleRole("GET /api/v2/chef/orders", r.orderHandler.ChefList)
 	r.handleRole("POST /api/v2/chef/orders/{id}/status", r.orderHandler.ChefAdvance)
+
+	// Card payments: opening a checkout requires the order's owner; the
+	// gateway's browser callback is necessarily public (no bearer token on
+	// that hop) — the outcome is verified server-to-server and the endpoint is
+	// rate limited like the auth surface.
+	r.handleAuth("POST /api/v2/orders/{id}/pay", r.paymentHandler.Pay)
+	r.mux.Handle("POST /api/v2/payments/callback", authLimit.Middleware(http.HandlerFunc(r.paymentHandler.Callback)))
 
 	// Favorites: a customer favoriting chefs (any authenticated user).
 	r.handleAuth("GET /api/v2/favorites", r.favoriteHandler.List)

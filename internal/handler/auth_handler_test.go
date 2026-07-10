@@ -13,6 +13,7 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/handler"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
+	"github.com/Yasin4261/food-delivery/internal/payment"
 	"github.com/Yasin4261/food-delivery/internal/router"
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
@@ -139,12 +140,14 @@ func (m *recordingMailer) last() (domain.Email, bool) {
 func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	chefRepo := newFakeChefRepo()
 	itemRepo := newFakeMenuItemRepo()
+	userRepo := newFakeUserRepo()
 	mail := &recordingMailer{}
-	authService := service.NewAuthService(newFakeUserRepo(), newFakeResetRepo(), mail, "test-secret", time.Hour, "http://app.test")
+	authService := service.NewAuthService(userRepo, newFakeResetRepo(), mail, "test-secret", time.Hour, "http://app.test")
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, newFakeMenuRepo(), itemRepo)
 	orderRepo := newFakeOrderRepo()
-	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo)
+	paymentService := service.NewPaymentService(newFakePaymentSessionRepo(), orderRepo, userRepo, payment.NewMock("http://app.test"), "http://app.test")
+	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo, paymentService)
 	favoriteService := service.NewFavoriteService(newFakeFavoriteRepo(chefRepo), chefRepo)
 	reviewService := service.NewReviewService(newFakeReviewRepo(), orderRepo)
 	earningsService := service.NewEarningsService(newFakeEarningsRepo(), chefRepo)
@@ -163,7 +166,8 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	searchHandler := handler.NewSearchHandler(searchService)
 	chatHandler := handler.NewChatHandler(chatService)
 	versionHandler := handler.NewVersionHandler("v-test")
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler).Setup(), mail
+	paymentHandler := handler.NewPaymentHandler(paymentService)
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler).Setup(), mail
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.
@@ -199,6 +203,17 @@ func decodePage[T any](t *testing.T, body []byte) pageResp[T] {
 		t.Fatalf("decode page: %v (%s)", err, body)
 	}
 	return p
+}
+
+// doForm sends an application/x-www-form-urlencoded POST (like a browser form
+// or a payment-gateway redirect).
+func doForm(t *testing.T, srv http.Handler, path, form string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	return rec
 }
 
 func do(t *testing.T, srv http.Handler, method, path, token, body string) *httptest.ResponseRecorder {

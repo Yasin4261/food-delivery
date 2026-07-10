@@ -55,7 +55,8 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrMenuNotFound),
 		errors.Is(err, domain.ErrMenuItemNotFound),
 		errors.Is(err, domain.ErrOrderNotFound),
-		errors.Is(err, domain.ErrConversationNotFound):
+		errors.Is(err, domain.ErrConversationNotFound),
+		errors.Is(err, domain.ErrPaymentSessionNotFound):
 		respondError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, domain.ErrForbidden):
 		respondError(w, http.StatusForbidden, err.Error())
@@ -70,7 +71,8 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrInvalidStatusTransition),
 		errors.Is(err, domain.ErrInvalidPaymentTransition),
 		errors.Is(err, domain.ErrOrderNotReviewable),
-		errors.Is(err, domain.ErrReviewTargetNotInOrder):
+		errors.Is(err, domain.ErrReviewTargetNotInOrder),
+		errors.Is(err, domain.ErrOrderNotPayable):
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, domain.ErrEmailAlreadyExists),
 		errors.Is(err, domain.ErrUsernameAlreadyExists),

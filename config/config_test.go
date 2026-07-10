@@ -15,7 +15,7 @@ func setBase(t *testing.T) {
 	for _, k := range []string{
 		"PORT", "ENV", "DATABASE_URL", "JWT_SECRET", "JWT_EXPIRATION", "AUTO_MIGRATE",
 		"ALLOWED_ORIGINS", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD",
-		"MAIL_FROM", "APP_BASE_URL",
+		"MAIL_FROM", "APP_BASE_URL", "IYZICO_API_KEY", "IYZICO_SECRET_KEY", "IYZICO_BASE_URL",
 	} {
 		t.Setenv(k, "")
 	}
@@ -65,10 +65,21 @@ func TestLoadConfig_RequiresJWTSecret(t *testing.T) {
 	}
 }
 
+// setProductionExtras satisfies the non-dev requirements (mail + payments) so
+// tests can isolate a single validation rule.
+func setProductionExtras(t *testing.T) {
+	t.Helper()
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("MAIL_FROM", "no-reply@example.com")
+	t.Setenv("IYZICO_API_KEY", "iyzi-key")
+	t.Setenv("IYZICO_SECRET_KEY", "iyzi-secret")
+}
+
 // TestLoadConfig_PlaceholderSecret is the OWASP A05 fail-fast: the known weak
 // placeholder must be rejected everywhere except development.
 func TestLoadConfig_PlaceholderSecret(t *testing.T) {
 	setBase(t)
+	setProductionExtras(t)
 	t.Setenv("JWT_SECRET", "change-me-in-production")
 
 	t.Setenv("ENV", "development")
@@ -89,6 +100,9 @@ func TestLoadConfig_PlaceholderSecret(t *testing.T) {
 func TestLoadConfig_MailValidation(t *testing.T) {
 	setBase(t)
 	t.Setenv("ENV", "production")
+	// Payments configured so only the mail rules are under test.
+	t.Setenv("IYZICO_API_KEY", "iyzi-key")
+	t.Setenv("IYZICO_SECRET_KEY", "iyzi-secret")
 
 	// No SMTP host -> refuse to boot.
 	if _, err := config.LoadConfig(); err == nil || !strings.Contains(err.Error(), "SMTP_HOST") {
@@ -113,6 +127,37 @@ func TestLoadConfig_MailValidation(t *testing.T) {
 	t.Setenv("MAIL_FROM", "")
 	if _, err := config.LoadConfig(); err != nil {
 		t.Errorf("development without SMTP should load, got %v", err)
+	}
+}
+
+// TestLoadConfig_PaymentValidation: outside development the iyzico credentials
+// are required (the dev mock gateway is development-only).
+func TestLoadConfig_PaymentValidation(t *testing.T) {
+	setBase(t)
+	t.Setenv("ENV", "production")
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("MAIL_FROM", "no-reply@example.com")
+
+	if _, err := config.LoadConfig(); err == nil || !strings.Contains(err.Error(), "IYZICO") {
+		t.Errorf("err = %v, want iyzico credentials required in production", err)
+	}
+
+	t.Setenv("IYZICO_API_KEY", "iyzi-key")
+	t.Setenv("IYZICO_SECRET_KEY", "iyzi-secret")
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("fully configured production should load, got %v", err)
+	}
+	if cfg.IyzicoBaseURL != "https://sandbox-api.iyzipay.com" {
+		t.Errorf("iyzico base url default = %q, want the sandbox", cfg.IyzicoBaseURL)
+	}
+
+	// Development runs happily on the mock gateway.
+	t.Setenv("ENV", "development")
+	t.Setenv("IYZICO_API_KEY", "")
+	t.Setenv("IYZICO_SECRET_KEY", "")
+	if _, err := config.LoadConfig(); err != nil {
+		t.Errorf("development without iyzico should load, got %v", err)
 	}
 }
 

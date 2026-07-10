@@ -14,14 +14,16 @@ import (
 // orders (which may span several chefs), and a chef advances the status of
 // orders containing their items. It depends only on domain ports.
 type OrderService struct {
-	orders domain.OrderRepository
-	items  domain.MenuItemRepository
-	chefs  domain.ChefRepository
+	orders   domain.OrderRepository
+	items    domain.MenuItemRepository
+	chefs    domain.ChefRepository
+	refunder domain.PaymentRefunder // refunds card payments on cancel; may be nil
 }
 
-// NewOrderService builds an OrderService.
-func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository) *OrderService {
-	return &OrderService{orders: orders, items: items, chefs: chefs}
+// NewOrderService builds an OrderService. refunder handles gateway refunds
+// when a paid card order is cancelled (nil disables refunds).
+func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, refunder domain.PaymentRefunder) *OrderService {
+	return &OrderService{orders: orders, items: items, chefs: chefs, refunder: refunder}
 }
 
 // OrderLineInput is one requested dish in a new order.
@@ -132,13 +134,28 @@ func (s *OrderService) ListForCustomer(ctx context.Context, userID, limit, offse
 }
 
 // CancelForCustomer cancels the customer's own order (pending/confirmed only).
+// A paid card order is refunded through the gateway first — if the refund
+// fails, the order stays uncancelled so money and state never diverge.
 func (s *OrderService) CancelForCustomer(ctx context.Context, userID, orderID int) (*domain.Order, error) {
 	order, err := s.GetForCustomer(ctx, userID, orderID)
 	if err != nil {
 		return nil, err
 	}
+	if !order.CanCancel() {
+		return nil, domain.ErrInvalidStatusTransition
+	}
+
+	refund := order.IsCardPaid() && s.refunder != nil
+	if refund {
+		if err := s.refunder.RefundOrderPayment(ctx, order); err != nil {
+			return nil, err
+		}
+	}
 	if err := order.Cancel(); err != nil {
 		return nil, err
+	}
+	if refund {
+		_ = order.Refund() // paid -> refunded; guarded by IsCardPaid above
 	}
 	if err := s.orders.UpdateStatus(ctx, order); err != nil {
 		return nil, err

@@ -105,7 +105,9 @@ if present). See [`.env.example`](./.env.example).
 | `SMTP_PORT` | `587` | SMTP server port |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | — | SMTP credentials (omit for an unauthenticated relay) |
 | `MAIL_FROM` | — | From address for outgoing mail (**required** outside dev) |
-| `APP_BASE_URL` | `http://localhost:8080` | base URL for links in emails (e.g. the reset link) |
+| `APP_BASE_URL` | `http://localhost:8080` | public base URL for email links and payment callbacks |
+| `IYZICO_API_KEY` / `IYZICO_SECRET_KEY` | — | iyzico credentials; empty ⇒ dev mock gateway (**required** outside dev) |
+| `IYZICO_BASE_URL` | sandbox | `https://sandbox-api.iyzipay.com` or the production API |
 
 **JWT secret:** generate a strong one and never commit it:
 

@@ -14,7 +14,7 @@ func TestMigrations_SchemaApplied(t *testing.T) {
 	want := []string{
 		"users", "chefs", "menus", "menu_items", "orders", "order_items",
 		"favorites", "reviews", "password_reset_tokens",
-		"chat_conversations", "chat_messages",
+		"chat_conversations", "chat_messages", "payment_sessions",
 	}
 	for _, table := range want {
 		var exists bool

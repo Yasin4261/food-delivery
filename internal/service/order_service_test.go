@@ -73,7 +73,7 @@ func orderFixture(t *testing.T, userIDs ...int) (*service.OrderService, *fakeMen
 		}
 	}
 	itemRepo := newFakeMenuItemRepo()
-	svc := service.NewOrderService(newFakeOrderRepo(), itemRepo, chefRepo)
+	svc := service.NewOrderService(newFakeOrderRepo(), itemRepo, chefRepo, nil)
 	return svc, itemRepo, chefRepo
 }
 

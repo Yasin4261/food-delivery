@@ -25,7 +25,13 @@ type Config struct {
 	SMTPUsername string
 	SMTPPassword string
 	MailFrom     string
-	AppBaseURL   string // public base URL for links in emails
+	AppBaseURL   string // public base URL for links in emails and gateway callbacks
+
+	// Payments (iyzico). When IyzicoAPIKey is empty the app uses the dev mock
+	// gateway; outside development real credentials are required.
+	IyzicoAPIKey    string
+	IyzicoSecretKey string
+	IyzicoBaseURL   string
 }
 
 // LoadConfig reads configuration from the environment (and a local .env file
@@ -48,6 +54,10 @@ func LoadConfig() (*Config, error) {
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 		MailFrom:     getEnv("MAIL_FROM", ""),
 		AppBaseURL:   getEnv("APP_BASE_URL", "http://localhost:8080"),
+
+		IyzicoAPIKey:    getEnv("IYZICO_API_KEY", ""),
+		IyzicoSecretKey: getEnv("IYZICO_SECRET_KEY", ""),
+		IyzicoBaseURL:   getEnv("IYZICO_BASE_URL", "https://sandbox-api.iyzipay.com"),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -58,6 +68,9 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	if err := validateMail(cfg); err != nil {
+		return nil, err
+	}
+	if err := validatePayments(cfg); err != nil {
 		return nil, err
 	}
 
@@ -98,6 +111,18 @@ func validateMail(cfg *Config) error {
 	}
 	if cfg.MailFrom == "" {
 		return fmt.Errorf("MAIL_FROM is required when SMTP is configured")
+	}
+	return nil
+}
+
+// validatePayments fails fast outside development when the payment gateway is
+// not configured — the dev mock gateway must never run in production.
+func validatePayments(cfg *Config) error {
+	if cfg.Env == "development" {
+		return nil
+	}
+	if cfg.IyzicoAPIKey == "" || cfg.IyzicoSecretKey == "" {
+		return fmt.Errorf("IYZICO_API_KEY and IYZICO_SECRET_KEY are required in env=%q (no dev mock gateway outside development)", cfg.Env)
 	}
 	return nil
 }

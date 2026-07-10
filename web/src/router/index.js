@@ -47,6 +47,13 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    // Dev-only stand-in for the gateway's hosted payment page (mock gateway).
+    path: '/mock-pay',
+    name: 'mock-pay',
+    component: () => import('@/views/MockPayView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/chef',
     name: 'chef-dashboard',
     component: () => import('@/views/ChefDashboardView.vue'),
