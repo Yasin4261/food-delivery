@@ -16,15 +16,15 @@ dev-down: ## Stop development environment
 dev-logs: ## View development logs
 	docker compose -f docker-compose.dev.yml logs -f api
 
-# Production
-prod: ## Run production environment
-	docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# Production (see DEPLOY.md). Stamps the API with the git version.
+prod: ## Build & run the production stack (SPA + API + DB behind Caddy)
+	VERSION=$(VERSION) docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
 prod-down: ## Stop production environment
-	docker compose -f docker-compose.prod.yml down
+	docker compose -f docker-compose.prod.yml --env-file .env.prod down
 
 prod-logs: ## View production logs
-	docker compose -f docker-compose.prod.yml logs -f api
+	docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f api web
 
 # Local development (without Docker)
 run: ## Run locally without Docker

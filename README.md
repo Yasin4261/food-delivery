@@ -87,6 +87,18 @@ cd web && npm install && npm run dev   # http://localhost:5173 (proxies /api to 
 
 See [`web/README.md`](./web/README.md) for details.
 
+### Production
+
+The production stack (Caddy serving the built SPA + proxying the API, with
+automatic HTTPS) is one command once `.env.prod` is filled:
+
+```bash
+cp .env.prod.example .env.prod && $EDITOR .env.prod
+make prod
+```
+
+Full runbook: [`DEPLOY.md`](./DEPLOY.md).
+
 ## Configuration
 
 Configuration is read from environment variables (a local `.env` file is loaded

@@ -232,6 +232,8 @@ make fmt            # go fmt ./...
 
 App auto-runs migrations on boot when `AutoMigrate` is enabled (see `cmd/api/main.go`). Config comes from `.env*` files (see `.env.example`).
 
+**Production** (`docker-compose.prod.yml` + `make prod`, runbook in `DEPLOY.md`): Caddy (`Dockerfile.web` + `deploy/Caddyfile`) serves the built SPA and proxies `/api`/`/health`/`/version` to the Go API on **one origin** (no CORS; auto-HTTPS via `SITE_ADDRESS=<domain>`); DB and API have no host ports. `.env.prod` (from `.env.prod.example`, gitignored) is enforced by compose `${VAR:?}` **and** the API's `ENV=production` fail-fasts.
+
 ---
 
 ## 9. Versioning & releases

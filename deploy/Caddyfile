@@ -1,0 +1,25 @@
+# Production front: serves the built SPA and proxies the API on ONE origin
+# (no CORS in prod). SITE_ADDRESS controls TLS:
+#   SITE_ADDRESS=":80"             -> plain HTTP (local prod test / behind an LB)
+#   SITE_ADDRESS="food.example.com" -> automatic HTTPS via Let's Encrypt
+{$SITE_ADDRESS}
+
+encode gzip
+
+# API (includes WebSocket upgrades for /api/v2/chat/.../ws).
+handle /api/* {
+	reverse_proxy api:8080
+}
+handle /health {
+	reverse_proxy api:8080
+}
+handle /version {
+	reverse_proxy api:8080
+}
+
+# SPA: static files with history-mode fallback to index.html.
+handle {
+	root * /srv
+	try_files {path} /index.html
+	file_server
+}
