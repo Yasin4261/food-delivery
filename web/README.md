@@ -25,12 +25,15 @@ Point at a different backend with `VITE_API_TARGET=http://host:port npm run dev`
 ```bash
 npm test           # Vitest (jsdom): stores, router guards, api client, components
 npm run test:watch # watch mode
+npm run test:e2e   # Playwright golden-path smoke (needs the API running: docker compose up)
 npm run build      # outputs dist/
 npm run preview    # serve the production build
 ```
 
-Tests live next to the code as `*.test.js` and run in CI (web job) before the
-build.
+Unit tests live next to the code as `*.test.js` and run in CI (web job) before
+the build. The **E2E smoke** (`e2e/shop-flow.spec.js`) drives a real browser
+through register → chef onboarding → menu/dish → order → deliver → cash
+settlement, against the real API + Postgres — it has its own CI job.
 
 ## Layout
 

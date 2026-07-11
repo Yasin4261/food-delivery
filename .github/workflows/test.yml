@@ -118,6 +118,75 @@ jobs:
       - name: 🔒 Audit (production deps)
         run: npm audit --omit=dev --audit-level=high
 
+  e2e:
+    name: E2E smoke (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: food_delivery
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d food_delivery"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: 🟢 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 🚀 Build & start API
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/food_delivery?sslmode=disable
+          JWT_SECRET: e2e-ci-secret
+          ENV: development
+          AUTO_MIGRATE: "true"
+          APP_BASE_URL: http://localhost:5173
+          PORT: "8080"
+        run: |
+          go build -o /tmp/api ./cmd/api
+          nohup /tmp/api > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/health && break; sleep 2; done
+
+      - name: 📦 Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: 🎭 Install Playwright browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: 🧪 E2E smoke
+        working-directory: web
+        run: npx playwright test
+
+      - name: 📎 Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure
+          path: |
+            web/playwright-report/
+            web/test-results/
+            /tmp/api.log
+
   docker:
     name: Docker build
     runs-on: ubuntu-latest

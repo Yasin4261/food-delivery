@@ -21,5 +21,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Unit tests only — Playwright owns e2e/*.spec.js.
+    include: ['src/**/*.test.js'],
   },
 })
