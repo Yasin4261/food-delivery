@@ -167,7 +167,9 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	chatHandler := handler.NewChatHandler(chatService)
 	versionHandler := handler.NewVersionHandler("v-test")
 	paymentHandler := handler.NewPaymentHandler(paymentService)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler).Setup(), mail
+	// A generous budget so no test trips the per-IP throttle accidentally.
+	authLimiter := middleware.NewRateLimiter(1000, time.Minute)
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup(), mail
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.

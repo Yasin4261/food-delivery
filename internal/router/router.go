@@ -2,7 +2,6 @@ package router
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/handler"
@@ -25,6 +24,7 @@ type Router struct {
 	chatHandler     *handler.ChatHandler
 	versionHandler  *handler.VersionHandler
 	paymentHandler  *handler.PaymentHandler
+	authLimiter     middleware.Limiter
 }
 
 // NewRouter creates a Router with its handler and middleware dependencies.
@@ -42,6 +42,7 @@ func NewRouter(
 	chatHandler *handler.ChatHandler,
 	versionHandler *handler.VersionHandler,
 	paymentHandler *handler.PaymentHandler,
+	authLimiter middleware.Limiter,
 ) *Router {
 	return &Router{
 		mux:             http.NewServeMux(),
@@ -58,6 +59,7 @@ func NewRouter(
 		chatHandler:     chatHandler,
 		versionHandler:  versionHandler,
 		paymentHandler:  paymentHandler,
+		authLimiter:     authLimiter,
 	}
 }
 
@@ -68,9 +70,9 @@ func (r *Router) Setup() http.Handler {
 
 	// Public auth routes. The credential/secret-bearing endpoints are rate
 	// limited per IP to blunt brute-force / credential-stuffing attempts.
-	authLimit := middleware.NewRateLimiter(10, time.Minute)
+	throttle := middleware.RateLimit(r.authLimiter)
 	limited := func(pattern string, h http.HandlerFunc) {
-		r.mux.Handle(pattern, authLimit.Middleware(http.HandlerFunc(h)))
+		r.mux.Handle(pattern, throttle(http.HandlerFunc(h)))
 	}
 	limited("POST /api/v2/auth/register", r.authHandler.Register)
 	limited("POST /api/v2/auth/login", r.authHandler.Login)
@@ -123,7 +125,7 @@ func (r *Router) Setup() http.Handler {
 	// that hop) — the outcome is verified server-to-server and the endpoint is
 	// rate limited like the auth surface.
 	r.handleAuth("POST /api/v2/orders/{id}/pay", r.paymentHandler.Pay)
-	r.mux.Handle("POST /api/v2/payments/callback", authLimit.Middleware(http.HandlerFunc(r.paymentHandler.Callback)))
+	r.mux.Handle("POST /api/v2/payments/callback", throttle(http.HandlerFunc(r.paymentHandler.Callback)))
 
 	// Favorites: a customer favoriting chefs (any authenticated user).
 	r.handleAuth("GET /api/v2/favorites", r.favoriteHandler.List)

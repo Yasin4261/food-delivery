@@ -67,9 +67,11 @@ Schedule the backup line in cron; test restores regularly.
 
 - The API runs read-only with `no-new-privileges`; migrations run
   automatically at startup (`AUTO_MIGRATE=true`).
-- The token denylist and rate limiter are in-memory — correct for this
-  **single-instance** stack. Scale-out needs the Redis backing tracked in
-  issue #32.
+- The token denylist and rate limiter are in-memory by default — correct for
+  this **single-instance** stack. To run multiple API instances, add a Redis
+  and set `REDIS_URL` (e.g. `redis://redis:6379/0`): revocation and rate
+  limits are then shared across instances. On Redis errors both fail **open**
+  (availability over strictness) with logged warnings.
 - iyzico starts against the **sandbox** (`IYZICO_BASE_URL`); switch to
   `https://api.iyzipay.com` after verifying with test cards (issue #51).
 - Postgres is reachable **only** on the internal Docker network; take backups

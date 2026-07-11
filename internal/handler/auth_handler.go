@@ -13,11 +13,11 @@ import (
 // layer: parse the request, call the service, translate the result to HTTP.
 type AuthHandler struct {
 	auth     *service.AuthService
-	denylist *service.TokenDenylist
+	denylist service.TokenRevoker
 }
 
 // NewAuthHandler builds an AuthHandler.
-func NewAuthHandler(auth *service.AuthService, denylist *service.TokenDenylist) *AuthHandler {
+func NewAuthHandler(auth *service.AuthService, denylist service.TokenRevoker) *AuthHandler {
 	return &AuthHandler{auth: auth, denylist: denylist}
 }
 
