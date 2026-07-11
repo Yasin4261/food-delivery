@@ -255,7 +255,8 @@ Tag history:
 | `v3.0.0` | the hexagonal rebuild — full product brief + hardening (PR #19, closes #1–#18) |
 | `v3.1.0` | email delivery — `domain.Mailer` (SMTP + dev logging); password reset emails the link (PR #21, closes #20) |
 | `v3.2.0` | web UI feature-complete — the Vue SPA covers the entire product brief incl. real-time chat; config tests at 100%; WS query-token auth (closes #24, #26–#31, #36) |
-| `v3.3.0` | **money flow complete** — cash settles on delivery; iyzico card checkout via the `PaymentGateway` port + refund-on-cancel; `/version`; Vitest in CI (closes #33, #42, #43) |
+| `v3.3.0` | money flow complete — cash settles on delivery; iyzico card checkout via the `PaymentGateway` port + refund-on-cancel; `/version`; Vitest in CI (closes #33, #42, #43) |
+| `v4.0.0` | **production release** — one-origin deploy behind Caddy with auto-HTTPS (`DEPLOY.md`); Redis-backed denylist + rate limiter for multi-instance (closes #32, #44) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
