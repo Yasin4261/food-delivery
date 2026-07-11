@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { api } from '@/api/client'
+import { i18n } from '@/i18n'
 import StarRating from '@/components/StarRating.vue'
 
 // Review targets for a delivered order: each chef involved (multi-chef carts
@@ -44,7 +45,7 @@ onMounted(async () => {
 
 async function submit(t) {
   if (!t.rating) {
-    t.error = 'pick a star rating first'
+    t.error = i18n.global.t('review.pickRating')
     return
   }
   t.state = 'saving'
@@ -54,14 +55,14 @@ async function submit(t) {
     t.state = 'done'
   } catch (e) {
     t.state = 'idle'
-    t.error = e.status === 409 ? 'you already reviewed this' : e.message
+    t.error = e.status === 409 ? i18n.global.t('review.alreadyReviewed') : e.message
   }
 }
 </script>
 
 <template>
   <div class="space-y-3 rounded-lg bg-gray-50 p-4">
-    <p class="text-sm font-medium text-gray-700">How was it? Rate the chef and dishes ⭐</p>
+    <p class="text-sm font-medium text-gray-700">{{ $t('review.prompt') }}</p>
     <div
       v-for="t in targets"
       :key="t.key"
@@ -69,13 +70,13 @@ async function submit(t) {
     >
       <span class="min-w-36 text-sm font-medium">{{ t.label }}</span>
       <template v-if="t.state === 'done'">
-        <span class="text-sm text-green-600">✓ Thanks for your review!</span>
+        <span class="text-sm text-green-600">{{ $t('review.thanks') }}</span>
       </template>
       <template v-else>
         <StarRating v-model="t.rating" />
-        <input v-model="t.comment" class="input max-w-52 grow" placeholder="Say a few words (optional)" />
+        <input v-model="t.comment" class="input max-w-52 grow" :placeholder="$t('review.commentPlaceholder')" />
         <button class="btn-ghost" :disabled="t.state === 'saving'" @click="submit(t)">
-          {{ t.state === 'saving' ? 'Saving…' : 'Submit' }}
+          {{ t.state === 'saving' ? $t('review.saving') : $t('review.submit') }}
         </button>
         <span v-if="t.error" class="text-sm text-red-600">{{ t.error }}</span>
       </template>

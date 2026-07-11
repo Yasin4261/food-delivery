@@ -88,11 +88,11 @@ onMounted(async () => {
         <div class="min-w-0 grow">
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="page-title">{{ chef.business_name }}</h1>
-            <span v-if="chef.is_online" class="badge bg-green-100 text-green-700">● online</span>
+            <span v-if="chef.is_online" class="badge bg-green-100 text-green-700">{{ $t('chef.online') }}</span>
             <button
               v-if="canFavorite"
               class="ml-auto text-2xl transition hover:scale-110"
-              :title="favorites.has(chef.id) ? 'Remove from favorites' : 'Add to favorites'"
+              :title="favorites.has(chef.id) ? $t('favorites.removeTitle') : $t('favorites.addTitle')"
               @click="toggleFavorite"
             >
               {{ favorites.has(chef.id) ? '❤️' : '🤍' }}
@@ -102,18 +102,18 @@ onMounted(async () => {
           <p class="mt-1 text-sm text-gray-500">📍 {{ chef.kitchen_address }}</p>
           <p class="mt-1 text-sm">
             <span class="badge bg-amber-50 text-amber-700">★ {{ chef.rating?.toFixed(1) ?? '—' }}</span>
-            <span class="ml-1 text-gray-400">{{ chef.total_reviews }} reviews</span>
+            <span class="ml-1 text-gray-400">{{ chef.total_reviews }} · {{ $t('chef.reviews').toLowerCase() }}</span>
           </p>
-          <button v-if="!auth.isChef" class="btn-ghost mt-3" @click="startChat">💬 Chat with chef</button>
+          <button v-if="!auth.isChef" class="btn-ghost mt-3" @click="startChat">{{ $t('chef.chatWithChef') }}</button>
         </div>
       </div>
 
       <div>
-        <h2 class="mb-3 text-lg font-semibold">Menu</h2>
+        <h2 class="mb-3 text-lg font-semibold">{{ $t('chef.menu') }}</h2>
         <div v-if="!items.length" class="empty-state">
           <span class="empty-state-emoji">🥘</span>
-          <p class="font-medium text-gray-600">This chef hasn't added dishes yet</p>
-          <p class="text-sm">Check back soon — good things take time to simmer.</p>
+          <p class="font-medium text-gray-600">{{ $t('chef.noDishes') }}</p>
+          <p class="text-sm">{{ $t('chef.noDishesHint') }}</p>
         </div>
         <div v-else class="grid gap-3 sm:grid-cols-2">
           <div v-for="item in items" :key="item.id" class="card-hover flex items-start justify-between gap-3">
@@ -133,18 +133,18 @@ onMounted(async () => {
               :disabled="!item.is_available"
               @click="addToCart(item)"
             >
-              {{ justAdded === item.id ? '✓ Added' : item.is_available ? '+ Add' : 'Sold out' }}
+              {{ justAdded === item.id ? $t('chef.added') : item.is_available ? $t('chef.add') : $t('chef.soldOut') }}
             </button>
           </div>
         </div>
       </div>
 
       <div>
-        <h2 class="mb-3 text-lg font-semibold">Reviews <span class="text-sm font-normal text-gray-400">({{ reviewsTotal }})</span></h2>
+        <h2 class="mb-3 text-lg font-semibold">{{ $t('chef.reviews') }} <span class="text-sm font-normal text-gray-400">({{ reviewsTotal }})</span></h2>
         <div v-if="!reviews.length" class="empty-state">
           <span class="empty-state-emoji">⭐</span>
-          <p class="font-medium text-gray-600">No reviews yet</p>
-          <p class="text-sm">Order from this chef and be the first to rate them.</p>
+          <p class="font-medium text-gray-600">{{ $t('chef.noReviews') }}</p>
+          <p class="text-sm">{{ $t('chef.noReviewsHint') }}</p>
         </div>
         <div v-else class="space-y-3">
           <div v-for="r in reviews" :key="r.id" class="card py-3">

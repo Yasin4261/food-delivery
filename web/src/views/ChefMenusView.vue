@@ -110,15 +110,15 @@ onMounted(load)
   <div class="space-y-6">
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold">My menus</h1>
-      <RouterLink to="/chef" class="btn-ghost">← Dashboard</RouterLink>
+      <RouterLink to="/chef" class="btn-ghost">{{ $t('menus.back') }}</RouterLink>
     </div>
 
     <p v-if="loading" class="text-gray-500">Loading…</p>
 
     <div v-else-if="needsProfile" class="card">
       <p class="text-gray-600">
-        You need a kitchen profile before adding menus.
-        <RouterLink to="/chef" class="text-brand-600 hover:underline">Set it up on the dashboard</RouterLink>.
+        {{ $t('menus.needProfile') }}
+        <RouterLink to="/chef" class="text-brand-600 hover:underline">{{ $t('menus.needProfileLink') }}</RouterLink>.
       </p>
     </div>
 
@@ -127,43 +127,43 @@ onMounted(load)
 
       <form class="card flex items-end gap-3" @submit.prevent="createMenu">
         <div class="grow">
-          <label class="label">New menu name</label>
-          <input v-model="newMenuName" class="input" placeholder="Dinner menu" required />
+          <label class="label">{{ $t('menus.newMenu') }}</label>
+          <input v-model="newMenuName" class="input" :placeholder="$t('menus.newMenuPlaceholder')" required />
         </div>
-        <button class="btn-primary" :disabled="creatingMenu">Create menu</button>
+        <button class="btn-primary" :disabled="creatingMenu">{{ $t('menus.createMenu') }}</button>
       </form>
 
-      <p v-if="!entries.length" class="text-gray-500">No menus yet — create your first one above.</p>
+      <p v-if="!entries.length" class="text-gray-500">{{ $t('menus.empty') }}</p>
 
       <div v-for="entry in entries" :key="entry.menu.id" class="card space-y-3">
         <div class="flex items-center justify-between">
           <h2 class="font-semibold">{{ entry.menu.name }}</h2>
-          <button class="text-sm text-red-600 hover:underline" @click="deleteMenu(entry)">delete menu</button>
+          <button class="text-sm text-red-600 hover:underline" @click="deleteMenu(entry)">{{ $t('menus.deleteMenu') }}</button>
         </div>
 
-        <p v-if="!entry.items.length" class="text-sm text-gray-500">No dishes in this menu yet.</p>
+        <p v-if="!entry.items.length" class="text-sm text-gray-500">{{ $t('menus.noDishesYet') }}</p>
         <div v-for="item in entry.items" :key="item.id" class="flex items-center justify-between border-t border-gray-100 pt-2 text-sm">
           <div>
             <span class="font-medium">{{ item.name }}</span>
             <span class="ml-2 text-gray-500">${{ item.price?.toFixed(2) }}</span>
             <span class="ml-2 text-gray-400">
-              {{ item.is_unlimited ? 'unlimited' : `stock: ${item.available_quantity ?? 0}` }}
+              {{ item.is_unlimited ? $t('menus.unlimited') : $t('menus.stockN', { n: item.available_quantity ?? 0 }) }}
             </span>
           </div>
-          <button class="text-red-600 hover:underline" @click="deleteItem(entry, item)">remove</button>
+          <button class="text-red-600 hover:underline" @click="deleteItem(entry, item)">{{ $t('menus.remove') }}</button>
         </div>
 
         <form class="grid grid-cols-2 items-end gap-2 border-t border-gray-100 pt-3 sm:grid-cols-6" @submit.prevent="addItem(entry)">
           <div class="col-span-2">
-            <label class="label">Dish name</label>
-            <input v-model="entry.form.name" class="input" required placeholder="Lentil soup" />
+            <label class="label">{{ $t('menus.dishName') }}</label>
+            <input v-model="entry.form.name" class="input" required :placeholder="$t('menus.dishPlaceholder')" />
           </div>
           <div>
-            <label class="label">Price</label>
+            <label class="label">{{ $t('menus.price') }}</label>
             <input v-model="entry.form.price" class="input" required type="number" step="0.01" min="0.01" />
           </div>
           <div>
-            <label class="label">Stock</label>
+            <label class="label">{{ $t('menus.stock') }}</label>
             <input
               v-model="entry.form.available_quantity"
               class="input"
@@ -173,9 +173,9 @@ onMounted(load)
             />
           </div>
           <label class="flex items-center gap-1 pb-2 text-sm text-gray-600">
-            <input v-model="entry.form.is_unlimited" type="checkbox" /> unlimited
+            <input v-model="entry.form.is_unlimited" type="checkbox" /> {{ $t('menus.unlimited') }}
           </label>
-          <button class="btn-primary" :disabled="entry.form.saving">Add dish</button>
+          <button class="btn-primary" :disabled="entry.form.saving">{{ $t('menus.addDish') }}</button>
         </form>
       </div>
     </template>

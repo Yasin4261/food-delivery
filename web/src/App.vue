@@ -10,7 +10,7 @@ import NavBar from '@/components/NavBar.vue'
     </main>
     <footer class="border-t border-gray-200 bg-white py-6">
       <div class="mx-auto max-w-5xl px-4 text-center text-sm text-gray-400">
-        🍲 Home Chef — homemade food from freelance chefs near you
+        {{ $t('footer.tagline') }}
       </div>
     </footer>
   </div>

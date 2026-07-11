@@ -3,6 +3,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, page } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
+import { i18n } from '@/i18n'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -35,7 +36,7 @@ async function loadConversations() {
           c._label = `👨‍🍳 Chef #${c.chef_id}`
         }
       } else {
-        c._label = `🧑 Customer #${c.user_id}`
+        c._label = i18n.global.t('chat.customerNum', { id: c.user_id })
       }
     }),
   )
@@ -129,8 +130,8 @@ onBeforeUnmount(disconnect)
 <template>
   <div class="space-y-4">
     <div>
-      <h1 class="page-title">Messages 💬</h1>
-      <p class="page-subtitle">Chat directly with {{ auth.isChef ? 'your customers' : 'your chefs' }}.</p>
+      <h1 class="page-title">{{ $t('chat.title') }}</h1>
+      <p class="page-subtitle">{{ auth.isChef ? $t('chat.subtitleChef') : $t('chat.subtitleCustomer') }}</p>
     </div>
 
     <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
@@ -138,9 +139,9 @@ onBeforeUnmount(disconnect)
 
     <div v-else-if="!conversations.length" class="empty-state">
       <span class="empty-state-emoji">💬</span>
-      <p class="font-medium text-gray-600">No conversations yet</p>
+      <p class="font-medium text-gray-600">{{ $t('chat.empty') }}</p>
       <p class="text-sm">
-        {{ auth.isChef ? 'Customers can start a chat from your kitchen page.' : 'Open a chef page and hit "Chat with chef".' }}
+        {{ auth.isChef ? $t('chat.emptyHintChef') : $t('chat.emptyHintCustomer') }}
       </p>
     </div>
 
@@ -164,13 +165,13 @@ onBeforeUnmount(disconnect)
           <div class="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
             <span class="font-semibold">{{ active._label }}</span>
             <span class="badge" :class="live ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'">
-              {{ live ? '● live' : 'offline' }}
+              {{ live ? $t('chat.live') : $t('chat.offline') }}
             </span>
           </div>
 
           <div ref="listEl" class="grow space-y-2 overflow-y-auto px-4 py-3">
             <p v-if="!messages.length" class="pt-10 text-center text-sm text-gray-400">
-              Say hello 👋 — messages are delivered live.
+              {{ $t('chat.sayHello') }}
             </p>
             <div v-for="m in messages" :key="m.id" class="flex" :class="mine(m) ? 'justify-end' : 'justify-start'">
               <div
@@ -184,12 +185,12 @@ onBeforeUnmount(disconnect)
           </div>
 
           <form class="flex gap-2 border-t border-gray-100 p-3" @submit.prevent="send">
-            <input v-model="draft" class="input" placeholder="Type a message…" />
-            <button class="btn-primary shrink-0" :disabled="!draft.trim()">Send</button>
+            <input v-model="draft" class="input" :placeholder="$t('chat.typePlaceholder')" />
+            <button class="btn-primary shrink-0" :disabled="!draft.trim()">{{ $t('chat.send') }}</button>
           </form>
         </template>
         <div v-else class="flex grow items-center justify-center text-sm text-gray-400">
-          Pick a conversation to start chatting
+          {{ $t('chat.pick') }}
         </div>
       </div>
     </div>

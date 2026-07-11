@@ -47,53 +47,53 @@ async function submit() {
 
 <template>
   <div class="mx-auto max-w-lg">
-    <h1 class="mb-1 text-2xl font-bold">Set up your kitchen</h1>
+    <h1 class="mb-1 text-2xl font-bold">{{ $t('onboarding.title') }}</h1>
     <p class="mb-4 text-gray-600">
-      Create your chef profile to start receiving orders. You can add menus and dishes right after.
+      {{ $t('onboarding.subtitle') }}
     </p>
     <form class="card space-y-4" @submit.prevent="submit">
       <div>
-        <label class="label">Kitchen / business name</label>
-        <input v-model="form.business_name" class="input" required placeholder="Yasin's Kitchen" />
+        <label class="label">{{ $t('onboarding.businessName') }}</label>
+        <input v-model="form.business_name" class="input" required :placeholder="$t('onboarding.businessPlaceholder')" />
       </div>
       <div>
-        <label class="label">Kitchen address</label>
-        <input v-model="form.kitchen_address" class="input" required placeholder="123 Main St" />
+        <label class="label">{{ $t('onboarding.address') }}</label>
+        <input v-model="form.kitchen_address" class="input" required :placeholder="$t('onboarding.addressPlaceholder')" />
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="label">City</label>
-          <input v-model="form.kitchen_city" class="input" placeholder="Istanbul" />
+          <label class="label">{{ $t('onboarding.city') }}</label>
+          <input v-model="form.kitchen_city" class="input" :placeholder="$t('onboarding.cityPlaceholder')" />
         </div>
         <div>
-          <label class="label">Specialty</label>
-          <input v-model="form.specialty" class="input" placeholder="Homestyle Turkish" />
+          <label class="label">{{ $t('onboarding.specialty') }}</label>
+          <input v-model="form.specialty" class="input" :placeholder="$t('onboarding.specialtyPlaceholder')" />
         </div>
       </div>
       <div>
-        <label class="label">Bio</label>
-        <textarea v-model="form.bio" class="input" rows="2" placeholder="Tell customers about your cooking…" />
+        <label class="label">{{ $t('onboarding.bio') }}</label>
+        <textarea v-model="form.bio" class="input" rows="2" :placeholder="$t('onboarding.bioPlaceholder')" />
       </div>
       <div class="grid grid-cols-3 gap-3">
         <div>
-          <label class="label">Latitude</label>
+          <label class="label">{{ $t('onboarding.lat') }}</label>
           <input v-model="form.latitude" class="input" placeholder="41.0082" />
         </div>
         <div>
-          <label class="label">Longitude</label>
+          <label class="label">{{ $t('onboarding.lng') }}</label>
           <input v-model="form.longitude" class="input" placeholder="28.9784" />
         </div>
         <div>
-          <label class="label">Radius (km)</label>
+          <label class="label">{{ $t('onboarding.radius') }}</label>
           <input v-model="form.delivery_radius" type="number" min="1" class="input" />
         </div>
       </div>
       <p class="text-xs text-gray-500">
-        Coordinates let customers find you with "nearby" search — you only appear there if they're set.
+        {{ $t('onboarding.coordsHint') }}
       </p>
       <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
       <button class="btn-primary w-full" :disabled="saving">
-        {{ saving ? 'Creating…' : 'Create my kitchen' }}
+        {{ saving ? $t('onboarding.creating') : $t('onboarding.create') }}
       </button>
     </form>
   </div>

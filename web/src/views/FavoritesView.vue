@@ -39,8 +39,8 @@ onMounted(load)
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="page-title">Favorite chefs ❤️</h1>
-      <p class="page-subtitle">Your go-to kitchens, one tap away.</p>
+      <h1 class="page-title">{{ $t('favorites.title') }}</h1>
+      <p class="page-subtitle">{{ $t('favorites.subtitle') }}</p>
     </div>
 
     <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
@@ -51,10 +51,9 @@ onMounted(load)
 
     <div v-else-if="!chefs.length" class="empty-state">
       <span class="empty-state-emoji">🤍</span>
-      <p class="font-medium text-gray-600">No favorites yet</p>
+      <p class="font-medium text-gray-600">{{ $t('favorites.empty') }}</p>
       <p class="text-sm">
-        Tap the heart on a chef you love while
-        <RouterLink to="/" class="text-brand-600 hover:underline">browsing</RouterLink>.
+        <i18n-t keypath="favorites.emptyHint" tag="span"><template #browsing><RouterLink to="/" class="text-brand-600 hover:underline">{{ $t('favorites.browsing') }}</RouterLink></template></i18n-t>
       </p>
     </div>
 
@@ -62,7 +61,7 @@ onMounted(load)
       <RouterLink v-for="chef in chefs" :key="chef.id" :to="`/chefs/${chef.id}`" class="card-hover relative">
         <button
           class="absolute right-3 top-3 text-lg transition hover:scale-110"
-          title="Remove from favorites"
+          :title="$t('favorites.removeTitle')"
           @click.prevent.stop="unfavorite(chef)"
         >
           ❤️

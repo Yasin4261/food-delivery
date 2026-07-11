@@ -3,8 +3,8 @@
 A single **role-based** Vue 3 SPA for the food-delivery API: the same app shows
 customer or chef views depending on the logged-in user's role.
 
-Stack: **Vue 3 + Vite + JavaScript + Tailwind CSS**, Pinia (state) and Vue
-Router.
+Stack: **Vue 3 + Vite + JavaScript + Tailwind CSS**, Pinia (state), Vue
+Router and vue-i18n.
 
 ## Develop
 
@@ -43,6 +43,7 @@ src/
   stores/auth.js       # token + user (Pinia), login/register/logout
   stores/cart.js       # multi-chef cart, persisted to localStorage
   router/index.js      # routes + auth/role guards
+  i18n/                # vue-i18n setup + en/tr message catalogues
   lib/status.js        # order-status colours + chef transition actions
   components/NavBar.vue
   views/               # Login, Register, Chefs, ChefDetail, Cart, Orders, ChefDashboard
@@ -76,5 +77,11 @@ src/
   (iyzico in production; in dev the mock gateway sends you to `/mock-pay`, a
   simulated sandbox page) → redirected back to `/orders` with a result banner.
   Payment badges on every order; paid card orders refund on cancel.
+
+- Localisation: full **Turkish + English** UI (vue-i18n). The navbar switcher
+  toggles TR/EN; the choice persists in `localStorage` and first visits
+  language-detect from the browser (Turkish browsers get Turkish). Catalogues
+  live in `src/i18n/{en,tr}.js` — note vue-i18n treats `@` and `|` as syntax,
+  so literal `@` in a message must be written `{'@'}`.
 
 The full product brief is covered in the UI. 🎉

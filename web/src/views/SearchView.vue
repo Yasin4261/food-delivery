@@ -59,13 +59,13 @@ onMounted(() => {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="page-title">Search 🔍</h1>
-      <p class="page-subtitle">Find chefs and dishes by name, cuisine or city.</p>
+      <h1 class="page-title">{{ $t('search.title') }}</h1>
+      <p class="page-subtitle">{{ $t('search.subtitle') }}</p>
     </div>
 
     <form class="flex flex-wrap items-center gap-2" @submit.prevent="search">
-      <input v-model="q" class="input max-w-md" placeholder="Try “soup”, “turkish” or a chef's name…" autofocus />
-      <button class="btn-primary" :disabled="loading || !q.trim()">{{ loading ? 'Searching…' : 'Search' }}</button>
+      <input v-model="q" class="input max-w-md" :placeholder="$t('search.placeholder')" autofocus />
+      <button class="btn-primary" :disabled="loading || !q.trim()">{{ loading ? $t('search.searching') : $t('search.search') }}</button>
       <div class="ml-2 flex rounded-lg border border-gray-300 bg-white p-0.5">
         <button
           type="button"
@@ -73,7 +73,7 @@ onMounted(() => {
           :class="type === 'chef' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'"
           @click="setType('chef')"
         >
-          🧑‍🍳 Chefs
+          {{ $t('search.chefs') }}
         </button>
         <button
           type="button"
@@ -81,7 +81,7 @@ onMounted(() => {
           :class="type === 'food' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'"
           @click="setType('food')"
         >
-          🍽️ Dishes
+          {{ $t('search.dishes') }}
         </button>
       </div>
     </form>
@@ -94,12 +94,12 @@ onMounted(() => {
 
     <div v-else-if="searched && !results.length" class="empty-state">
       <span class="empty-state-emoji">🫥</span>
-      <p class="font-medium text-gray-600">Nothing found for “{{ q }}”</p>
-      <p class="text-sm">Try a different word, or switch between chefs and dishes.</p>
+      <p class="font-medium text-gray-600">{{ $t('search.empty', { q }) }}</p>
+      <p class="text-sm">{{ $t('search.emptyHint') }}</p>
     </div>
 
     <template v-else-if="searched">
-      <p class="text-sm text-gray-500">{{ total }} result{{ total === 1 ? '' : 's' }}</p>
+      <p class="text-sm text-gray-500">{{ $t('search.results', { n: total }, total) }}</p>
 
       <!-- Chef results -->
       <div v-if="type === 'chef'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -133,7 +133,7 @@ onMounted(() => {
             <p class="mt-1.5 flex items-center gap-1.5">
               <span class="badge bg-brand-50 text-brand-700">${{ item.price?.toFixed(2) }}</span>
               <RouterLink :to="`/chefs/${item.chef_id}`" class="text-xs text-brand-600 hover:underline">
-                view chef →
+                {{ $t('search.viewChef') }}
               </RouterLink>
             </p>
           </div>
@@ -144,7 +144,7 @@ onMounted(() => {
             :disabled="!item.is_available"
             @click="addToCart(item)"
           >
-            {{ justAdded === item.id ? '✓ Added' : item.is_available ? '+ Add' : 'Sold out' }}
+            {{ justAdded === item.id ? $t('chef.added') : item.is_available ? $t('chef.add') : $t('chef.soldOut') }}
           </button>
         </div>
       </div>
