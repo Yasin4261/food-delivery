@@ -77,6 +77,24 @@ func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	stored.CancelledAt = o.CancelledAt
 	return nil
 }
+func (f *fakeOrderRepo) CountActiveByUser(_ context.Context, userID int) (int, error) {
+	n := 0
+	for _, o := range f.orders {
+		if o.UserID == userID && o.Status != "delivered" && o.Status != "cancelled" {
+			n++
+		}
+	}
+	return n, nil
+}
+func (f *fakeOrderRepo) CountPendingByChef(_ context.Context, chefID int) (int, error) {
+	n := 0
+	for _, o := range f.orders {
+		if o.Status == "pending" && o.HasChef(chefID) {
+			n++
+		}
+	}
+	return n, nil
+}
 
 // seedChefWithItem registers a chef, opens a profile and publishes a menu with
 // one limited-stock dish. It returns the chef's token and the dish id.
@@ -163,6 +181,71 @@ func TestOrder_FullLifecycle(t *testing.T) {
 	// Cancelling a delivered order is rejected.
 	if rec := do(t, srv, http.MethodPost, "/api/v2/orders/1/cancel", customer, ""); rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("cancel delivered = %d, want 422", rec.Code)
+	}
+}
+
+func TestNotifications_Summary(t *testing.T) {
+	srv := newTestServer()
+
+	// Auth required.
+	if rec := do(t, srv, http.MethodGet, "/api/v2/notifications/summary", "", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anonymous summary = %d, want 401", rec.Code)
+	}
+
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+
+	summary := func(token string) (active, pending int) {
+		t.Helper()
+		rec := do(t, srv, http.MethodGet, "/api/v2/notifications/summary", token, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("summary = %d (%s)", rec.Code, rec.Body)
+		}
+		var s struct {
+			Active  int `json:"active_orders"`
+			Pending int `json:"pending_chef_orders"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &s)
+		return s.Active, s.Pending
+	}
+
+	// Clean slate: everything zero.
+	if a, p := summary(customer); a != 0 || p != 0 {
+		t.Errorf("fresh customer summary = %d/%d, want 0/0", a, p)
+	}
+	if a, p := summary(chefToken); a != 0 || p != 0 {
+		t.Errorf("fresh chef summary = %d/%d, want 0/0", a, p)
+	}
+
+	// Customer places an order -> customer active 1, chef pending 1.
+	body := `{"delivery_address":"x","payment_method":"cash","items":[{"menu_item_id":` + itoa(itemID) + `,"quantity":1}]}`
+	if rec := do(t, srv, http.MethodPost, "/api/v2/orders", customer, body); rec.Code != http.StatusCreated {
+		t.Fatalf("place = %d (%s)", rec.Code, rec.Body)
+	}
+	if a, _ := summary(customer); a != 1 {
+		t.Errorf("customer active = %d, want 1", a)
+	}
+	if _, p := summary(chefToken); p != 1 {
+		t.Errorf("chef pending = %d, want 1", p)
+	}
+
+	// Chef accepts -> no longer pending for the chef, still active for the customer.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/chef/orders/1/status", chefToken, `{"action":"confirm"}`); rec.Code != http.StatusOK {
+		t.Fatalf("confirm = %d", rec.Code)
+	}
+	if _, p := summary(chefToken); p != 0 {
+		t.Errorf("chef pending after confirm = %d, want 0", p)
+	}
+	if a, _ := summary(customer); a != 1 {
+		t.Errorf("customer active after confirm = %d, want 1", a)
+	}
+
+	// Delivered -> customer active back to 0.
+	for _, action := range []string{"preparing", "ready", "delivering", "delivered"} {
+		_ = do(t, srv, http.MethodPost, "/api/v2/chef/orders/1/status", chefToken, `{"action":"`+action+`"}`)
+	}
+	if a, _ := summary(customer); a != 0 {
+		t.Errorf("customer active after delivery = %d, want 0", a)
 	}
 }
 

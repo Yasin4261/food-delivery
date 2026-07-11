@@ -97,6 +97,44 @@ func TestOrderRepository_MultiChefScoping(t *testing.T) {
 	}
 }
 
+func TestOrderRepository_NotificationCounts(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewOrderRepository(testDB)
+	customer := seedUser(t, "cust@example.com")
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+	menu := seedMenu(t, chef.ID)
+	item := seedItem(t, menu.ID, chef.ID, 5, 100)
+
+	mk := func(code, status string) {
+		t.Helper()
+		o := buildOrder(customer.ID, code, domain.NewOrderItem(item.ID, chef.ID, item.Name, 1, item.Price))
+		if err := repo.Create(ctx(), o); err != nil {
+			t.Fatalf("create %s: %v", code, err)
+		}
+		if status != domain.OrderStatusPending {
+			if _, err := testDB.Exec(`UPDATE orders SET status = $2 WHERE id = $1`, o.ID, status); err != nil {
+				t.Fatalf("set status: %v", err)
+			}
+		}
+	}
+	mk("N-PENDING", domain.OrderStatusPending)     // active + chef-pending
+	mk("N-PREPARING", domain.OrderStatusPreparing) // active only
+	mk("N-DELIVERED", domain.OrderStatusDelivered) // neither
+	mk("N-CANCELLED", domain.OrderStatusCancelled) // neither
+
+	active, err := repo.CountActiveByUser(ctx(), customer.ID)
+	if err != nil || active != 2 {
+		t.Errorf("active = %d (%v), want 2 (pending + preparing)", active, err)
+	}
+	pending, err := repo.CountPendingByChef(ctx(), chef.ID)
+	if err != nil || pending != 1 {
+		t.Errorf("chef pending = %d (%v), want 1", pending, err)
+	}
+	if n, _ := repo.CountPendingByChef(ctx(), 9999); n != 0 {
+		t.Errorf("unknown chef pending = %d, want 0", n)
+	}
+}
+
 func TestOrderRepository_UpdateStatus(t *testing.T) {
 	resetDB(t)
 	repo := repository.NewOrderRepository(testDB)

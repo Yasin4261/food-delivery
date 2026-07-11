@@ -61,6 +61,24 @@ func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	f.orders[o.ID] = &cp
 	return nil
 }
+func (f *fakeOrderRepo) CountActiveByUser(_ context.Context, userID int) (int, error) {
+	n := 0
+	for _, o := range f.orders {
+		if o.UserID == userID && o.Status != domain.OrderStatusDelivered && o.Status != domain.OrderStatusCancelled {
+			n++
+		}
+	}
+	return n, nil
+}
+func (f *fakeOrderRepo) CountPendingByChef(_ context.Context, chefID int) (int, error) {
+	n := 0
+	for _, o := range f.orders {
+		if o.Status == domain.OrderStatusPending && o.HasChef(chefID) {
+			n++
+		}
+	}
+	return n, nil
+}
 
 // orderFixture wires an OrderService over fakes, seeds chef profiles for the
 // given user ids, and returns the service plus the item repo for seeding dishes.

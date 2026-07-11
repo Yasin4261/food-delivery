@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
@@ -132,6 +133,22 @@ func (h *OrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, order)
+}
+
+// Summary handles GET /api/v2/notifications/summary (auth): the lightweight
+// counts the SPA polls for its navbar badges.
+func (h *OrderHandler) Summary(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	summary, err := h.orders.Summary(r.Context(), claims.UserID, claims.Role == domain.RoleChef)
+	if err != nil {
+		respondOrderError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, summary)
 }
 
 // --- chef ---

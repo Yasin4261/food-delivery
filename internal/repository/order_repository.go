@@ -182,6 +182,22 @@ func (r *OrderRepository) ListByChef(ctx context.Context, chefID, limit, offset 
 	return orders, total, err
 }
 
+// CountActiveByUser counts a customer's in-flight orders (not delivered or
+// cancelled).
+func (r *OrderRepository) CountActiveByUser(ctx context.Context, userID int) (int, error) {
+	return r.countOrders(ctx, `
+		SELECT count(*) FROM orders
+		WHERE user_id = $1 AND status NOT IN ('delivered', 'cancelled')`, userID)
+}
+
+// CountPendingByChef counts orders awaiting the chef's accept/decline.
+func (r *OrderRepository) CountPendingByChef(ctx context.Context, chefID int) (int, error) {
+	return r.countOrders(ctx, `
+		SELECT count(*) FROM orders o
+		WHERE o.status = 'pending'
+		  AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.chef_id = $1)`, chefID)
+}
+
 func (r *OrderRepository) countOrders(ctx context.Context, query string, arg any) (int, error) {
 	var total int
 	if err := r.db.QueryRowContext(ctx, query, arg).Scan(&total); err != nil {

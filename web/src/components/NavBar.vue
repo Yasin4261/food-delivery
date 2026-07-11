@@ -1,15 +1,24 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
+import { useNotificationsStore } from '@/stores/notifications'
 
 const auth = useAuthStore()
 const cart = useCartStore()
+const notifications = useNotificationsStore()
 const router = useRouter()
 
 const cartCount = computed(() => cart.count)
 const initial = computed(() => (auth.user?.username || auth.user?.email || '?')[0].toUpperCase())
+
+// Poll the badge counts while a session is active.
+watch(
+  () => auth.isAuthenticated,
+  (loggedIn) => (loggedIn ? notifications.start() : notifications.stop()),
+  { immediate: true },
+)
 
 async function logout() {
   await auth.logout()
@@ -38,8 +47,14 @@ async function logout() {
           🔍 Search
         </RouterLink>
         <template v-if="auth.isAuthenticated && auth.isChef">
-          <RouterLink to="/chef" class="nav-link" exact-active-class="router-link-active bg-brand-50">
+          <RouterLink to="/chef" class="nav-link relative" exact-active-class="router-link-active bg-brand-50">
             Dashboard
+            <span
+              v-if="notifications.pendingChefOrders"
+              class="absolute -right-2 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white shadow-sm"
+              title="orders waiting for you"
+              >{{ notifications.pendingChefOrders }}</span
+            >
           </RouterLink>
           <RouterLink to="/chef/menus" class="nav-link" exact-active-class="router-link-active bg-brand-50">
             My menus
@@ -48,10 +63,16 @@ async function logout() {
         <RouterLink
           v-if="auth.isAuthenticated && !auth.isChef"
           to="/orders"
-          class="nav-link"
+          class="nav-link relative"
           exact-active-class="router-link-active bg-brand-50"
         >
           My orders
+          <span
+            v-if="notifications.activeOrders"
+            class="absolute -right-2 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white shadow-sm"
+            title="orders on the way"
+            >{{ notifications.activeOrders }}</span
+          >
         </RouterLink>
         <RouterLink
           v-if="auth.isAuthenticated && !auth.isChef"

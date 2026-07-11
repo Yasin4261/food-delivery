@@ -1,8 +1,9 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { api, page } from '@/api/client'
 import { statusClass } from '@/lib/status'
+import { POLL_MS } from '@/stores/notifications'
 import OrderReviewPanel from '@/components/OrderReviewPanel.vue'
 
 const route = useRoute()
@@ -39,9 +40,10 @@ async function payNow(order) {
 const orders = ref([])
 const loading = ref(true)
 const error = ref('')
+let poll = null
 
-async function load() {
-  loading.value = true
+async function load(silent = false) {
+  if (!silent) loading.value = true
   try {
     orders.value = page(await api.get('/orders?limit=50')).items
   } catch (e) {
@@ -69,7 +71,13 @@ onMounted(() => {
   else if (outcome === 'error') paymentBanner.value = '⚠️ We could not verify that payment. If you were charged, contact support.'
   if (outcome) router.replace({ query: {} })
   load()
+  // Status changes appear without a manual reload (issue #55).
+  poll = setInterval(() => {
+    if (!document.hidden) load(true)
+  }, POLL_MS)
 })
+
+onBeforeUnmount(() => clearInterval(poll))
 </script>
 
 <template>
