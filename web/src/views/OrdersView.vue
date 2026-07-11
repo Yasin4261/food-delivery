@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { api, page } from '@/api/client'
 import { statusClass } from '@/lib/status'
 import { POLL_MS } from '@/stores/notifications'
@@ -8,6 +9,7 @@ import OrderReviewPanel from '@/components/OrderReviewPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 // Which orders have their review panel open, keyed by order id.
 const reviewing = ref({})
@@ -66,9 +68,9 @@ const cancellable = (s) => s === 'pending' || s === 'confirmed'
 
 onMounted(() => {
   const outcome = route.query.payment
-  if (outcome === 'success') paymentBanner.value = '🎉 Payment received — thank you!'
-  else if (outcome === 'failed') paymentBanner.value = '❌ Payment failed — you can retry from the order below.'
-  else if (outcome === 'error') paymentBanner.value = '⚠️ We could not verify that payment. If you were charged, contact support.'
+  if (outcome === 'success') paymentBanner.value = t('orders.paySuccess')
+  else if (outcome === 'failed') paymentBanner.value = t('orders.payFailed')
+  else if (outcome === 'error') paymentBanner.value = t('orders.payError')
   if (outcome) router.replace({ query: {} })
   load()
   // Status changes appear without a manual reload (issue #55).
@@ -83,8 +85,8 @@ onBeforeUnmount(() => clearInterval(poll))
 <template>
   <div class="space-y-4">
     <div>
-      <h1 class="page-title">My orders</h1>
-      <p class="page-subtitle">Track your deliveries and past orders.</p>
+      <h1 class="page-title">{{ $t('orders.title') }}</h1>
+      <p class="page-subtitle">{{ $t('orders.subtitle') }}</p>
     </div>
     <div
       v-if="paymentBanner"
@@ -97,17 +99,17 @@ onBeforeUnmount(() => clearInterval(poll))
     <div v-if="loading" class="space-y-3"><div class="skeleton h-24"></div><div class="skeleton h-24"></div></div>
     <div v-else-if="!orders.length" class="empty-state">
       <span class="empty-state-emoji">🍽️</span>
-      <p class="font-medium text-gray-600">No orders yet</p>
-      <p class="text-sm">Hungry? <RouterLink to="/" class="text-brand-600 hover:underline">Browse chefs</RouterLink> and place your first order.</p>
+      <p class="font-medium text-gray-600">{{ $t('orders.empty') }}</p>
+      <p class="text-sm"><i18n-t keypath="orders.emptyHint" tag="span"><template #browse><RouterLink to="/" class="text-brand-600 hover:underline">{{ $t('orders.browseChefs') }}</RouterLink></template></i18n-t></p>
     </div>
 
     <div v-for="order in orders" :key="order.id" class="card space-y-2">
       <div class="flex items-center justify-between">
         <div>
           <span class="font-mono text-sm text-gray-500">{{ order.order_code }}</span>
-          <span class="badge ml-2" :class="statusClass(order.status)">{{ order.status }}</span>
+          <span class="badge ml-2" :class="statusClass(order.status)">{{ $t(`status.${order.status}`) }}</span>
           <span class="badge ml-1" :class="paymentClass(order.payment_status)">
-            {{ order.payment_method === 'card' ? '💳' : '💵' }} {{ order.payment_status }}
+            {{ order.payment_method === 'card' ? '💳' : '💵' }} {{ $t(`payment.${order.payment_status}`) }}
           </span>
         </div>
         <span class="font-semibold">${{ order.total_price?.toFixed(2) }}</span>
@@ -117,16 +119,16 @@ onBeforeUnmount(() => clearInterval(poll))
       </ul>
       <div class="flex justify-end gap-2">
         <button v-if="payable(order)" class="btn-primary" :disabled="paying === order.id" @click="payNow(order)">
-          {{ paying === order.id ? 'Redirecting…' : '💳 Pay now' }}
+          {{ paying === order.id ? $t('orders.redirecting') : $t('orders.payNow') }}
         </button>
         <button
           v-if="order.status === 'delivered'"
           class="btn-ghost"
           @click="reviewing[order.id] = !reviewing[order.id]"
         >
-          {{ reviewing[order.id] ? 'Hide rating' : '⭐ Rate order' }}
+          {{ reviewing[order.id] ? $t('orders.hideRating') : $t('orders.rate') }}
         </button>
-        <button v-if="cancellable(order.status)" class="btn-ghost" @click="cancel(order)">Cancel</button>
+        <button v-if="cancellable(order.status)" class="btn-ghost" @click="cancel(order)">{{ $t('orders.cancel') }}</button>
       </div>
       <OrderReviewPanel v-if="reviewing[order.id]" :order="order" />
     </div>

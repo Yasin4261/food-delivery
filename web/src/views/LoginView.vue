@@ -32,19 +32,19 @@ async function submit() {
   <div class="mx-auto mt-6 max-w-sm">
     <div class="mb-6 text-center">
       <div class="text-4xl">🍲</div>
-      <h1 class="mt-2 text-2xl font-bold tracking-tight">Welcome back</h1>
-      <p class="page-subtitle">Log in to order homemade food near you.</p>
+      <h1 class="mt-2 text-2xl font-bold tracking-tight">{{ $t('auth.welcomeTitle') }}</h1>
+      <p class="page-subtitle">{{ $t('auth.welcomeSubtitle') }}</p>
     </div>
     <form class="card space-y-4 shadow-md" @submit.prevent="submit">
       <div>
-        <label class="label">Email</label>
-        <input v-model="email" type="email" class="input" required autocomplete="email" placeholder="you@example.com" />
+        <label class="label">{{ $t('auth.email') }}</label>
+        <input v-model="email" type="email" class="input" required autocomplete="email" :placeholder="$t('auth.emailPlaceholder')" />
       </div>
       <div>
         <div class="mb-1 flex items-center justify-between">
-          <label class="label !mb-0">Password</label>
+          <label class="label !mb-0">{{ $t('auth.password') }}</label>
           <RouterLink to="/forgot-password" class="text-xs font-medium text-brand-600 hover:underline">
-            Forgot password?
+            {{ $t('auth.forgotPassword') }}
           </RouterLink>
         </div>
         <input
@@ -53,14 +53,14 @@ async function submit() {
           class="input"
           required
           autocomplete="current-password"
-          placeholder="••••••••"
+          :placeholder="$t('auth.passwordDots')"
         />
       </div>
       <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
-      <button class="btn-primary w-full" :disabled="loading">{{ loading ? 'Logging in…' : 'Log in' }}</button>
+      <button class="btn-primary w-full" :disabled="loading">{{ loading ? $t('auth.loggingIn') : $t('auth.login') }}</button>
       <p class="text-center text-sm text-gray-500">
-        No account?
-        <RouterLink to="/register" class="font-medium text-brand-600 hover:underline">Sign up</RouterLink>
+        {{ $t('auth.noAccount') }}
+        <RouterLink to="/register" class="font-medium text-brand-600 hover:underline">{{ $t('auth.signup') }}</RouterLink>
       </p>
     </form>
   </div>

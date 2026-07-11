@@ -12,6 +12,11 @@ const chefs = ref([])
 const loading = ref(true)
 const error = ref('')
 
+// Optional "deliver to me" filter by coordinates.
+const lat = ref('')
+const lng = ref('')
+const nearbyActive = ref(false)
+
 // Customers see and use the favorite hearts; chefs don't favorite themselves.
 const canFavorite = auth.isAuthenticated && !auth.isChef
 
@@ -22,11 +27,6 @@ async function toggleFavorite(chef) {
     error.value = e.message
   }
 }
-
-// Optional "deliver to me" filter by coordinates.
-const lat = ref('')
-const lng = ref('')
-const nearbyActive = ref(false)
 
 async function loadAll() {
   loading.value = true
@@ -67,20 +67,20 @@ onMounted(() => {
   <div class="space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 class="page-title">Discover home chefs 🧑‍🍳</h1>
-        <p class="page-subtitle">Homemade food, cooked nearby and delivered to you.</p>
+        <h1 class="page-title">{{ $t('browse.title') }}</h1>
+        <p class="page-subtitle">{{ $t('browse.subtitle') }}</p>
       </div>
       <form class="flex items-end gap-2" @submit.prevent="loadNearby">
         <div>
-          <label class="label">Lat</label>
+          <label class="label">{{ $t('browse.lat') }}</label>
           <input v-model="lat" class="input w-28" placeholder="41.0082" />
         </div>
         <div>
-          <label class="label">Lng</label>
+          <label class="label">{{ $t('browse.lng') }}</label>
           <input v-model="lng" class="input w-28" placeholder="28.9784" />
         </div>
-        <button class="btn-ghost">📍 Nearby</button>
-        <button v-if="nearbyActive" type="button" class="btn-ghost" @click="loadAll">Show all</button>
+        <button class="btn-ghost">{{ $t('browse.nearby') }}</button>
+        <button v-if="nearbyActive" type="button" class="btn-ghost" @click="loadAll">{{ $t('browse.showAll') }}</button>
       </form>
     </div>
 
@@ -93,8 +93,8 @@ onMounted(() => {
 
     <div v-else-if="!chefs.length" class="empty-state">
       <span class="empty-state-emoji">🍳</span>
-      <p class="font-medium text-gray-600">No chefs found here yet</p>
-      <p class="text-sm">Try widening your search, or check back soon.</p>
+      <p class="font-medium text-gray-600">{{ $t('browse.empty') }}</p>
+      <p class="text-sm">{{ $t('browse.emptyHint') }}</p>
     </div>
 
     <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -102,7 +102,7 @@ onMounted(() => {
         <button
           v-if="canFavorite"
           class="absolute right-3 top-3 text-lg transition hover:scale-110"
-          :title="favorites.has(chef.id) ? 'Remove from favorites' : 'Add to favorites'"
+          :title="favorites.has(chef.id) ? $t('favorites.removeTitle') : $t('favorites.addTitle')"
           @click.prevent.stop="toggleFavorite(chef)"
         >
           {{ favorites.has(chef.id) ? '❤️' : '🤍' }}
@@ -113,7 +113,7 @@ onMounted(() => {
             <span
               v-if="chef.is_online"
               class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-green-500"
-              title="online"
+              :title="$t('dashboard.online')"
             ></span>
           </div>
           <div class="min-w-0">

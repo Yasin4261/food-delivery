@@ -11,6 +11,9 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://localhost:5173',
+    // Pin the browser locale: the app language-detects (TR browsers get
+    // Turkish), and the spec selects by the English catalogue.
+    locale: 'en-US',
     trace: 'retain-on-failure',
   },
   webServer: {

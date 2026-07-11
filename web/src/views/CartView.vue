@@ -36,15 +36,15 @@ async function placeOrder() {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="page-title">Your cart</h1>
-      <p class="page-subtitle">One checkout, even across several chefs.</p>
+      <h1 class="page-title">{{ $t('cart.title') }}</h1>
+      <p class="page-subtitle">{{ $t('cart.subtitle') }}</p>
     </div>
 
     <div v-if="!cart.lines.length" class="empty-state">
       <span class="empty-state-emoji">🛒</span>
-      <p class="font-medium text-gray-600">Your cart is empty</p>
+      <p class="font-medium text-gray-600">{{ $t('cart.empty') }}</p>
       <p class="text-sm">
-        <RouterLink to="/" class="text-brand-600 hover:underline">Browse chefs</RouterLink> to add something tasty.
+        <i18n-t keypath="cart.emptyHint" tag="span"><template #browse><RouterLink to="/" class="text-brand-600 hover:underline">{{ $t('cart.browseChefs') }}</RouterLink></template></i18n-t>
       </p>
     </div>
 
@@ -63,35 +63,35 @@ async function placeOrder() {
               @input="cart.setQuantity(line.menuItemId, Number($event.target.value))"
             />
             <span class="w-16 text-right text-sm">${{ (line.price * line.quantity).toFixed(2) }}</span>
-            <button class="text-sm text-red-600 hover:underline" @click="cart.remove(line.menuItemId)">remove</button>
+            <button class="text-sm text-red-600 hover:underline" @click="cart.remove(line.menuItemId)">{{ $t('cart.remove') }}</button>
           </div>
         </div>
       </div>
 
       <div class="flex justify-between text-lg font-semibold">
-        <span>Total</span>
+        <span>{{ $t('cart.total') }}</span>
         <span>${{ cart.total.toFixed(2) }}</span>
       </div>
 
       <form class="card space-y-4" @submit.prevent="placeOrder">
         <div>
-          <label class="label">Delivery address</label>
+          <label class="label">{{ $t('cart.deliveryAddress') }}</label>
           <input v-model="deliveryAddress" class="input" required />
         </div>
         <div>
-          <label class="label">Payment</label>
+          <label class="label">{{ $t('cart.paymentLabel') }}</label>
           <select v-model="paymentMethod" class="input">
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
+            <option value="cash">{{ $t('cart.cash') }}</option>
+            <option value="card">{{ $t('cart.card') }}</option>
           </select>
         </div>
         <div>
-          <label class="label">Notes (optional)</label>
+          <label class="label">{{ $t('cart.notes') }}</label>
           <input v-model="notes" class="input" />
         </div>
         <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
         <button class="btn-primary w-full" :disabled="placing">
-          {{ placing ? 'Placing…' : `Place order — $${cart.total.toFixed(2)}` }}
+          {{ placing ? $t('cart.placing') : $t('cart.placeOrder', { total: `$${cart.total.toFixed(2)}` }) }}
         </button>
       </form>
     </template>

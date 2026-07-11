@@ -16,12 +16,13 @@ export function statusClass(status) {
 
 // The action a chef can take to move an order forward from its current status,
 // plus "decline" while still cancellable. Maps to POST /chef/orders/:id/status.
+// labelKey is an i18n key — render it with $t(nextAction(status).labelKey).
 const NEXT_ACTION = {
-  pending: { action: 'confirm', label: 'Accept' },
-  confirmed: { action: 'preparing', label: 'Start preparing' },
-  preparing: { action: 'ready', label: 'Mark ready' },
-  ready: { action: 'delivering', label: 'Out for delivery' },
-  delivering: { action: 'delivered', label: 'Mark delivered' },
+  pending: { action: 'confirm', labelKey: 'actions.accept' },
+  confirmed: { action: 'preparing', labelKey: 'actions.startPreparing' },
+  preparing: { action: 'ready', labelKey: 'actions.markReady' },
+  ready: { action: 'delivering', labelKey: 'actions.outForDelivery' },
+  delivering: { action: 'delivered', labelKey: 'actions.markDelivered' },
 }
 
 export function nextAction(status) {

@@ -1,17 +1,21 @@
 <script setup>
 import { computed, watch } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
 import { useNotificationsStore } from '@/stores/notifications'
+import { setLocale } from '@/i18n'
 
 const auth = useAuthStore()
 const cart = useCartStore()
 const notifications = useNotificationsStore()
 const router = useRouter()
+const { locale } = useI18n()
 
 const cartCount = computed(() => cart.count)
 const initial = computed(() => (auth.user?.username || auth.user?.email || '?')[0].toUpperCase())
+const otherLocale = computed(() => (locale.value === 'tr' ? 'en' : 'tr'))
 
 // Poll the badge counts while a session is active.
 watch(
@@ -36,7 +40,7 @@ async function logout() {
 
       <div class="flex items-center gap-1">
         <RouterLink v-if="!auth.isChef" to="/" class="nav-link" exact-active-class="router-link-active bg-brand-50">
-          Browse
+          {{ $t('nav.browse') }}
         </RouterLink>
         <RouterLink
           v-if="auth.isAuthenticated && !auth.isChef"
@@ -44,20 +48,20 @@ async function logout() {
           class="nav-link"
           exact-active-class="router-link-active bg-brand-50"
         >
-          🔍 Search
+          {{ $t('nav.search') }}
         </RouterLink>
         <template v-if="auth.isAuthenticated && auth.isChef">
           <RouterLink to="/chef" class="nav-link relative" exact-active-class="router-link-active bg-brand-50">
-            Dashboard
+            {{ $t('nav.dashboard') }}
             <span
               v-if="notifications.pendingChefOrders"
               class="absolute -right-2 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white shadow-sm"
-              title="orders waiting for you"
+              :title="$t('nav.pendingTitle')"
               >{{ notifications.pendingChefOrders }}</span
             >
           </RouterLink>
           <RouterLink to="/chef/menus" class="nav-link" exact-active-class="router-link-active bg-brand-50">
-            My menus
+            {{ $t('nav.myMenus') }}
           </RouterLink>
         </template>
         <RouterLink
@@ -66,11 +70,11 @@ async function logout() {
           class="nav-link relative"
           exact-active-class="router-link-active bg-brand-50"
         >
-          My orders
+          {{ $t('nav.myOrders') }}
           <span
             v-if="notifications.activeOrders"
             class="absolute -right-2 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white shadow-sm"
-            title="orders on the way"
+            :title="$t('nav.activeTitle')"
             >{{ notifications.activeOrders }}</span
           >
         </RouterLink>
@@ -80,7 +84,7 @@ async function logout() {
           class="nav-link"
           exact-active-class="router-link-active bg-brand-50"
         >
-          Favorites
+          {{ $t('nav.favorites') }}
         </RouterLink>
         <RouterLink
           v-if="auth.isAuthenticated"
@@ -88,18 +92,26 @@ async function logout() {
           class="nav-link"
           exact-active-class="router-link-active bg-brand-50"
         >
-          💬 Chat
+          {{ $t('nav.chat') }}
         </RouterLink>
       </div>
 
       <div class="ml-auto flex items-center gap-3">
+        <button
+          class="rounded-md border border-gray-200 px-2 py-1 text-xs font-semibold uppercase text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+          :title="otherLocale === 'tr' ? 'Türkçe' : 'English'"
+          @click="setLocale(otherLocale)"
+        >
+          {{ otherLocale }}
+        </button>
+
         <RouterLink
           v-if="auth.isAuthenticated && !auth.isChef"
           to="/cart"
           class="nav-link relative"
           exact-active-class="router-link-active bg-brand-50"
         >
-          🛒 Cart
+          {{ $t('nav.cart') }}
           <span
             v-if="cartCount"
             class="absolute -right-2 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1 text-xs font-bold text-white shadow-sm"
@@ -116,11 +128,11 @@ async function logout() {
             </span>
             {{ auth.user?.username || auth.user?.email }}
           </span>
-          <button class="btn-ghost" @click="logout">Log out</button>
+          <button class="btn-ghost" @click="logout">{{ $t('nav.logout') }}</button>
         </template>
         <template v-else>
-          <RouterLink to="/login" class="nav-link">Log in</RouterLink>
-          <RouterLink to="/register" class="btn-primary">Sign up</RouterLink>
+          <RouterLink to="/login" class="nav-link">{{ $t('nav.login') }}</RouterLink>
+          <RouterLink to="/register" class="btn-primary">{{ $t('nav.signup') }}</RouterLink>
         </template>
       </div>
     </nav>

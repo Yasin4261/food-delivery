@@ -83,48 +83,48 @@ onBeforeUnmount(() => clearInterval(poll))
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold">{{ profile?.business_name }}</h1>
-        <p class="text-sm text-gray-500">Chef dashboard</p>
+        <p class="text-sm text-gray-500">{{ $t('dashboard.subtitle') }}</p>
       </div>
       <div class="flex items-center gap-2">
         <span class="badge" :class="profile?.is_online ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'">
-          {{ profile?.is_online ? 'online' : 'offline' }}
+          {{ profile?.is_online ? $t('dashboard.online') : $t('dashboard.offline') }}
         </span>
         <button class="btn-ghost" :disabled="toggling" @click="toggleOnline">
-          {{ profile?.is_online ? 'Go offline' : 'Go online' }}
+          {{ profile?.is_online ? $t('dashboard.goOffline') : $t('dashboard.goOnline') }}
         </button>
-        <RouterLink to="/chef/menus" class="btn-primary">My menus</RouterLink>
-        <button class="btn-ghost" @click="load">Refresh</button>
+        <RouterLink to="/chef/menus" class="btn-primary">{{ $t('nav.myMenus') }}</RouterLink>
+        <button class="btn-ghost" @click="load">{{ $t('dashboard.refresh') }}</button>
       </div>
     </div>
 
     <div v-if="earnings" class="grid gap-4 sm:grid-cols-3">
       <div class="card">
-        <p class="text-sm text-gray-500">Earnings (delivered &amp; paid)</p>
+        <p class="text-sm text-gray-500">{{ $t('dashboard.earnings') }}</p>
         <p class="text-2xl font-bold">${{ earnings.total_earnings?.toFixed(2) }}</p>
       </div>
       <div class="card">
-        <p class="text-sm text-gray-500">Delivered orders</p>
+        <p class="text-sm text-gray-500">{{ $t('dashboard.deliveredOrders') }}</p>
         <p class="text-2xl font-bold">{{ earnings.delivered_orders }}</p>
       </div>
       <div class="card">
-        <p class="text-sm text-gray-500">Items sold</p>
+        <p class="text-sm text-gray-500">{{ $t('dashboard.itemsSold') }}</p>
         <p class="text-2xl font-bold">{{ earnings.items_sold }}</p>
       </div>
     </div>
 
-    <h2 class="text-lg font-semibold">Incoming orders</h2>
+    <h2 class="text-lg font-semibold">{{ $t('dashboard.incoming') }}</h2>
     <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
     <div v-if="!orders.length" class="empty-state">
       <span class="empty-state-emoji">👨‍🍳</span>
-      <p class="font-medium text-gray-600">No orders yet</p>
-      <p class="text-sm">Go online and make sure your menus are stocked — orders will land here.</p>
+      <p class="font-medium text-gray-600">{{ $t('dashboard.empty') }}</p>
+      <p class="text-sm">{{ $t('dashboard.emptyHint') }}</p>
     </div>
 
     <div v-for="order in orders" :key="order.id" class="card space-y-2">
       <div class="flex items-center justify-between">
         <div>
           <span class="font-mono text-sm text-gray-500">{{ order.order_code }}</span>
-          <span class="badge ml-2" :class="statusClass(order.status)">{{ order.status }}</span>
+          <span class="badge ml-2" :class="statusClass(order.status)">{{ $t(`status.${order.status}`) }}</span>
         </div>
         <span class="font-semibold">${{ order.total_price?.toFixed(2) }}</span>
       </div>
@@ -132,15 +132,13 @@ onBeforeUnmount(() => clearInterval(poll))
         <li v-for="it in order.items" :key="it.id">{{ it.quantity }}× {{ it.item_name }}</li>
       </ul>
       <div class="flex justify-end gap-2">
-        <button v-if="canDecline(order.status)" class="btn-ghost" @click="advance(order, 'decline')">
-          Decline
-        </button>
+        <button v-if="canDecline(order.status)" class="btn-ghost" @click="advance(order, 'decline')">{{ $t('actions.decline') }}</button>
         <button
           v-if="nextAction(order.status)"
           class="btn-primary"
           @click="advance(order, nextAction(order.status).action)"
         >
-          {{ nextAction(order.status).label }}
+          {{ $t(nextAction(order.status).labelKey) }}
         </button>
       </div>
     </div>

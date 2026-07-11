@@ -28,24 +28,24 @@ async function submit() {
   <div class="mx-auto mt-6 max-w-sm">
     <div class="mb-6 text-center">
       <div class="text-4xl">👋</div>
-      <h1 class="mt-2 text-2xl font-bold tracking-tight">Join Home Chef</h1>
-      <p class="page-subtitle">Order homemade food — or start selling yours.</p>
+      <h1 class="mt-2 text-2xl font-bold tracking-tight">{{ $t('auth.joinTitle') }}</h1>
+      <p class="page-subtitle">{{ $t('auth.joinSubtitle') }}</p>
     </div>
     <form class="card space-y-4 shadow-md" @submit.prevent="submit">
       <div>
-        <label class="label">Username</label>
-        <input v-model="form.username" class="input" required minlength="3" placeholder="yasin" />
+        <label class="label">{{ $t('auth.username') }}</label>
+        <input v-model="form.username" class="input" required minlength="3" :placeholder="$t('auth.usernamePlaceholder')" />
       </div>
       <div>
-        <label class="label">Email</label>
-        <input v-model="form.email" type="email" class="input" required placeholder="you@example.com" />
+        <label class="label">{{ $t('auth.email') }}</label>
+        <input v-model="form.email" type="email" class="input" required :placeholder="$t('auth.emailPlaceholder')" />
       </div>
       <div>
-        <label class="label">Password</label>
-        <input v-model="form.password" type="password" class="input" required minlength="6" placeholder="min. 6 characters" />
+        <label class="label">{{ $t('auth.password') }}</label>
+        <input v-model="form.password" type="password" class="input" required minlength="6" :placeholder="$t('auth.passwordMin')" />
       </div>
       <div>
-        <label class="label">I want to…</label>
+        <label class="label">{{ $t('auth.iWantTo') }}</label>
         <div class="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -53,7 +53,7 @@ async function submit() {
             :class="form.role === 'customer' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'"
             @click="form.role = 'customer'"
           >
-            🛍️ Order food
+            {{ $t('auth.orderFood') }}
           </button>
           <button
             type="button"
@@ -61,15 +61,17 @@ async function submit() {
             :class="form.role === 'chef' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'"
             @click="form.role = 'chef'"
           >
-            👨‍🍳 Cook &amp; sell
+            {{ $t('auth.cookSell') }}
           </button>
         </div>
       </div>
       <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
-      <button class="btn-primary w-full" :disabled="loading">{{ loading ? 'Creating…' : 'Create account' }}</button>
+      <button class="btn-primary w-full" :disabled="loading">
+        {{ loading ? $t('auth.creating') : $t('auth.createAccount') }}
+      </button>
       <p class="text-center text-sm text-gray-500">
-        Have an account?
-        <RouterLink to="/login" class="font-medium text-brand-600 hover:underline">Log in</RouterLink>
+        {{ $t('auth.haveAccount') }}
+        <RouterLink to="/login" class="font-medium text-brand-600 hover:underline">{{ $t('auth.login') }}</RouterLink>
       </p>
     </form>
   </div>
