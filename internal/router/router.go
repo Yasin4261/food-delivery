@@ -141,6 +141,9 @@ func (r *Router) Setup() http.Handler {
 	// Search: dishes/chefs for any authenticated user; users for admins only.
 	r.handleAuth("GET /api/v2/search", r.searchHandler.Search)
 
+	// Notification badge counts, polled by the SPA.
+	r.handleAuth("GET /api/v2/notifications/summary", r.orderHandler.Summary)
+
 	// Chat: customer <-> chef messaging (auth; only participants may access a
 	// conversation). The /ws route upgrades to a WebSocket for live delivery.
 	r.handleAuth("POST /api/v2/chat/conversations", r.chatHandler.StartConversation)

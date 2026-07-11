@@ -1,8 +1,9 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api, page, ApiError } from '@/api/client'
 import { statusClass, nextAction, canDecline } from '@/lib/status'
+import { POLL_MS } from '@/stores/notifications'
 import ChefOnboarding from '@/components/ChefOnboarding.vue'
 
 const profile = ref(null)
@@ -13,8 +14,8 @@ const loading = ref(true)
 const error = ref('')
 const toggling = ref(false)
 
-async function load() {
-  loading.value = true
+async function load(silent = false) {
+  if (!silent) loading.value = true
   error.value = ''
   try {
     // No profile yet -> onboarding instead of a broken dashboard.
@@ -62,7 +63,15 @@ async function advance(order, action) {
   }
 }
 
-onMounted(load)
+// Incoming orders refresh themselves — no manual reload needed (issue #55).
+let poll = null
+onMounted(() => {
+  load()
+  poll = setInterval(() => {
+    if (!document.hidden && !needsProfile.value) load(true)
+  }, POLL_MS)
+})
+onBeforeUnmount(() => clearInterval(poll))
 </script>
 
 <template>

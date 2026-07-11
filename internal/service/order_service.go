@@ -127,6 +127,41 @@ func (s *OrderService) GetForCustomer(ctx context.Context, userID, orderID int) 
 	return order, nil
 }
 
+// NotificationSummary is the lightweight payload the SPA polls for its navbar
+// badges.
+type NotificationSummary struct {
+	// ActiveOrders is the caller's in-flight order count (customer side).
+	ActiveOrders int `json:"active_orders"`
+	// PendingChefOrders is how many orders await the caller's accept/decline
+	// (chef side; 0 for non-chefs or chefs without a profile).
+	PendingChefOrders int `json:"pending_chef_orders"`
+}
+
+// Summary returns the notification counts for the caller. isChef comes from
+// the token's role; a chef without a profile simply reports 0 pending.
+func (s *OrderService) Summary(ctx context.Context, userID int, isChef bool) (*NotificationSummary, error) {
+	out := &NotificationSummary{}
+	active, err := s.orders.CountActiveByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out.ActiveOrders = active
+
+	if isChef {
+		chef, err := s.chefs.FindByUserID(ctx, userID)
+		if err == nil {
+			pending, err := s.orders.CountPendingByChef(ctx, chef.ID)
+			if err != nil {
+				return nil, err
+			}
+			out.PendingChefOrders = pending
+		} else if err != domain.ErrChefNotFound {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
 // ListForCustomer returns a page of the customer's order history and the total.
 func (s *OrderService) ListForCustomer(ctx context.Context, userID, limit, offset int) ([]*domain.Order, int, error) {
 	limit, offset = normalisePaging(limit, offset)

@@ -19,4 +19,9 @@ type OrderRepository interface {
 	// UpdateStatus persists the mutable status/payment/timestamp fields of an
 	// order after a transition.
 	UpdateStatus(ctx context.Context, order *Order) error
+	// CountActiveByUser counts a customer's in-flight orders (anything not yet
+	// delivered or cancelled) — powers the SPA's notification badge.
+	CountActiveByUser(ctx context.Context, userID int) (int, error)
+	// CountPendingByChef counts orders awaiting the chef's accept/decline.
+	CountPendingByChef(ctx context.Context, chefID int) (int, error)
 }
