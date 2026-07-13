@@ -87,8 +87,11 @@ func notifierFixture(t *testing.T) (*service.OrderService, *channelMailer, *fake
 	}
 
 	chefs := newFakeChefRepo()
-	for uid, name := range map[int]string{1: "Kitchen One", 2: "Kitchen Two"} {
-		if err := chefs.Create(ctx, &domain.Chef{UserID: uid, BusinessName: name, IsActive: true}); err != nil {
+	// Seed in a fixed order: the fake assigns chef IDs sequentially, and the
+	// assertions rely on user 1 owning chef 1 ("Kitchen One") — a map here
+	// would randomise the pairing and flake.
+	for i, name := range []string{"Kitchen One", "Kitchen Two"} {
+		if err := chefs.Create(ctx, &domain.Chef{UserID: i + 1, BusinessName: name, IsActive: true}); err != nil {
 			t.Fatalf("seed chef: %v", err)
 		}
 	}
