@@ -83,6 +83,10 @@ func (r *Router) Setup() http.Handler {
 
 	// Protected: requires a valid bearer token.
 	r.mux.Handle("GET /api/v2/auth/me", r.auth.Require(http.HandlerFunc(r.authHandler.Me)))
+	// Profile self-service: password change proves the current password; the
+	// profile endpoint edits contact/location only (never email/username/role).
+	r.handleAuth("PUT /api/v2/auth/password", r.authHandler.ChangePassword)
+	r.handleAuth("PUT /api/v2/users/me", r.authHandler.UpdateProfile)
 
 	// Chefs: reads are public; opening a profile requires the chef role.
 	// The literal /nearby pattern is matched ahead of /{id} by ServeMux.
@@ -92,6 +96,7 @@ func (r *Router) Setup() http.Handler {
 	r.handleRole("POST /api/v2/chefs", r.chefHandler.Create)
 	// The literal /chefs/me* patterns are matched ahead of /chefs/{id}.
 	r.handleRole("GET /api/v2/chefs/me", r.chefHandler.Me)
+	r.handleRole("PUT /api/v2/chefs/me", r.chefHandler.UpdateMe)
 	r.handleRole("PATCH /api/v2/chefs/me/status", r.chefHandler.SetStatus)
 	r.handleRole("GET /api/v2/chefs/me/earnings", r.earningsHandler.Get)
 

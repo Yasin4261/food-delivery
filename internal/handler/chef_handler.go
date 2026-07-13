@@ -170,3 +170,40 @@ func queryInt(r *http.Request, key string, def int) int {
 func queryBool(r *http.Request, key string) bool {
 	return r.URL.Query().Get(key) == "true"
 }
+
+// UpdateMe handles PUT /api/v2/chefs/me (chef) — the caller edits their own
+// kitchen profile. Ownership comes from the token: the service resolves the
+// chef by user id, so no other chef's profile is reachable.
+func (h *ChefHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req createChefRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	chef, err := h.chefs.UpdateProfile(r.Context(), claims.UserID, service.CreateProfileInput{
+		BusinessName:   req.BusinessName,
+		KitchenAddress: req.KitchenAddress,
+		Bio:            req.Bio,
+		Specialty:      req.Specialty,
+		KitchenCity:    req.KitchenCity,
+		Latitude:       req.Latitude,
+		Longitude:      req.Longitude,
+		DeliveryRadius: req.DeliveryRadius,
+	})
+	if err != nil {
+		var ve service.ValidationError
+		if errors.As(err, &ve) {
+			respondError(w, http.StatusBadRequest, ve.Msg)
+			return
+		}
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, chef)
+}

@@ -12,4 +12,8 @@ type UserRepository interface {
 	FindByUsername(ctx context.Context, username string) (*User, error)
 	// UpdatePassword sets a user's password hash.
 	UpdatePassword(ctx context.Context, userID int, passwordHash string) error
+	// UpdateProfile persists the user's editable contact/location fields
+	// (phone, address, city, state, zip, lat/lng) — never email, username,
+	// role or password.
+	UpdateProfile(ctx context.Context, user *User) error
 }

@@ -76,6 +76,28 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID int, passwor
 	return nil
 }
 
+// UpdateProfile persists the editable contact/location fields.
+func (r *UserRepository) UpdateProfile(ctx context.Context, u *domain.User) error {
+	query := `
+		UPDATE users
+		SET phone_number = $2, address = $3, city = $4, state = $5, zip_code = $6,
+		    latitude = $7, longitude = $8, updated_at = now()
+		WHERE id = $1
+		RETURNING updated_at`
+
+	err := r.db.QueryRowContext(
+		ctx, query,
+		u.ID, u.PhoneNumber, u.Address, u.City, u.State, u.ZipCode, u.Latitude, u.Longitude,
+	).Scan(&u.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.ErrUserNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("update profile: %w", err)
+	}
+	return nil
+}
+
 func scanUser(s interface{ Scan(...any) error }) (*domain.User, error) {
 	u := &domain.User{}
 	err := s.Scan(

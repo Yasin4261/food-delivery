@@ -217,6 +217,68 @@ func (s *AuthService) ResetPassword(ctx context.Context, rawToken, newPassword s
 	return s.resets.MarkUsed(ctx, token.ID)
 }
 
+// ChangePassword sets a new password for a logged-in user after verifying the
+// current one. Unlike the reset flow it requires knowledge of the old
+// password, so a stolen session alone cannot lock the owner out silently.
+func (s *AuthService) ChangePassword(ctx context.Context, userID int, current, newPassword string) error {
+	if len(newPassword) < 6 {
+		return ValidationError{Msg: "password must be at least 6 characters"}
+	}
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(current)) != nil {
+		return domain.ErrInvalidCredentials
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	return s.users.UpdatePassword(ctx, userID, string(hash))
+}
+
+// UpdateProfileInput is the editable slice of a user account: contact and
+// default delivery location. Email, username and role are deliberately not
+// editable here (identity/auth surface).
+type UpdateProfileInput struct {
+	PhoneNumber string
+	Address     string
+	City        string
+	State       string
+	ZipCode     string
+	Latitude    *float64
+	Longitude   *float64
+}
+
+// UpdateProfile updates the caller's own contact/location fields and returns
+// the fresh profile (password hash cleared).
+func (s *AuthService) UpdateProfile(ctx context.Context, userID int, in UpdateProfileInput) (*domain.User, error) {
+	if (in.Latitude == nil) != (in.Longitude == nil) {
+		return nil, ValidationError{Msg: "latitude and longitude must be provided together"}
+	}
+	in.PhoneNumber = strings.TrimSpace(in.PhoneNumber)
+	if len(in.PhoneNumber) > 20 {
+		return nil, ValidationError{Msg: "phone_number must be at most 20 characters"}
+	}
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	user.PhoneNumber = optional(in.PhoneNumber)
+	user.Address = optional(in.Address)
+	user.City = optional(in.City)
+	user.State = optional(in.State)
+	user.ZipCode = optional(in.ZipCode)
+	user.Latitude = in.Latitude
+	user.Longitude = in.Longitude
+	if err := s.users.UpdateProfile(ctx, user); err != nil {
+		return nil, err
+	}
+	user.PasswordHash = ""
+	return user, nil
+}
+
 // randomToken returns a 32-byte random token, hex-encoded.
 func randomToken() (string, error) {
 	var b [32]byte

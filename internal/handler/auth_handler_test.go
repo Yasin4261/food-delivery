@@ -68,6 +68,21 @@ func (f *fakeUserRepo) UpdatePassword(_ context.Context, userID int, passwordHas
 	return domain.ErrUserNotFound
 }
 
+func (f *fakeUserRepo) UpdateProfile(_ context.Context, u *domain.User) error {
+	stored, ok := f.users[u.ID]
+	if !ok {
+		return domain.ErrUserNotFound
+	}
+	stored.PhoneNumber = u.PhoneNumber
+	stored.Address = u.Address
+	stored.City = u.City
+	stored.State = u.State
+	stored.ZipCode = u.ZipCode
+	stored.Latitude = u.Latitude
+	stored.Longitude = u.Longitude
+	return nil
+}
+
 // fakeResetRepo is an in-memory domain.PasswordResetRepository for HTTP tests.
 type fakeResetRepo struct {
 	byHash map[string]*domain.PasswordResetToken
