@@ -130,6 +130,7 @@ export default {
   cart: {
     title: 'Sepetiniz',
     subtitle: 'Birden fazla şeften bile olsa tek ödeme.',
+    otherAddress: 'Başka adres…',
     empty: 'Sepetiniz boş',
     emptyHint: 'Lezzetli bir şeyler eklemek için {browse}.',
     browseChefs: 'şeflere göz atın',
@@ -201,6 +202,16 @@ export default {
     remove: 'kaldır',
     needProfile: 'Menü eklemeden önce mutfak profilinizi oluşturmalısınız.',
     needProfileLink: 'Panelden hemen kurun',
+  },
+  addresses: {
+    title: 'Adres defteri',
+    empty: 'Henüz kayıtlı adres yok — aşağıdan ekleyin, siparişte seçin.',
+    default: 'varsayılan',
+    makeDefault: 'Varsayılan yap',
+    remove: 'Sil',
+    add: 'Ekle',
+    labelPlaceholder: 'Ev / İş',
+    addressPlaceholder: 'Sokak, numara, daire…',
   },
   profile: {
     title: 'Profilim',

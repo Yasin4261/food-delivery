@@ -131,6 +131,7 @@ export default {
   cart: {
     title: 'Your cart',
     subtitle: 'One checkout, even across several chefs.',
+    otherAddress: 'Other address…',
     empty: 'Your cart is empty',
     emptyHint: '{browse} to add something tasty.',
     browseChefs: 'Browse chefs',
@@ -202,6 +203,16 @@ export default {
     remove: 'remove',
     needProfile: 'You need a kitchen profile before adding menus.',
     needProfileLink: 'Set it up on the dashboard',
+  },
+  addresses: {
+    title: 'Address book',
+    empty: 'No saved addresses yet — add one below and pick it at checkout.',
+    default: 'default',
+    makeDefault: 'Make default',
+    remove: 'Remove',
+    add: 'Add',
+    labelPlaceholder: 'Home / Work',
+    addressPlaceholder: 'Street, number, apartment…',
   },
   profile: {
     title: 'My profile',

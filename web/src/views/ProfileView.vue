@@ -30,6 +30,54 @@ const kitchenMsg = ref('')
 const kitchenErr = ref('')
 const savingKitchen = ref(false)
 
+// --- address book ---
+const addresses = ref([])
+const newAddress = reactive({ label: '', address: '', city: '' })
+const addressErr = ref('')
+const savingAddress = ref(false)
+
+async function loadAddresses() {
+  try {
+    addresses.value = await api.get('/addresses')
+  } catch (e) {
+    addressErr.value = e.message
+  }
+}
+
+async function addAddress() {
+  savingAddress.value = true
+  addressErr.value = ''
+  try {
+    await api.post('/addresses', { label: newAddress.label, address: newAddress.address, city: newAddress.city })
+    newAddress.label = newAddress.address = newAddress.city = ''
+    await loadAddresses()
+  } catch (e) {
+    addressErr.value = e.message
+  } finally {
+    savingAddress.value = false
+  }
+}
+
+async function makeDefault(a) {
+  addressErr.value = ''
+  try {
+    await api.put(`/addresses/${a.id}`, { label: a.label, address: a.address, city: a.city || '', is_default: true })
+    await loadAddresses()
+  } catch (e) {
+    addressErr.value = e.message
+  }
+}
+
+async function removeAddress(a) {
+  addressErr.value = ''
+  try {
+    await api.del(`/addresses/${a.id}`)
+    await loadAddresses()
+  } catch (e) {
+    addressErr.value = e.message
+  }
+}
+
 async function load() {
   try {
     const me = await api.get('/auth/me')
@@ -119,7 +167,10 @@ async function saveKitchen() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadAddresses()
+})
 </script>
 
 <template>
@@ -183,6 +234,38 @@ onMounted(load)
       <p v-if="pwMsg" class="text-sm text-green-700">{{ $t('profile.passwordChanged') }}</p>
       <button class="btn-primary" :disabled="savingPw">{{ $t('profile.changePassword') }}</button>
     </form>
+
+    <!-- Address book -->
+    <div class="card space-y-4">
+      <h2 class="font-semibold">{{ $t('addresses.title') }}</h2>
+      <p v-if="!addresses.length" class="text-sm text-gray-500">{{ $t('addresses.empty') }}</p>
+      <ul v-else class="space-y-2">
+        <li
+          v-for="a in addresses"
+          :key="a.id"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-100 px-3 py-2 text-sm"
+        >
+          <span class="min-w-0">
+            <span class="font-medium">{{ a.label }}</span>
+            <span v-if="a.is_default" class="badge ml-2 bg-brand-50 text-brand-700">{{ $t('addresses.default') }}</span>
+            <span class="block truncate text-gray-500">{{ a.address }}<template v-if="a.city">, {{ a.city }}</template></span>
+          </span>
+          <span class="flex shrink-0 gap-2">
+            <button v-if="!a.is_default" class="text-brand-600 hover:underline" @click="makeDefault(a)">{{ $t('addresses.makeDefault') }}</button>
+            <button class="text-red-600 hover:underline" @click="removeAddress(a)">{{ $t('addresses.remove') }}</button>
+          </span>
+        </li>
+      </ul>
+      <form class="grid gap-3 sm:grid-cols-4" @submit.prevent="addAddress">
+        <input v-model="newAddress.label" class="input" :placeholder="$t('addresses.labelPlaceholder')" required maxlength="50" />
+        <input v-model="newAddress.address" class="input sm:col-span-2" :placeholder="$t('addresses.addressPlaceholder')" required />
+        <div class="flex gap-2">
+          <input v-model="newAddress.city" class="input min-w-0" :placeholder="$t('onboarding.cityPlaceholder')" />
+          <button class="btn-primary shrink-0" :disabled="savingAddress">{{ $t('addresses.add') }}</button>
+        </div>
+      </form>
+      <p v-if="addressErr" class="text-sm text-red-600">{{ addressErr }}</p>
+    </div>
 
     <!-- Kitchen (chefs with a profile) -->
     <form v-if="kitchen" class="card space-y-4" @submit.prevent="saveKitchen">

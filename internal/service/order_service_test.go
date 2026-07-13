@@ -103,7 +103,7 @@ func orderFixture(t *testing.T, userIDs ...int) (*service.OrderService, *fakeMen
 		}
 	}
 	itemRepo := newFakeMenuItemRepo()
-	svc := service.NewOrderService(newFakeOrderRepo(), itemRepo, chefRepo, nil, nil)
+	svc := service.NewOrderService(newFakeOrderRepo(), itemRepo, chefRepo, nil, nil, nil)
 	return svc, itemRepo, chefRepo
 }
 
@@ -318,7 +318,7 @@ func placeMultiChef(t *testing.T, method string, refunder domain.PaymentRefunder
 	a := seedItem(t, items, 1, 5, 10)
 	b := seedItem(t, items, 2, 3, 10)
 	orders := newFakeOrderRepo()
-	svc := service.NewOrderService(orders, items, chefRepo, refunder, nil)
+	svc := service.NewOrderService(orders, items, chefRepo, nil, refunder, nil)
 
 	order, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
 		DeliveryAddress: "x", PaymentMethod: method,
