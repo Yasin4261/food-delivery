@@ -29,6 +29,13 @@ func cloneOrder(o *domain.Order, chefID int) *domain.Order {
 		ic := *it
 		cp.Items = append(cp.Items, &ic)
 	}
+	// Sub-orders stay unfiltered — the chef view shows the whole order's
+	// progress while acting only on its own slice.
+	cp.SubOrders = make([]*domain.SubOrder, 0, len(o.SubOrders))
+	for _, s := range o.SubOrders {
+		sc := *s
+		cp.SubOrders = append(cp.SubOrders, &sc)
+	}
 	return &cp
 }
 
@@ -75,7 +82,15 @@ func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	stored.PaymentStatus = o.PaymentStatus
 	stored.ActualDeliveryTime = o.ActualDeliveryTime
 	stored.CancelledAt = o.CancelledAt
+	for _, s := range o.SubOrders {
+		if ss := stored.SubOrderFor(s.ChefID); ss != nil {
+			ss.Status = s.Status
+		}
+	}
 	return nil
+}
+func (f *fakeOrderRepo) UpdateSubOrder(ctx context.Context, o *domain.Order, _ *domain.SubOrder) error {
+	return f.UpdateStatus(ctx, o)
 }
 func (f *fakeOrderRepo) CountActiveByUser(_ context.Context, userID int) (int, error) {
 	n := 0
@@ -89,7 +104,7 @@ func (f *fakeOrderRepo) CountActiveByUser(_ context.Context, userID int) (int, e
 func (f *fakeOrderRepo) CountPendingByChef(_ context.Context, chefID int) (int, error) {
 	n := 0
 	for _, o := range f.orders {
-		if o.Status == "pending" && o.HasChef(chefID) {
+		if s := o.SubOrderFor(chefID); s != nil && s.Status == "pending" {
 			n++
 		}
 	}

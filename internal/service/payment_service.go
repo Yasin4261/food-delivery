@@ -130,6 +130,24 @@ func (s *PaymentService) RefundOrderPayment(ctx context.Context, order *domain.O
 	return s.sessions.UpdateStatus(ctx, session.ID, domain.PaymentSessionRefunded, nil)
 }
 
+// RefundSubOrderPayment returns one declined sub-order's slice of a captured
+// card payment (domain.PaymentRefunder). The session stays paid — the other
+// sub-orders' money remains captured.
+func (s *PaymentService) RefundSubOrderPayment(ctx context.Context, order *domain.Order, amount float64) error {
+	session, err := s.sessions.FindPaidByOrder(ctx, order.ID)
+	if err != nil {
+		return err
+	}
+	paymentID := ""
+	if session.PaymentID != nil {
+		paymentID = *session.PaymentID
+	}
+	if err := s.gateway.RefundPartial(ctx, paymentID, amount); err != nil {
+		return fmt.Errorf("refund sub-order payment: %w", err)
+	}
+	return nil
+}
+
 // ResultRedirectURL is where the callback handler sends the browser after a
 // checkout completes.
 func (s *PaymentService) ResultRedirectURL(orderID int, paid bool) string {

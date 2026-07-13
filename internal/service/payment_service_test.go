@@ -175,14 +175,23 @@ func TestPaymentService_CompleteCheckout(t *testing.T) {
 	}
 }
 
-// recordingRefunder captures refund calls for the order-service cancel path.
+// recordingRefunder captures refund calls for the order-service cancel and
+// decline paths.
 type recordingRefunder struct {
-	calls int
-	err   error
+	calls          int
+	partialCalls   int
+	partialAmounts []float64
+	err            error
 }
 
 func (r *recordingRefunder) RefundOrderPayment(context.Context, *domain.Order) error {
 	r.calls++
+	return r.err
+}
+
+func (r *recordingRefunder) RefundSubOrderPayment(_ context.Context, _ *domain.Order, amount float64) error {
+	r.partialCalls++
+	r.partialAmounts = append(r.partialAmounts, amount)
 	return r.err
 }
 

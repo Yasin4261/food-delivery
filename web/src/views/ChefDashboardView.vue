@@ -63,6 +63,13 @@ async function advance(order, action) {
   }
 }
 
+// The chef acts on their own slice of the order: badge and action buttons are
+// driven by the caller's sub-order status, not the order-level (derived) one.
+function myStatus(order) {
+  const sub = order.sub_orders?.find((s) => s.chef_id === profile.value?.id)
+  return sub ? sub.status : order.status
+}
+
 // Incoming orders refresh themselves — no manual reload needed (issue #55).
 let poll = null
 onMounted(() => {
@@ -124,7 +131,8 @@ onBeforeUnmount(() => clearInterval(poll))
       <div class="flex items-center justify-between">
         <div>
           <span class="font-mono text-sm text-gray-500">{{ order.order_code }}</span>
-          <span class="badge ml-2" :class="statusClass(order.status)">{{ $t(`status.${order.status}`) }}</span>
+          <span class="badge ml-2" :class="statusClass(myStatus(order))">{{ $t(`status.${myStatus(order)}`) }}</span>
+          <span v-if="order.sub_orders?.length > 1" class="ml-2 text-xs text-gray-400">{{ $t('dashboard.multiChef') }}</span>
         </div>
         <span class="font-semibold">${{ order.total_price?.toFixed(2) }}</span>
       </div>
@@ -132,13 +140,13 @@ onBeforeUnmount(() => clearInterval(poll))
         <li v-for="it in order.items" :key="it.id">{{ it.quantity }}× {{ it.item_name }}</li>
       </ul>
       <div class="flex justify-end gap-2">
-        <button v-if="canDecline(order.status)" class="btn-ghost" @click="advance(order, 'decline')">{{ $t('actions.decline') }}</button>
+        <button v-if="canDecline(myStatus(order))" class="btn-ghost" @click="advance(order, 'decline')">{{ $t('actions.decline') }}</button>
         <button
-          v-if="nextAction(order.status)"
+          v-if="nextAction(myStatus(order))"
           class="btn-primary"
-          @click="advance(order, nextAction(order.status).action)"
+          @click="advance(order, nextAction(myStatus(order)).action)"
         >
-          {{ $t(nextAction(order.status).labelKey) }}
+          {{ $t(nextAction(myStatus(order)).labelKey) }}
         </button>
       </div>
     </div>

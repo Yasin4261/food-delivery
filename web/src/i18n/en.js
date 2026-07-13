@@ -169,6 +169,7 @@ export default {
   },
   dashboard: {
     subtitle: 'Chef dashboard',
+    multiChef: 'your part of a multi-chef order',
     online: 'online',
     offline: 'offline',
     goOnline: 'Go online',

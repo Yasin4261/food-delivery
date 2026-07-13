@@ -24,6 +24,7 @@ const (
 	pathCheckoutInit     = "/payment/iyzipos/checkoutform/initialize/auth/ecom"
 	pathCheckoutRetrieve = "/payment/iyzipos/checkoutform/auth/ecom/detail"
 	pathCancel           = "/payment/cancel"
+	pathRefundV2         = "/v2/payment/refund"
 )
 
 // Iyzico implements domain.PaymentGateway against the iyzico REST API using
@@ -240,6 +241,26 @@ func (g *Iyzico) Refund(ctx context.Context, paymentID string) error {
 	}
 	if res.Status != "success" {
 		return fmt.Errorf("iyzico: cancel failed: %s", res.ErrorMessage)
+	}
+	return nil
+}
+
+// RefundPartial returns part of a captured payment via iyzico's amount-based
+// refund (v2 refund-by-paymentId) — a declined sub-order's slice of a
+// multi-chef order.
+func (g *Iyzico) RefundPartial(ctx context.Context, paymentID string, amount float64) error {
+	req := map[string]string{
+		"locale":    "en",
+		"paymentId": paymentID,
+		"price":     strconv.FormatFloat(amount, 'f', 2, 64),
+		"ip":        "127.0.0.1",
+	}
+	var res cancelResponse
+	if err := g.post(ctx, pathRefundV2, req, &res); err != nil {
+		return err
+	}
+	if res.Status != "success" {
+		return fmt.Errorf("iyzico: partial refund failed: %s", res.ErrorMessage)
 	}
 	return nil
 }

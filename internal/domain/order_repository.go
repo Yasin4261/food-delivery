@@ -17,8 +17,13 @@ type OrderRepository interface {
 	// items (newest first, items filtered to that chef) and the total count.
 	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Order, int, error)
 	// UpdateStatus persists the mutable status/payment/timestamp fields of an
-	// order after a transition.
+	// order after a transition, together with the statuses of its loaded
+	// sub-orders (a customer cancel touches all of them), atomically.
 	UpdateStatus(ctx context.Context, order *Order) error
+	// UpdateSubOrder persists one sub-order's transition and the parent's
+	// re-derived status/payment fields in a single transaction, locking the
+	// order row so two chefs advancing concurrently serialise.
+	UpdateSubOrder(ctx context.Context, order *Order, sub *SubOrder) error
 	// CountActiveByUser counts a customer's in-flight orders (anything not yet
 	// delivered or cancelled) — powers the SPA's notification badge.
 	CountActiveByUser(ctx context.Context, userID int) (int, error)

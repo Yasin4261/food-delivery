@@ -10,7 +10,8 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/repository"
 )
 
-// buildOrder assembles a pending order for userID containing the given items.
+// buildOrder assembles a pending order for userID containing the given items,
+// with one sub-order per participating chef (as the order service does).
 func buildOrder(userID int, code string, items ...*domain.OrderItem) *domain.Order {
 	o := domain.NewOrder(userID, "123 St")
 	o.OrderCode = code
@@ -20,6 +21,11 @@ func buildOrder(userID int, code string, items ...*domain.OrderItem) *domain.Ord
 	for _, it := range items {
 		o.Items = append(o.Items, it)
 		subtotal += it.Subtotal
+		if s := o.SubOrderFor(it.ChefID); s != nil {
+			s.Subtotal += it.Subtotal
+		} else {
+			o.SubOrders = append(o.SubOrders, domain.NewSubOrder(it.ChefID, it.Subtotal))
+		}
 	}
 	o.Subtotal = subtotal
 	o.TotalPrice = subtotal
@@ -42,6 +48,9 @@ func TestOrderRepository_CreateTransactionAndFind(t *testing.T) {
 	if order.ID == 0 || order.Items[0].ID == 0 || order.Items[0].OrderID != order.ID {
 		t.Fatalf("create did not back-fill ids: %+v", order)
 	}
+	if len(order.SubOrders) != 1 || order.SubOrders[0].ID == 0 || order.SubOrders[0].OrderID != order.ID {
+		t.Fatalf("create did not persist sub-orders: %+v", order.SubOrders)
+	}
 
 	got, err := repo.FindByID(ctx(), order.ID)
 	if err != nil {
@@ -52,6 +61,10 @@ func TestOrderRepository_CreateTransactionAndFind(t *testing.T) {
 	}
 	if got.Items[0].ChefID != chef.ID || got.Items[0].Quantity != 2 {
 		t.Errorf("unexpected item: %+v", got.Items[0])
+	}
+	if len(got.SubOrders) != 1 || got.SubOrders[0].Status != domain.OrderStatusPending ||
+		got.SubOrders[0].Subtotal != 10 || got.SubOrders[0].ChefName == "" {
+		t.Errorf("unexpected sub-orders: %+v", got.SubOrders)
 	}
 }
 
@@ -95,6 +108,61 @@ func TestOrderRepository_MultiChefScoping(t *testing.T) {
 	if len(bOrders) != 1 || len(bOrders[0].Items) != 1 || bOrders[0].Items[0].ChefID != chefB.ID {
 		t.Errorf("chef B scoping wrong: %+v", bOrders)
 	}
+
+	// Both chef views keep the whole order's sub-orders visible (progress),
+	// each with its own subtotal.
+	if len(aOrders[0].SubOrders) != 2 {
+		t.Fatalf("chef view sub-orders = %d, want 2", len(aOrders[0].SubOrders))
+	}
+	subA, subB := aOrders[0].SubOrderFor(chefA.ID), aOrders[0].SubOrderFor(chefB.ID)
+	if subA == nil || subA.Subtotal != 5 || subB == nil || subB.Subtotal != 6 {
+		t.Errorf("sub-order split wrong: %+v / %+v", subA, subB)
+	}
+}
+
+// TestOrderRepository_UpdateSubOrder: chef A's transition persists atomically
+// with the derived order status, and chef B's sub-order is untouched.
+func TestOrderRepository_UpdateSubOrder(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewOrderRepository(testDB)
+	customer := seedUser(t, "cust@example.com")
+	chefA := seedChef(t, seedUser(t, "chefa@example.com").ID)
+	menuA := seedMenu(t, chefA.ID)
+	itemA := seedItem(t, menuA.ID, chefA.ID, 5, 10)
+	chefB := seedChef(t, seedUser(t, "chefb@example.com").ID)
+	menuB := seedMenu(t, chefB.ID)
+	itemB := seedItem(t, menuB.ID, chefB.ID, 3, 10)
+
+	order := buildOrder(customer.ID, "ORD-SUB",
+		domain.NewOrderItem(itemA.ID, chefA.ID, itemA.Name, 1, 5),
+		domain.NewOrderItem(itemB.ID, chefB.ID, itemB.Name, 1, 3))
+	if err := repo.Create(ctx(), order); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	sub := order.SubOrderFor(chefA.ID)
+	if err := sub.Confirm(); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	order.SyncStatusFromSubOrders()
+	if err := repo.UpdateSubOrder(ctx(), order, sub); err != nil {
+		t.Fatalf("update sub-order: %v", err)
+	}
+
+	got, err := repo.FindByID(ctx(), order.ID)
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if s := got.SubOrderFor(chefA.ID).Status; s != domain.OrderStatusConfirmed {
+		t.Errorf("chef A sub-order = %q, want confirmed", s)
+	}
+	if s := got.SubOrderFor(chefB.ID).Status; s != domain.OrderStatusPending {
+		t.Errorf("chef B sub-order = %q, want pending (untouched)", s)
+	}
+	// Derived order status: least-advanced active sub-order is still pending.
+	if got.Status != domain.OrderStatusPending {
+		t.Errorf("order status = %q, want pending (derived)", got.Status)
+	}
 }
 
 func TestOrderRepository_NotificationCounts(t *testing.T) {
@@ -114,6 +182,9 @@ func TestOrderRepository_NotificationCounts(t *testing.T) {
 		if status != domain.OrderStatusPending {
 			if _, err := testDB.Exec(`UPDATE orders SET status = $2 WHERE id = $1`, o.ID, status); err != nil {
 				t.Fatalf("set status: %v", err)
+			}
+			if _, err := testDB.Exec(`UPDATE sub_orders SET status = $2 WHERE order_id = $1`, o.ID, status); err != nil {
+				t.Fatalf("set sub-order status: %v", err)
 			}
 		}
 	}
@@ -171,8 +242,62 @@ func TestOrderRepository_UpdateStatus(t *testing.T) {
 	if got.Status != domain.OrderStatusCancelled || got.CancelledAt == nil {
 		t.Errorf("cancel not persisted: %+v", got)
 	}
+	// A customer cancel takes the sub-orders with it, in the same transaction.
+	if s := got.SubOrders[0].Status; s != domain.OrderStatusCancelled {
+		t.Errorf("sub-order after cancel = %q, want cancelled", s)
+	}
 
 	if err := repo.UpdateStatus(ctx(), buildOrder(customer.ID, "missing")); !errors.Is(err, domain.ErrOrderNotFound) {
 		t.Errorf("update missing = %v, want ErrOrderNotFound", err)
+	}
+}
+
+// TestOrderRepository_UpdateSubOrder_StaleSnapshot: two chefs advance from
+// stale reads of the same order — the derived order status must be recomputed
+// from the current rows inside the lock, not trusted from either snapshot.
+func TestOrderRepository_UpdateSubOrder_StaleSnapshot(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewOrderRepository(testDB)
+	customer := seedUser(t, "cust@example.com")
+	chefA := seedChef(t, seedUser(t, "chefa@example.com").ID)
+	menuA := seedMenu(t, chefA.ID)
+	itemA := seedItem(t, menuA.ID, chefA.ID, 5, 10)
+	chefB := seedChef(t, seedUser(t, "chefb@example.com").ID)
+	menuB := seedMenu(t, chefB.ID)
+	itemB := seedItem(t, menuB.ID, chefB.ID, 3, 10)
+
+	order := buildOrder(customer.ID, "ORD-STALE",
+		domain.NewOrderItem(itemA.ID, chefA.ID, itemA.Name, 1, 5),
+		domain.NewOrderItem(itemB.ID, chefB.ID, itemB.Name, 1, 3))
+	if err := repo.Create(ctx(), order); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Both chefs read the order before either writes (stale snapshots).
+	viewA, _ := repo.FindByID(ctx(), order.ID)
+	viewB, _ := repo.FindByID(ctx(), order.ID)
+
+	subA := viewA.SubOrderFor(chefA.ID)
+	_ = subA.Confirm()
+	viewA.SyncStatusFromSubOrders() // derives pending: B is pending in A's view
+	if err := repo.UpdateSubOrder(ctx(), viewA, subA); err != nil {
+		t.Fatalf("update A: %v", err)
+	}
+
+	subB := viewB.SubOrderFor(chefB.ID)
+	_ = subB.Confirm()
+	viewB.SyncStatusFromSubOrders() // derives pending: A is pending in B's *stale* view
+	if err := repo.UpdateSubOrder(ctx(), viewB, subB); err != nil {
+		t.Fatalf("update B: %v", err)
+	}
+
+	got, err := repo.FindByID(ctx(), order.ID)
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	// Both slices are confirmed, so the derived status must be confirmed even
+	// though B's snapshot said pending.
+	if got.Status != domain.OrderStatusConfirmed {
+		t.Errorf("order status = %q, want confirmed (re-derived under lock)", got.Status)
 	}
 }
