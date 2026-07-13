@@ -203,7 +203,7 @@ func TestOrderService_CancelRefundsPaidCardOrders(t *testing.T) {
 	item := seedItem(t, items, 1, 5, 10)
 	orders := newFakeOrderRepo()
 	refunder := &recordingRefunder{}
-	svc := service.NewOrderService(orders, items, chefRepo, refunder)
+	svc := service.NewOrderService(orders, items, chefRepo, refunder, nil)
 
 	place := func() *domain.Order {
 		o, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
