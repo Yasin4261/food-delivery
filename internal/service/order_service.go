@@ -18,12 +18,14 @@ type OrderService struct {
 	items    domain.MenuItemRepository
 	chefs    domain.ChefRepository
 	refunder domain.PaymentRefunder // refunds card payments on cancel; may be nil
+	notifier *OrderNotifier         // fire-and-forget order emails; may be nil
 }
 
 // NewOrderService builds an OrderService. refunder handles gateway refunds
-// when a paid card order is cancelled (nil disables refunds).
-func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, refunder domain.PaymentRefunder) *OrderService {
-	return &OrderService{orders: orders, items: items, chefs: chefs, refunder: refunder}
+// when a paid card order is cancelled (nil disables refunds); notifier sends
+// order emails (nil disables them).
+func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, refunder domain.PaymentRefunder, notifier *OrderNotifier) *OrderService {
+	return &OrderService{orders: orders, items: items, chefs: chefs, refunder: refunder, notifier: notifier}
 }
 
 // OrderLineInput is one requested dish in a new order.
@@ -122,6 +124,9 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 		}
 	}
 
+	if s.notifier != nil {
+		s.notifier.OrderPlaced(ctx, order)
+	}
 	return order, nil
 }
 
@@ -272,6 +277,9 @@ func (s *OrderService) AdvanceForChef(ctx context.Context, userID, orderID int, 
 	order.SettleCashOnDelivery()
 	if err := s.orders.UpdateSubOrder(ctx, order, sub); err != nil {
 		return nil, err
+	}
+	if s.notifier != nil {
+		s.notifier.SubOrderAdvanced(ctx, order, sub)
 	}
 	return order, nil
 }
