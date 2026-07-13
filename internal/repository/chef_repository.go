@@ -160,6 +160,32 @@ func (r *ChefRepository) SetOnline(ctx context.Context, chefID int, online bool)
 	return nil
 }
 
+// Update persists the chef's editable profile fields.
+func (r *ChefRepository) Update(ctx context.Context, c *domain.Chef) error {
+	query := `
+		UPDATE chefs
+		SET business_name = $2, bio = $3, specialty = $4,
+		    kitchen_address = $5, kitchen_city = $6,
+		    kitchen_latitude = $7, kitchen_longitude = $8,
+		    delivery_radius = $9, updated_at = now()
+		WHERE id = $1
+		RETURNING updated_at`
+
+	err := r.db.QueryRowContext(
+		ctx, query,
+		c.ID, c.BusinessName, c.Bio, c.Specialty,
+		c.KitchenAddress, c.KitchenCity, c.KitchenLatitude, c.KitchenLongitude,
+		c.DeliveryRadius,
+	).Scan(&c.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.ErrChefNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("update chef: %w", err)
+	}
+	return nil
+}
+
 func collectChefs(rows *sql.Rows) ([]*domain.Chef, error) {
 	chefs := make([]*domain.Chef, 0)
 	for rows.Next() {

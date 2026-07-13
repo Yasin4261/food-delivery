@@ -72,6 +72,15 @@ func (f *fakeChefRepo) SetOnline(_ context.Context, chefID int, online bool) err
 	return domain.ErrChefNotFound
 }
 
+func (f *fakeChefRepo) Update(_ context.Context, c *domain.Chef) error {
+	if _, ok := f.chefs[c.ID]; !ok {
+		return domain.ErrChefNotFound
+	}
+	cp := *c
+	f.chefs[c.ID] = &cp
+	return nil
+}
+
 func (f *fakeChefRepo) FindNearby(_ context.Context, lat, lng float64, limit int, onlineOnly bool) ([]*domain.Chef, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {

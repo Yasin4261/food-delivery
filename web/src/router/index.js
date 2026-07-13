@@ -47,6 +47,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('@/views/ProfileView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     // Dev-only stand-in for the gateway's hosted payment page (mock gateway).
     path: '/mock-pay',
     name: 'mock-pay',

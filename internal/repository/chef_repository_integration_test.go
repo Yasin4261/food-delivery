@@ -119,3 +119,44 @@ func TestChefRepository_List(t *testing.T) {
 		t.Errorf("list not ordered by rating desc: %v, %v", chefs[0].Rating, chefs[1].Rating)
 	}
 }
+
+func TestChefRepository_Update(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewChefRepository(testDB)
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+
+	bio, spec, kCity := "slow food", "soups", "Istanbul"
+	lat, lng := 41.0, 29.0
+	chef.BusinessName = "Renamed Kitchen"
+	chef.KitchenAddress = "2 Side St"
+	chef.Bio = &bio
+	chef.Specialty = &spec
+	chef.KitchenCity = &kCity
+	chef.KitchenLatitude = &lat
+	chef.KitchenLongitude = &lng
+	chef.DeliveryRadius = 12
+	if err := repo.Update(ctx(), chef); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	got, err := repo.FindByID(ctx(), chef.ID)
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if got.BusinessName != "Renamed Kitchen" || got.KitchenAddress != "2 Side St" || got.DeliveryRadius != 12 {
+		t.Errorf("profile fields not persisted: %+v", got)
+	}
+	if got.Bio == nil || *got.Bio != bio || got.KitchenLatitude == nil || *got.KitchenLatitude != lat {
+		t.Errorf("optional fields not persisted: %+v", got)
+	}
+	// Status/verification untouched by profile updates.
+	if !got.IsActive || got.IsVerified {
+		t.Errorf("status flags mutated: %+v", got)
+	}
+
+	ghost := *chef
+	ghost.ID = 9999
+	if err := repo.Update(ctx(), &ghost); err != domain.ErrChefNotFound {
+		t.Errorf("unknown chef = %v, want ErrChefNotFound", err)
+	}
+}

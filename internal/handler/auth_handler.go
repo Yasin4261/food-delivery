@@ -158,3 +158,80 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, http.StatusOK, user)
 }
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password"`
+}
+
+// ChangePassword handles PUT /api/v2/auth/password (auth) — a logged-in user
+// sets a new password after proving the current one.
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req changePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.auth.ChangePassword(r.Context(), claims.UserID, req.CurrentPassword, req.NewPassword); err != nil {
+		var ve service.ValidationError
+		if errors.As(err, &ve) {
+			respondError(w, http.StatusBadRequest, ve.Msg)
+			return
+		}
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"message": "password updated"})
+}
+
+type updateProfileRequest struct {
+	PhoneNumber string   `json:"phone_number"`
+	Address     string   `json:"address"`
+	City        string   `json:"city"`
+	State       string   `json:"state"`
+	ZipCode     string   `json:"zip_code"`
+	Latitude    *float64 `json:"latitude"`
+	Longitude   *float64 `json:"longitude"`
+}
+
+// UpdateProfile handles PUT /api/v2/users/me (auth) — the caller edits their
+// own contact/location fields. Identity fields (email, username, role) are
+// not accepted here by design.
+func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req updateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	user, err := h.auth.UpdateProfile(r.Context(), claims.UserID, service.UpdateProfileInput{
+		PhoneNumber: req.PhoneNumber,
+		Address:     req.Address,
+		City:        req.City,
+		State:       req.State,
+		ZipCode:     req.ZipCode,
+		Latitude:    req.Latitude,
+		Longitude:   req.Longitude,
+	})
+	if err != nil {
+		var ve service.ValidationError
+		if errors.As(err, &ve) {
+			respondError(w, http.StatusBadRequest, ve.Msg)
+			return
+		}
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, user)
+}

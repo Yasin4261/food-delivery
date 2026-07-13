@@ -120,14 +120,16 @@ async function logout() {
         </RouterLink>
 
         <template v-if="auth.isAuthenticated">
-          <span
-            class="hidden items-center gap-2 rounded-full border border-gray-200 bg-white py-1 pl-1 pr-3 text-sm text-gray-600 sm:flex"
+          <RouterLink
+            to="/profile"
+            class="hidden items-center gap-2 rounded-full border border-gray-200 bg-white py-1 pl-1 pr-3 text-sm text-gray-600 transition hover:border-brand-200 hover:text-brand-700 sm:flex"
+            :title="$t('nav.profileTitle')"
           >
             <span class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
               {{ initial }}
             </span>
             {{ auth.user?.username || auth.user?.email }}
-          </span>
+          </RouterLink>
           <button class="btn-ghost" @click="logout">{{ $t('nav.logout') }}</button>
         </template>
         <template v-else>

@@ -63,3 +63,50 @@ func TestUserRepository_UniqueEmail(t *testing.T) {
 		t.Error("expected a unique-violation error on duplicate email")
 	}
 }
+
+func TestUserRepository_UpdateProfile(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewUserRepository(testDB)
+	user := seedUser(t, "profile@example.com")
+
+	phone, city := "+90 555 111 22 33", "Istanbul"
+	lat, lng := 41.0082, 28.9784
+	user.PhoneNumber = &phone
+	user.City = &city
+	user.Latitude = &lat
+	user.Longitude = &lng
+	if err := repo.UpdateProfile(ctx(), user); err != nil {
+		t.Fatalf("update profile: %v", err)
+	}
+
+	got, err := repo.FindByID(ctx(), user.ID)
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if got.PhoneNumber == nil || *got.PhoneNumber != phone || got.City == nil || *got.City != city {
+		t.Errorf("contact fields not persisted: %+v", got)
+	}
+	if got.Latitude == nil || *got.Latitude != lat || got.Longitude == nil || *got.Longitude != lng {
+		t.Errorf("location not persisted: lat=%v lng=%v", got.Latitude, got.Longitude)
+	}
+	// Identity untouched.
+	if got.Email != "profile@example.com" {
+		t.Errorf("email changed: %q", got.Email)
+	}
+
+	// Clearing works too (nil pointers -> NULL).
+	user.PhoneNumber, user.City, user.Latitude, user.Longitude = nil, nil, nil, nil
+	if err := repo.UpdateProfile(ctx(), user); err != nil {
+		t.Fatalf("clear profile: %v", err)
+	}
+	got, _ = repo.FindByID(ctx(), user.ID)
+	if got.PhoneNumber != nil || got.Latitude != nil {
+		t.Errorf("fields not cleared: %+v", got)
+	}
+
+	ghost := *user
+	ghost.ID = 9999
+	if err := repo.UpdateProfile(ctx(), &ghost); err != domain.ErrUserNotFound {
+		t.Errorf("unknown user = %v, want ErrUserNotFound", err)
+	}
+}

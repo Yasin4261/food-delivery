@@ -3,6 +3,7 @@
 export default {
   nav: {
     browse: 'Browse',
+    profileTitle: 'My profile',
     search: '🔍 Search',
     dashboard: 'Dashboard',
     myMenus: 'My menus',
@@ -201,6 +202,22 @@ export default {
     remove: 'remove',
     needProfile: 'You need a kitchen profile before adding menus.',
     needProfileLink: 'Set it up on the dashboard',
+  },
+  profile: {
+    title: 'My profile',
+    account: 'Contact & delivery location',
+    phone: 'Phone number',
+    address: 'Address',
+    city: 'City',
+    save: 'Save',
+    saved: 'Saved.',
+    password: 'Change password',
+    currentPassword: 'Current password',
+    newPassword: 'New password',
+    changePassword: 'Update password',
+    passwordChanged: 'Password updated.',
+    kitchen: 'My kitchen',
+    bio: 'Bio',
   },
   onboarding: {
     title: 'Set up your kitchen',

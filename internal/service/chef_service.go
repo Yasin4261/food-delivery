@@ -71,6 +71,46 @@ func (s *ChefService) CreateProfile(ctx context.Context, userID int, in CreatePr
 	return chef, nil
 }
 
+// UpdateProfile edits the caller's own kitchen profile (same validation as
+// CreateProfile). A zero DeliveryRadius keeps the current one.
+func (s *ChefService) UpdateProfile(ctx context.Context, userID int, in CreateProfileInput) (*domain.Chef, error) {
+	in.BusinessName = strings.TrimSpace(in.BusinessName)
+	in.KitchenAddress = strings.TrimSpace(in.KitchenAddress)
+
+	if in.BusinessName == "" {
+		return nil, ValidationError{Msg: "business_name is required"}
+	}
+	if in.KitchenAddress == "" {
+		return nil, ValidationError{Msg: "kitchen_address is required"}
+	}
+	if in.DeliveryRadius < 0 {
+		return nil, ValidationError{Msg: "delivery_radius cannot be negative"}
+	}
+	if (in.Latitude == nil) != (in.Longitude == nil) {
+		return nil, ValidationError{Msg: "latitude and longitude must be provided together"}
+	}
+
+	chef, err := s.chefs.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	chef.BusinessName = in.BusinessName
+	chef.KitchenAddress = in.KitchenAddress
+	chef.Bio = optional(in.Bio)
+	chef.Specialty = optional(in.Specialty)
+	chef.KitchenCity = optional(in.KitchenCity)
+	chef.KitchenLatitude = in.Latitude
+	chef.KitchenLongitude = in.Longitude
+	if in.DeliveryRadius > 0 {
+		chef.DeliveryRadius = in.DeliveryRadius
+	}
+
+	if err := s.chefs.Update(ctx, chef); err != nil {
+		return nil, err
+	}
+	return chef, nil
+}
+
 // Get returns a chef by id.
 func (s *ChefService) Get(ctx context.Context, id int) (*domain.Chef, error) {
 	return s.chefs.FindByID(ctx, id)

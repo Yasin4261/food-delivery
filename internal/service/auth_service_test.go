@@ -69,6 +69,21 @@ func (f *fakeUserRepo) UpdatePassword(_ context.Context, userID int, passwordHas
 	return domain.ErrUserNotFound
 }
 
+func (f *fakeUserRepo) UpdateProfile(_ context.Context, u *domain.User) error {
+	stored, ok := f.users[u.ID]
+	if !ok {
+		return domain.ErrUserNotFound
+	}
+	stored.PhoneNumber = u.PhoneNumber
+	stored.Address = u.Address
+	stored.City = u.City
+	stored.State = u.State
+	stored.ZipCode = u.ZipCode
+	stored.Latitude = u.Latitude
+	stored.Longitude = u.Longitude
+	return nil
+}
+
 // fakeResetRepo is an in-memory domain.PasswordResetRepository for tests.
 type fakeResetRepo struct {
 	byHash map[string]*domain.PasswordResetToken
@@ -426,4 +441,92 @@ func TestParseToken_Rejected(t *testing.T) {
 	if _, err := svc.ParseToken(res.Token); err == nil {
 		t.Error("expected rejection of a token signed with another secret")
 	}
+}
+
+func TestAuthService_ChangePassword(t *testing.T) {
+	repo := newFakeUserRepo()
+	svc := newService(repo)
+	ctx := context.Background()
+	reg, err := svc.Register(ctx, validRegister())
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	uid := reg.User.ID
+
+	t.Run("wrong current password", func(t *testing.T) {
+		err := svc.ChangePassword(ctx, uid, "not-the-password", "newpass1")
+		if !errors.Is(err, domain.ErrInvalidCredentials) {
+			t.Errorf("err = %v, want ErrInvalidCredentials", err)
+		}
+	})
+
+	t.Run("too-short new password", func(t *testing.T) {
+		if err := svc.ChangePassword(ctx, uid, "secret123", "abc"); !isValidation(err) {
+			t.Errorf("err = %v, want ValidationError", err)
+		}
+	})
+
+	t.Run("success rotates the hash", func(t *testing.T) {
+		if err := svc.ChangePassword(ctx, uid, "secret123", "newpass1"); err != nil {
+			t.Fatalf("change: %v", err)
+		}
+		if _, err := svc.Login(ctx, "yasin@example.com", "secret123"); !errors.Is(err, domain.ErrInvalidCredentials) {
+			t.Errorf("old password still works: %v", err)
+		}
+		if _, err := svc.Login(ctx, "yasin@example.com", "newpass1"); err != nil {
+			t.Errorf("new password rejected: %v", err)
+		}
+	})
+}
+
+func TestAuthService_UpdateProfile(t *testing.T) {
+	repo := newFakeUserRepo()
+	svc := newService(repo)
+	ctx := context.Background()
+	reg, err := svc.Register(ctx, validRegister())
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	uid := reg.User.ID
+
+	t.Run("lat without lng rejected", func(t *testing.T) {
+		lat := 41.0
+		_, err := svc.UpdateProfile(ctx, uid, service.UpdateProfileInput{Latitude: &lat})
+		if !isValidation(err) {
+			t.Errorf("err = %v, want ValidationError", err)
+		}
+	})
+
+	t.Run("updates contact and location, never identity", func(t *testing.T) {
+		lat, lng := 41.0082, 28.9784
+		got, err := svc.UpdateProfile(ctx, uid, service.UpdateProfileInput{
+			PhoneNumber: "+90 555 000 00 00",
+			Address:     "New Street 5",
+			City:        "Istanbul",
+			Latitude:    &lat,
+			Longitude:   &lng,
+		})
+		if err != nil {
+			t.Fatalf("update: %v", err)
+		}
+		if got.PhoneNumber == nil || *got.PhoneNumber != "+90 555 000 00 00" || got.City == nil || *got.City != "Istanbul" {
+			t.Errorf("profile not applied: %+v", got)
+		}
+		if got.Email != "yasin@example.com" || got.Username != "yasin" || got.Role != domain.RoleCustomer {
+			t.Errorf("identity fields must be untouched: %+v", got)
+		}
+		if got.PasswordHash != "" {
+			t.Error("password hash leaked in response")
+		}
+		stored, _ := repo.FindByID(ctx, uid)
+		if stored.Latitude == nil || *stored.Latitude != lat {
+			t.Errorf("location not persisted: %+v", stored)
+		}
+	})
+
+	t.Run("unknown user", func(t *testing.T) {
+		if _, err := svc.UpdateProfile(ctx, 999, service.UpdateProfileInput{}); !errors.Is(err, domain.ErrUserNotFound) {
+			t.Errorf("err = %v, want ErrUserNotFound", err)
+		}
+	})
 }

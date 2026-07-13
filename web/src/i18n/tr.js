@@ -2,6 +2,7 @@
 export default {
   nav: {
     browse: 'Keşfet',
+    profileTitle: 'Profilim',
     search: '🔍 Ara',
     dashboard: 'Panelim',
     myMenus: 'Menülerim',
@@ -200,6 +201,22 @@ export default {
     remove: 'kaldır',
     needProfile: 'Menü eklemeden önce mutfak profilinizi oluşturmalısınız.',
     needProfileLink: 'Panelden hemen kurun',
+  },
+  profile: {
+    title: 'Profilim',
+    account: 'İletişim ve teslimat konumu',
+    phone: 'Telefon numarası',
+    address: 'Adres',
+    city: 'Şehir',
+    save: 'Kaydet',
+    saved: 'Kaydedildi.',
+    password: 'Şifre değiştir',
+    currentPassword: 'Mevcut şifre',
+    newPassword: 'Yeni şifre',
+    changePassword: 'Şifreyi güncelle',
+    passwordChanged: 'Şifre güncellendi.',
+    kitchen: 'Mutfağım',
+    bio: 'Tanıtım',
   },
   onboarding: {
     title: 'Mutfağınızı kurun',
