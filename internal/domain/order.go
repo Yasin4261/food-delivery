@@ -48,6 +48,11 @@ type Order struct {
 
 	// Items is loaded alongside the order; it is not a column.
 	Items []*OrderItem `json:"items,omitempty"`
+
+	// SubOrders is the per-chef slices of the order (one per participating
+	// chef), loaded alongside it. Status is derived from these — see
+	// SyncStatusFromSubOrders.
+	SubOrders []*SubOrder `json:"sub_orders,omitempty"`
 }
 
 // Order status values. See the lifecycle in CLAUDE.md §4.
@@ -122,9 +127,19 @@ func (o *Order) MarkDelivered() error {
 }
 
 // CanCancel reports whether the order may still be cancelled: only pending or
-// confirmed orders (before preparation starts).
+// confirmed orders (before preparation starts). When sub-orders are loaded,
+// every one of them must still be cancellable — one chef having started
+// preparing locks the whole order in.
 func (o *Order) CanCancel() bool {
-	return o.Status == OrderStatusPending || o.Status == OrderStatusConfirmed
+	if o.Status != OrderStatusPending && o.Status != OrderStatusConfirmed {
+		return false
+	}
+	for _, s := range o.SubOrders {
+		if s.Status != OrderStatusCancelled && !s.CanCancel() {
+			return false
+		}
+	}
+	return true
 }
 
 // IsCardPaid reports whether the order was paid by card — the case that needs
@@ -134,17 +149,55 @@ func (o *Order) IsCardPaid() bool {
 		o.PaymentMethod != nil && *o.PaymentMethod == PaymentMethodCard
 }
 
-// Cancel cancels an order. Only pending or confirmed orders may be cancelled
-// (a chef declining, or a customer changing their mind before preparation).
+// Cancel cancels an order — and every still-active sub-order with it (a
+// customer changing their mind before any preparation starts). Only pending or
+// confirmed orders may be cancelled.
 func (o *Order) Cancel() error {
 	if !o.CanCancel() {
 		return ErrInvalidStatusTransition
+	}
+	for _, s := range o.SubOrders {
+		if s.Status != OrderStatusCancelled {
+			if err := s.Cancel(); err != nil {
+				return err
+			}
+		}
 	}
 	now := time.Now()
 	o.Status = OrderStatusCancelled
 	o.CancelledAt = &now
 	o.UpdatedAt = now
 	return nil
+}
+
+// SubOrderFor returns the chef's sub-order, or nil when the chef has no slice
+// of this order. It is the basis for chef-scoped status transitions.
+func (o *Order) SubOrderFor(chefID int) *SubOrder {
+	for _, s := range o.SubOrders {
+		if s.ChefID == chefID {
+			return s
+		}
+	}
+	return nil
+}
+
+// SyncStatusFromSubOrders re-derives the order-level status after a sub-order
+// transition, stamping delivery/cancellation times when the derived status
+// lands there. Call it after mutating any sub-order.
+func (o *Order) SyncStatusFromSubOrders() {
+	derived := DeriveOrderStatus(o.SubOrders)
+	if derived == o.Status {
+		return
+	}
+	now := time.Now()
+	o.Status = derived
+	o.UpdatedAt = now
+	switch derived {
+	case OrderStatusDelivered:
+		o.ActualDeliveryTime = &now
+	case OrderStatusCancelled:
+		o.CancelledAt = &now
+	}
 }
 
 // SettleCashOnDelivery marks payment as paid for a delivered cash order —

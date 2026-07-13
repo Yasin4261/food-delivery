@@ -94,6 +94,16 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 	order.Subtotal = subtotal
 	order.TotalPrice = subtotal + order.DeliveryFee + order.ServiceFee + order.Tax - order.Discount
 
+	// One sub-order per participating chef (in first-seen item order): the
+	// chef-scoped slice that carries its own status lifecycle.
+	for _, oi := range order.Items {
+		if s := order.SubOrderFor(oi.ChefID); s != nil {
+			s.Subtotal += oi.Subtotal
+			continue
+		}
+		order.SubOrders = append(order.SubOrders, domain.NewSubOrder(oi.ChefID, oi.Subtotal))
+	}
+
 	if err := s.orders.Create(ctx, order); err != nil {
 		return nil, err
 	}
@@ -219,9 +229,12 @@ const (
 	OrderActionDecline    = "decline"
 )
 
-// AdvanceForChef applies a status transition to an order the chef participates
-// in. "confirm" accepts the order; "decline" cancels it; the rest move it along
-// the lifecycle. Illegal transitions return ErrInvalidStatusTransition.
+// AdvanceForChef applies a status transition to the caller's own sub-order —
+// chef A advancing never touches chef B's slice. "confirm" accepts the
+// sub-order; "decline" cancels it (refunding the chef's slice of a card-paid
+// order first); the rest move it along the lifecycle. The order-level status
+// is re-derived from the sub-orders and both are persisted atomically.
+// Illegal transitions return ErrInvalidStatusTransition.
 func (s *OrderService) AdvanceForChef(ctx context.Context, userID, orderID int, action string) (*domain.Order, error) {
 	chef, err := s.chefs.FindByUserID(ctx, userID)
 	if err != nil {
@@ -231,37 +244,52 @@ func (s *OrderService) AdvanceForChef(ctx context.Context, userID, orderID int, 
 	if err != nil {
 		return nil, err
 	}
-	if !order.HasChef(chef.ID) {
+	sub := order.SubOrderFor(chef.ID)
+	if sub == nil {
 		return nil, domain.ErrForbidden
 	}
 
-	if err := applyChefAction(order, action); err != nil {
+	if err := applyChefAction(sub, action); err != nil {
 		return nil, err
 	}
-	// Cash settles at the door: a delivered cash order counts as paid, so it
-	// flows into chef earnings (delivered & paid). Card payment will be driven
-	// by the gateway integration (#42 phase 2).
+	// Declining a slice of a card-paid order returns that chef's money before
+	// anything persists — if the partial refund fails, the decline aborts.
+	if action == OrderActionDecline && order.IsCardPaid() && s.refunder != nil {
+		if err := s.refunder.RefundSubOrderPayment(ctx, order, sub.Subtotal); err != nil {
+			return nil, err
+		}
+	}
+
+	order.SyncStatusFromSubOrders()
+	// Every chef declined a card-paid order: each slice was refunded above, so
+	// the order's payment is fully returned.
+	if order.Status == domain.OrderStatusCancelled && order.IsCardPaid() {
+		_ = order.Refund()
+	}
+	// Cash settles at the door: once every sub-order is delivered the derived
+	// order is delivered, and a cash order then counts as paid, so it flows
+	// into chef earnings (delivered & paid).
 	order.SettleCashOnDelivery()
-	if err := s.orders.UpdateStatus(ctx, order); err != nil {
+	if err := s.orders.UpdateSubOrder(ctx, order, sub); err != nil {
 		return nil, err
 	}
 	return order, nil
 }
 
-func applyChefAction(order *domain.Order, action string) error {
+func applyChefAction(sub *domain.SubOrder, action string) error {
 	switch action {
 	case OrderActionConfirm:
-		return order.Confirm()
+		return sub.Confirm()
 	case OrderActionPreparing:
-		return order.StartPreparing()
+		return sub.StartPreparing()
 	case OrderActionReady:
-		return order.MarkReady()
+		return sub.MarkReady()
 	case OrderActionDelivering:
-		return order.StartDelivering()
+		return sub.StartDelivering()
 	case OrderActionDelivered:
-		return order.MarkDelivered()
+		return sub.MarkDelivered()
 	case OrderActionDecline:
-		return order.Cancel()
+		return sub.Cancel()
 	default:
 		return ValidationError{Msg: "unknown action: must be confirm, preparing, ready, delivering, delivered or decline"}
 	}

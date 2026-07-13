@@ -19,17 +19,27 @@ func newFakeOrderRepo() *fakeOrderRepo {
 	return &fakeOrderRepo{orders: map[int]*domain.Order{}, nextID: 1}
 }
 
+// copyOrder deep-copies the sub-orders so mutations on a fetched order never
+// leak into "storage" without an explicit update (mirrors a real database).
+func copyOrder(o *domain.Order) *domain.Order {
+	cp := *o
+	cp.SubOrders = make([]*domain.SubOrder, 0, len(o.SubOrders))
+	for _, s := range o.SubOrders {
+		sc := *s
+		cp.SubOrders = append(cp.SubOrders, &sc)
+	}
+	return &cp
+}
+
 func (f *fakeOrderRepo) Create(_ context.Context, o *domain.Order) error {
 	o.ID = f.nextID
 	f.nextID++
-	cp := *o
-	f.orders[o.ID] = &cp
+	f.orders[o.ID] = copyOrder(o)
 	return nil
 }
 func (f *fakeOrderRepo) FindByID(_ context.Context, id int) (*domain.Order, error) {
 	if o, ok := f.orders[id]; ok {
-		cp := *o
-		return &cp, nil
+		return copyOrder(o), nil
 	}
 	return nil, domain.ErrOrderNotFound
 }
@@ -57,9 +67,11 @@ func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	if _, ok := f.orders[o.ID]; !ok {
 		return domain.ErrOrderNotFound
 	}
-	cp := *o
-	f.orders[o.ID] = &cp
+	f.orders[o.ID] = copyOrder(o)
 	return nil
+}
+func (f *fakeOrderRepo) UpdateSubOrder(ctx context.Context, o *domain.Order, _ *domain.SubOrder) error {
+	return f.UpdateStatus(ctx, o)
 }
 func (f *fakeOrderRepo) CountActiveByUser(_ context.Context, userID int) (int, error) {
 	n := 0
@@ -73,7 +85,7 @@ func (f *fakeOrderRepo) CountActiveByUser(_ context.Context, userID int) (int, e
 func (f *fakeOrderRepo) CountPendingByChef(_ context.Context, chefID int) (int, error) {
 	n := 0
 	for _, o := range f.orders {
-		if o.Status == domain.OrderStatusPending && o.HasChef(chefID) {
+		if s := o.SubOrderFor(chefID); s != nil && s.Status == domain.OrderStatusPending {
 			n++
 		}
 	}
@@ -288,5 +300,196 @@ func TestOrderService_AdvanceForChef(t *testing.T) {
 	// Unknown action is a validation error.
 	if _, err := svc.AdvanceForChef(ctx, 1, order.ID, "teleport"); !isValidation(err) {
 		t.Errorf("unknown action = %v, want ValidationError", err)
+	}
+}
+
+// placeMultiChef seeds two chefs (users 1 and 2) with one dish each and places
+// a single order spanning both, returning the service, repo and order.
+func placeMultiChef(t *testing.T, method string, refunder domain.PaymentRefunder) (*service.OrderService, *fakeOrderRepo, *domain.Order) {
+	t.Helper()
+	ctx := context.Background()
+	chefRepo := newFakeChefRepo()
+	for _, uid := range []int{1, 2} {
+		if err := chefRepo.Create(ctx, &domain.Chef{UserID: uid, IsActive: true}); err != nil {
+			t.Fatalf("seed chef: %v", err)
+		}
+	}
+	items := newFakeMenuItemRepo()
+	a := seedItem(t, items, 1, 5, 10)
+	b := seedItem(t, items, 2, 3, 10)
+	orders := newFakeOrderRepo()
+	svc := service.NewOrderService(orders, items, chefRepo, refunder)
+
+	order, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
+		DeliveryAddress: "x", PaymentMethod: method,
+		Lines: []service.OrderLineInput{
+			{MenuItemID: a.ID, Quantity: 1}, // chef1: 5
+			{MenuItemID: b.ID, Quantity: 2}, // chef2: 6
+		},
+	})
+	if err != nil {
+		t.Fatalf("place: %v", err)
+	}
+	return svc, orders, order
+}
+
+// The issue's acceptance case: chef A advancing never changes chef B's slice,
+// and the order-level status derives from the least-advanced active sub-order.
+func TestOrderService_SubOrderIsolation(t *testing.T) {
+	svc, _, order := placeMultiChef(t, domain.PaymentMethodCash, nil)
+	ctx := context.Background()
+
+	if len(order.SubOrders) != 2 {
+		t.Fatalf("sub-orders = %d, want 2", len(order.SubOrders))
+	}
+	if order.SubOrders[0].Subtotal != 5 || order.SubOrders[1].Subtotal != 6 {
+		t.Fatalf("sub-order subtotals = %v/%v, want 5/6", order.SubOrders[0].Subtotal, order.SubOrders[1].Subtotal)
+	}
+
+	// Chef 1 races ahead to delivering; chef 2 hasn't touched theirs.
+	for _, action := range []string{"confirm", "preparing", "ready", "delivering"} {
+		if _, err := svc.AdvanceForChef(ctx, 1, order.ID, action); err != nil {
+			t.Fatalf("chef1 %s: %v", action, err)
+		}
+	}
+	got, err := svc.AdvanceForChef(ctx, 2, order.ID, service.OrderActionConfirm)
+	if err != nil {
+		t.Fatalf("chef2 confirm: %v", err)
+	}
+	if s := got.SubOrderFor(1).Status; s != domain.OrderStatusDelivering {
+		t.Errorf("chef1 sub-order = %q, want delivering (untouched by chef2)", s)
+	}
+	if s := got.SubOrderFor(2).Status; s != domain.OrderStatusConfirmed {
+		t.Errorf("chef2 sub-order = %q, want confirmed", s)
+	}
+	// Order-level status = least-advanced active sub-order.
+	if got.Status != domain.OrderStatusConfirmed {
+		t.Errorf("order status = %q, want confirmed (derived)", got.Status)
+	}
+
+	// Chef 2 cannot replay chef 1's transitions on their own slice.
+	if _, err := svc.AdvanceForChef(ctx, 2, order.ID, service.OrderActionReady); !errors.Is(err, domain.ErrInvalidStatusTransition) {
+		t.Errorf("chef2 illegal move = %v, want ErrInvalidStatusTransition", err)
+	}
+}
+
+// A cash multi-chef order settles to paid only when every sub-order is
+// delivered — the derived order status drives SettleCashOnDelivery.
+func TestOrderService_MultiChefCashSettlesWhenAllDelivered(t *testing.T) {
+	svc, orders, order := placeMultiChef(t, domain.PaymentMethodCash, nil)
+	ctx := context.Background()
+	all := []string{"confirm", "preparing", "ready", "delivering", "delivered"}
+
+	for _, action := range all {
+		if _, err := svc.AdvanceForChef(ctx, 1, order.ID, action); err != nil {
+			t.Fatalf("chef1 %s: %v", action, err)
+		}
+	}
+	mid, _ := orders.FindByID(ctx, order.ID)
+	if mid.Status != domain.OrderStatusPending || mid.PaymentStatus != domain.PaymentStatusPending {
+		t.Fatalf("after chef1 only: status=%q payment=%q, want pending/pending", mid.Status, mid.PaymentStatus)
+	}
+
+	var final *domain.Order
+	for _, action := range all {
+		o, err := svc.AdvanceForChef(ctx, 2, order.ID, action)
+		if err != nil {
+			t.Fatalf("chef2 %s: %v", action, err)
+		}
+		final = o
+	}
+	if final.Status != domain.OrderStatusDelivered {
+		t.Errorf("order status = %q, want delivered (all sub-orders delivered)", final.Status)
+	}
+	if final.PaymentStatus != domain.PaymentStatusPaid {
+		t.Errorf("payment = %q, want paid (cash settled on full delivery)", final.PaymentStatus)
+	}
+}
+
+// Declining one slice of a card-paid order partial-refunds that chef's
+// subtotal; the other chef's slice and the order stay alive. Declining the
+// last active slice marks the whole payment refunded.
+func TestOrderService_DeclinePartialRefund(t *testing.T) {
+	refunder := &recordingRefunder{}
+	svc, orders, order := placeMultiChef(t, domain.PaymentMethodCard, refunder)
+	ctx := context.Background()
+
+	stored, _ := orders.FindByID(ctx, order.ID)
+	_ = stored.MarkPaid()
+	_ = orders.UpdateStatus(ctx, stored)
+
+	got, err := svc.AdvanceForChef(ctx, 1, order.ID, service.OrderActionDecline)
+	if err != nil {
+		t.Fatalf("chef1 decline: %v", err)
+	}
+	if refunder.partialCalls != 1 || refunder.partialAmounts[0] != 5 {
+		t.Fatalf("partial refunds = %d %v, want one of 5", refunder.partialCalls, refunder.partialAmounts)
+	}
+	if s := got.SubOrderFor(2).Status; s != domain.OrderStatusPending {
+		t.Errorf("chef2 sub-order = %q, want pending (unaffected by decline)", s)
+	}
+	if got.Status != domain.OrderStatusPending || got.PaymentStatus != domain.PaymentStatusPaid {
+		t.Errorf("order = %q/%q, want pending/paid (still alive)", got.Status, got.PaymentStatus)
+	}
+
+	// The last chef declining cancels the order; every slice has been refunded.
+	final, err := svc.AdvanceForChef(ctx, 2, order.ID, service.OrderActionDecline)
+	if err != nil {
+		t.Fatalf("chef2 decline: %v", err)
+	}
+	if refunder.partialCalls != 2 || refunder.partialAmounts[1] != 6 {
+		t.Fatalf("partial refunds = %d %v, want second of 6", refunder.partialCalls, refunder.partialAmounts)
+	}
+	if final.Status != domain.OrderStatusCancelled || final.PaymentStatus != domain.PaymentStatusRefunded {
+		t.Errorf("order = %q/%q, want cancelled/refunded", final.Status, final.PaymentStatus)
+	}
+}
+
+// A failing partial refund aborts the decline — the sub-order stays alive so
+// money and state never diverge.
+func TestOrderService_DeclineAbortsWhenPartialRefundFails(t *testing.T) {
+	refunder := &recordingRefunder{err: errors.New("gateway down")}
+	svc, orders, order := placeMultiChef(t, domain.PaymentMethodCard, refunder)
+	ctx := context.Background()
+
+	stored, _ := orders.FindByID(ctx, order.ID)
+	_ = stored.MarkPaid()
+	_ = orders.UpdateStatus(ctx, stored)
+
+	if _, err := svc.AdvanceForChef(ctx, 1, order.ID, service.OrderActionDecline); err == nil {
+		t.Fatal("decline should fail when the partial refund fails")
+	}
+	after, _ := orders.FindByID(ctx, order.ID)
+	if s := after.SubOrderFor(1).Status; s == domain.OrderStatusCancelled {
+		t.Error("sub-order must stay uncancelled when the refund fails")
+	}
+}
+
+// Customer cancel is blocked once any chef has started preparing, and a
+// successful cancel takes every sub-order with it.
+func TestOrderService_CustomerCancelWithSubOrders(t *testing.T) {
+	svc, _, order := placeMultiChef(t, domain.PaymentMethodCash, nil)
+	ctx := context.Background()
+
+	// Chef 1 starts preparing -> the whole order is locked in.
+	for _, action := range []string{"confirm", "preparing"} {
+		if _, err := svc.AdvanceForChef(ctx, 1, order.ID, action); err != nil {
+			t.Fatalf("chef1 %s: %v", action, err)
+		}
+	}
+	if _, err := svc.CancelForCustomer(ctx, 100, order.ID); !errors.Is(err, domain.ErrInvalidStatusTransition) {
+		t.Errorf("cancel after preparing = %v, want ErrInvalidStatusTransition", err)
+	}
+
+	// A fresh order cancels cleanly, cancelling both slices.
+	svc2, _, order2 := placeMultiChef(t, domain.PaymentMethodCash, nil)
+	cancelled, err := svc2.CancelForCustomer(ctx, 100, order2.ID)
+	if err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	for _, s := range cancelled.SubOrders {
+		if s.Status != domain.OrderStatusCancelled {
+			t.Errorf("sub-order chef %d = %q, want cancelled", s.ChefID, s.Status)
+		}
 	}
 }

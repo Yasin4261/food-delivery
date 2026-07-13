@@ -54,6 +54,9 @@ type PaymentGateway interface {
 	VerifyCheckout(ctx context.Context, token string) (*PaymentResult, error)
 	// Refund returns a captured payment (full amount).
 	Refund(ctx context.Context, paymentID string) error
+	// RefundPartial returns part of a captured payment — a declined sub-order's
+	// subtotal in a multi-chef order that otherwise stays alive.
+	RefundPartial(ctx context.Context, paymentID string, amount float64) error
 }
 
 // PaymentSessionRepository is the port for payment-session persistence.
@@ -71,7 +74,11 @@ type PaymentSessionRepository interface {
 
 // PaymentRefunder refunds an order's captured card payment. Implemented by the
 // payment service; consumed by the order service when a paid order is
-// cancelled.
+// cancelled (full) or one of its sub-orders is declined (partial).
 type PaymentRefunder interface {
 	RefundOrderPayment(ctx context.Context, order *Order) error
+	// RefundSubOrderPayment returns amount of the order's captured payment —
+	// the declined chef's slice. The payment session stays paid: the remaining
+	// sub-orders' money is still captured.
+	RefundSubOrderPayment(ctx context.Context, order *Order, amount float64) error
 }

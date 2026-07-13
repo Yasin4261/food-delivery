@@ -168,6 +168,7 @@ export default {
   },
   dashboard: {
     subtitle: 'Şef paneli',
+    multiChef: 'çok şefli siparişteki payınız',
     online: 'çevrimiçi',
     offline: 'çevrimdışı',
     goOnline: 'Çevrimiçi ol',

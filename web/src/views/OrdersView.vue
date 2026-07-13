@@ -114,6 +114,17 @@ onBeforeUnmount(() => clearInterval(poll))
         </div>
         <span class="font-semibold">${{ order.total_price?.toFixed(2) }}</span>
       </div>
+      <!-- Multi-chef orders: each chef's slice advances on its own. -->
+      <div v-if="order.sub_orders?.length > 1" class="flex flex-wrap gap-2 text-sm">
+        <span
+          v-for="sub in order.sub_orders"
+          :key="sub.id"
+          class="inline-flex items-center gap-1.5 rounded-full bg-gray-50 py-0.5 pl-2.5 pr-1 text-gray-600"
+        >
+          {{ sub.chef_name }}
+          <span class="badge" :class="statusClass(sub.status)">{{ $t(`status.${sub.status}`) }}</span>
+        </span>
+      </div>
       <ul class="text-sm text-gray-600">
         <li v-for="it in order.items" :key="it.id">{{ it.quantity }}× {{ it.item_name }}</li>
       </ul>

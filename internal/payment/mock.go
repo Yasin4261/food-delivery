@@ -42,3 +42,6 @@ func (m *Mock) VerifyCheckout(_ context.Context, token string) (*domain.PaymentR
 
 // Refund always succeeds.
 func (m *Mock) Refund(context.Context, string) error { return nil }
+
+// RefundPartial always succeeds.
+func (m *Mock) RefundPartial(context.Context, string, float64) error { return nil }
