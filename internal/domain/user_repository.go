@@ -13,7 +13,7 @@ type UserRepository interface {
 	// UpdatePassword sets a user's password hash.
 	UpdatePassword(ctx context.Context, userID int, passwordHash string) error
 	// UpdateProfile persists the user's editable contact/location fields
-	// (phone, address, city, state, zip, lat/lng) — never email, username,
-	// role or password.
+	// (phone, address, city, state, zip, lat/lng) and the email-notification
+	// preference — never email, username, role or password.
 	UpdateProfile(ctx context.Context, user *User) error
 }

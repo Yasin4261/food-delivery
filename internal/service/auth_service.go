@@ -249,6 +249,9 @@ type UpdateProfileInput struct {
 	ZipCode     string
 	Latitude    *float64
 	Longitude   *float64
+	// EmailNotifications toggles order notification emails (#71); nil keeps
+	// the current preference. Password-reset email is unaffected.
+	EmailNotifications *bool
 }
 
 // UpdateProfile updates the caller's own contact/location fields and returns
@@ -272,6 +275,9 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID int, in UpdatePr
 	user.ZipCode = optional(in.ZipCode)
 	user.Latitude = in.Latitude
 	user.Longitude = in.Longitude
+	if in.EmailNotifications != nil {
+		user.EmailNotifications = *in.EmailNotifications
+	}
 	if err := s.users.UpdateProfile(ctx, user); err != nil {
 		return nil, err
 	}

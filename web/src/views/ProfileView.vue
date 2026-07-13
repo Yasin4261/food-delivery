@@ -5,8 +5,15 @@ import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 
-// --- account (contact + default location) ---
-const account = reactive({ phone_number: '', address: '', city: '', latitude: '', longitude: '' })
+// --- account (contact + default location + notification preference) ---
+const account = reactive({
+  phone_number: '',
+  address: '',
+  city: '',
+  latitude: '',
+  longitude: '',
+  email_notifications: true,
+})
 const accountMsg = ref('')
 const accountErr = ref('')
 const savingAccount = ref(false)
@@ -31,6 +38,7 @@ async function load() {
     account.city = me.city || ''
     account.latitude = me.latitude ?? ''
     account.longitude = me.longitude ?? ''
+    account.email_notifications = me.email_notifications !== false
   } catch {
     /* form just starts empty */
   }
@@ -64,6 +72,7 @@ async function saveAccount() {
       city: account.city,
       latitude: account.latitude === '' ? null : Number(account.latitude),
       longitude: account.longitude === '' ? null : Number(account.longitude),
+      email_notifications: account.email_notifications,
     })
     accountMsg.value = 'saved'
   } catch (e) {
@@ -147,6 +156,11 @@ onMounted(load)
           <input v-model="account.longitude" class="input" placeholder="28.9784" />
         </div>
       </div>
+      <label class="flex items-center gap-2 text-sm text-gray-700">
+        <input v-model="account.email_notifications" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+        {{ $t('profile.emailNotifications') }}
+      </label>
+      <p class="text-xs text-gray-400">{{ $t('profile.emailNotificationsHint') }}</p>
       <p v-if="accountErr" class="text-sm text-red-600">{{ accountErr }}</p>
       <p v-if="accountMsg" class="text-sm text-green-700">{{ $t('profile.saved') }}</p>
       <button class="btn-primary" :disabled="savingAccount">{{ $t('profile.save') }}</button>

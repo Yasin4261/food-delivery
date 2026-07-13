@@ -218,6 +218,8 @@ export default {
     passwordChanged: 'Password updated.',
     kitchen: 'My kitchen',
     bio: 'Bio',
+    emailNotifications: 'Email me about my orders',
+    emailNotificationsHint: 'New-order and delivery-status emails. Password-reset emails are always sent.',
   },
   onboarding: {
     title: 'Set up your kitchen',

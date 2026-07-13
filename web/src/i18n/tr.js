@@ -217,6 +217,8 @@ export default {
     passwordChanged: 'Şifre güncellendi.',
     kitchen: 'Mutfağım',
     bio: 'Tanıtım',
+    emailNotifications: 'Siparişlerim hakkında e-posta gönder',
+    emailNotificationsHint: 'Yeni sipariş ve teslimat durumu e-postaları. Şifre sıfırlama e-postaları her zaman gönderilir.',
   },
   onboarding: {
     title: 'Mutfağınızı kurun',

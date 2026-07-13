@@ -65,6 +65,23 @@ func TestProfileHTTP_UpdateOwnProfile(t *testing.T) {
 	if rec := do(t, srv, http.MethodPut, "/api/v2/users/me", token, `{"latitude":41.0}`); rec.Code != http.StatusBadRequest {
 		t.Errorf("lat-only update = %d, want 400", rec.Code)
 	}
+
+	// Email-notification preference: defaults on, toggles off, omitted keeps.
+	rec = do(t, srv, http.MethodGet, "/api/v2/auth/me", token, "")
+	_ = json.Unmarshal(rec.Body.Bytes(), &user)
+	if user["email_notifications"] != true {
+		t.Errorf("email_notifications default = %v, want true", user["email_notifications"])
+	}
+	rec = do(t, srv, http.MethodPut, "/api/v2/users/me", token, `{"email_notifications":false}`)
+	_ = json.Unmarshal(rec.Body.Bytes(), &user)
+	if user["email_notifications"] != false {
+		t.Errorf("opt-out not applied: %v", user["email_notifications"])
+	}
+	rec = do(t, srv, http.MethodPut, "/api/v2/users/me", token, `{"city":"Ankara"}`)
+	_ = json.Unmarshal(rec.Body.Bytes(), &user)
+	if user["email_notifications"] != false {
+		t.Errorf("omitted field must keep the opt-out: %v", user["email_notifications"])
+	}
 }
 
 func TestProfileHTTP_ChangePassword(t *testing.T) {

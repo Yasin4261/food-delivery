@@ -24,7 +24,7 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 const userColumns = `
 	id, username, email, password_hash, phone_number,
 	address, city, state, zip_code, latitude, longitude,
-	role, is_verified, is_active, created_at, updated_at`
+	role, is_verified, is_active, email_notifications, created_at, updated_at`
 
 // Create inserts a user and back-fills its generated ID and timestamps.
 func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
@@ -32,15 +32,15 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 		INSERT INTO users (
 			username, email, password_hash, phone_number,
 			address, city, state, zip_code, latitude, longitude,
-			role, is_verified, is_active, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			role, is_verified, is_active, email_notifications, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING id, created_at, updated_at`
 
 	err := r.db.QueryRowContext(
 		ctx, query,
 		user.Username, user.Email, user.PasswordHash, user.PhoneNumber,
 		user.Address, user.City, user.State, user.ZipCode, user.Latitude, user.Longitude,
-		user.Role, user.IsVerified, user.IsActive, user.CreatedAt, user.UpdatedAt,
+		user.Role, user.IsVerified, user.IsActive, user.EmailNotifications, user.CreatedAt, user.UpdatedAt,
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("create user: %w", err)
@@ -81,13 +81,14 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, u *domain.User) erro
 	query := `
 		UPDATE users
 		SET phone_number = $2, address = $3, city = $4, state = $5, zip_code = $6,
-		    latitude = $7, longitude = $8, updated_at = now()
+		    latitude = $7, longitude = $8, email_notifications = $9, updated_at = now()
 		WHERE id = $1
 		RETURNING updated_at`
 
 	err := r.db.QueryRowContext(
 		ctx, query,
 		u.ID, u.PhoneNumber, u.Address, u.City, u.State, u.ZipCode, u.Latitude, u.Longitude,
+		u.EmailNotifications,
 	).Scan(&u.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.ErrUserNotFound
@@ -103,7 +104,7 @@ func scanUser(s interface{ Scan(...any) error }) (*domain.User, error) {
 	err := s.Scan(
 		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.PhoneNumber,
 		&u.Address, &u.City, &u.State, &u.ZipCode, &u.Latitude, &u.Longitude,
-		&u.Role, &u.IsVerified, &u.IsActive, &u.CreatedAt, &u.UpdatedAt,
+		&u.Role, &u.IsVerified, &u.IsActive, &u.EmailNotifications, &u.CreatedAt, &u.UpdatedAt,
 	)
 	return u, err
 }

@@ -44,6 +44,9 @@ func (n *OrderNotifier) OrderPlaced(ctx context.Context, order *domain.Order) {
 				n.logFailure("new-order", order, err)
 				return
 			}
+			if !user.EmailNotifications {
+				return // the chef opted out of order emails (#71)
+			}
 			msg := domain.Email{
 				To:      user.Email,
 				Subject: fmt.Sprintf("New order %s", order.OrderCode),
@@ -79,6 +82,9 @@ func (n *OrderNotifier) SubOrderAdvanced(ctx context.Context, order *domain.Orde
 		if err != nil {
 			n.logFailure("status-change", order, err)
 			return
+		}
+		if !user.EmailNotifications {
+			return // the customer opted out of order emails (#71)
 		}
 		chefName := sub.ChefName
 		if chefName == "" {

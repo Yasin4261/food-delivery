@@ -25,6 +25,11 @@ type User struct {
 	IsVerified bool   `json:"is_verified"`
 	IsActive   bool   `json:"is_active"`
 
+	// EmailNotifications is the user's opt-in for order notification emails
+	// (new order / status changes). Security email (password reset) is sent
+	// regardless — it is not governed by this flag.
+	EmailNotifications bool `json:"email_notifications"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -51,14 +56,15 @@ func ValidRole(role string) bool {
 func NewUser(username, email, passwordHash string) *User {
 	now := time.Now()
 	return &User{
-		Username:     username,
-		Email:        email,
-		PasswordHash: passwordHash,
-		Role:         RoleCustomer,
-		IsVerified:   false,
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		Username:           username,
+		Email:              email,
+		PasswordHash:       passwordHash,
+		Role:               RoleCustomer,
+		IsVerified:         false,
+		IsActive:           true,
+		EmailNotifications: true,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 }
 
