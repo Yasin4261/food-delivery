@@ -67,21 +67,22 @@ func (m *channelMailer) assertQuiet(t *testing.T) {
 }
 
 // notifierFixture wires an OrderService with a notifier over fakes: users 1
-// and 2 are chefs (with emails), user 100 is the customer.
-func notifierFixture(t *testing.T) (*service.OrderService, *channelMailer, *fakeMenuItemRepo) {
+// and 2 are chefs (with emails), user 3 is the customer. All start opted in;
+// tests flip the flag through the user repo.
+func notifierFixture(t *testing.T) (*service.OrderService, *channelMailer, *fakeMenuItemRepo, *fakeUserRepo) {
 	t.Helper()
 	ctx := context.Background()
 
 	users := newFakeUserRepo()
 	for _, u := range []*domain.User{
-		{Email: "chef1@test.dev", Username: "chef1", Role: domain.RoleChef},
-		{Email: "chef2@test.dev", Username: "chef2", Role: domain.RoleChef},
+		{Email: "chef1@test.dev", Username: "chef1", Role: domain.RoleChef, EmailNotifications: true},
+		{Email: "chef2@test.dev", Username: "chef2", Role: domain.RoleChef, EmailNotifications: true},
 	} {
 		if err := users.Create(ctx, u); err != nil {
 			t.Fatalf("seed user: %v", err)
 		}
 	}
-	customer := &domain.User{Email: "cust@test.dev", Username: "cust", Role: domain.RoleCustomer}
+	customer := &domain.User{Email: "cust@test.dev", Username: "cust", Role: domain.RoleCustomer, EmailNotifications: true}
 	if err := users.Create(ctx, customer); err != nil {
 		t.Fatalf("seed customer: %v", err)
 	}
@@ -100,7 +101,20 @@ func notifierFixture(t *testing.T) (*service.OrderService, *channelMailer, *fake
 	mailer := newChannelMailer()
 	notifier := service.NewOrderNotifier(mailer, users, chefs)
 	svc := service.NewOrderService(newFakeOrderRepo(), items, chefs, nil, notifier)
-	return svc, mailer, items
+	return svc, mailer, items, users
+}
+
+// setOptOut flips a user's email-notification preference through the repo.
+func setOptOut(t *testing.T, users *fakeUserRepo, userID int, optedIn bool) {
+	t.Helper()
+	u, err := users.FindByID(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("find user %d: %v", userID, err)
+	}
+	u.EmailNotifications = optedIn
+	if err := users.UpdateProfile(context.Background(), u); err != nil {
+		t.Fatalf("set opt-out: %v", err)
+	}
 }
 
 func placeNotified(t *testing.T, svc *service.OrderService, items *fakeMenuItemRepo) *domain.Order {
@@ -122,7 +136,7 @@ func placeNotified(t *testing.T, svc *service.OrderService, items *fakeMenuItemR
 
 // Every participating chef gets a "new order" email with only their items.
 func TestOrderNotifier_NewOrderEmailsEachChef(t *testing.T) {
-	svc, mailer, items := notifierFixture(t)
+	svc, mailer, items, _ := notifierFixture(t)
 	order := placeNotified(t, svc, items)
 
 	emails := mailer.wait(t, 2)
@@ -153,7 +167,7 @@ func TestOrderNotifier_NewOrderEmailsEachChef(t *testing.T) {
 // The customer is emailed on meaningful transitions only: confirm, delivering,
 // delivered, decline — not preparing/ready.
 func TestOrderNotifier_StatusChangeEmailsCustomer(t *testing.T) {
-	svc, mailer, items := notifierFixture(t)
+	svc, mailer, items, _ := notifierFixture(t)
 	order := placeNotified(t, svc, items)
 	mailer.wait(t, 2) // drain the placement emails
 	ctx := context.Background()
@@ -198,7 +212,7 @@ func TestOrderNotifier_StatusChangeEmailsCustomer(t *testing.T) {
 // Mail failures are logged, never surfaced: the order still places and
 // advances when the mailer is down.
 func TestOrderNotifier_FailuresNeverBlockOrders(t *testing.T) {
-	svc, mailer, items := notifierFixture(t)
+	svc, mailer, items, _ := notifierFixture(t)
 	mailer.fail(errors.New("smtp down"))
 
 	order := placeNotified(t, svc, items)
@@ -209,4 +223,44 @@ func TestOrderNotifier_FailuresNeverBlockOrders(t *testing.T) {
 		t.Fatalf("advance with failing mailer: %v", err)
 	}
 	mailer.assertQuiet(t)
+}
+
+// Opted-out recipients get no order emails: an opted-out chef stays silent on
+// placement (the other chef still gets theirs), and an opted-out customer
+// stays silent on status changes.
+func TestOrderNotifier_RespectsOptOut(t *testing.T) {
+	svc, mailer, items, users := notifierFixture(t)
+	setOptOut(t, users, 1, false) // chef 1 (user 1) opts out
+	setOptOut(t, users, 3, false) // the customer (user 3) opts out
+
+	order := placeNotified(t, svc, items)
+
+	// Only chef 2's placement email arrives.
+	got := mailer.wait(t, 1)[0]
+	if got.To != "chef2@test.dev" {
+		t.Errorf("placement email to %q, want only chef2 (chef1 opted out)", got.To)
+	}
+	mailer.assertQuiet(t)
+
+	// A notify-worthy transition stays silent for the opted-out customer.
+	if _, err := svc.AdvanceForChef(context.Background(), 1, order.ID, "confirm"); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	mailer.assertQuiet(t)
+
+	// Opting back in resumes delivery.
+	setOptOut(t, users, 3, true)
+	if _, err := svc.AdvanceForChef(context.Background(), 1, order.ID, "preparing"); err != nil {
+		t.Fatalf("preparing: %v", err)
+	}
+	if _, err := svc.AdvanceForChef(context.Background(), 1, order.ID, "ready"); err != nil {
+		t.Fatalf("ready: %v", err)
+	}
+	if _, err := svc.AdvanceForChef(context.Background(), 1, order.ID, "delivering"); err != nil {
+		t.Fatalf("delivering: %v", err)
+	}
+	back := mailer.wait(t, 1)[0]
+	if back.To != "cust@test.dev" {
+		t.Errorf("post-opt-in email to %q, want the customer", back.To)
+	}
 }

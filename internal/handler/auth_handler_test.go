@@ -80,6 +80,7 @@ func (f *fakeUserRepo) UpdateProfile(_ context.Context, u *domain.User) error {
 	stored.ZipCode = u.ZipCode
 	stored.Latitude = u.Latitude
 	stored.Longitude = u.Longitude
+	stored.EmailNotifications = u.EmailNotifications
 	return nil
 }
 

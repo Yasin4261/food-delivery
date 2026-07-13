@@ -79,8 +79,9 @@ src/
   Payment badges on every order; paid card orders refund on cancel.
 
 - Profile: `/profile` (navbar avatar chip) — edit contact/default location,
-  change password (current password required), and for chefs the kitchen
-  profile (name, specialty, address, radius, coordinates).
+  change password (current password required), toggle order-email
+  notifications, and for chefs the kitchen profile (name, specialty, address,
+  radius, coordinates).
 - Localisation: full **Turkish + English** UI (vue-i18n). The navbar switcher
   toggles TR/EN; the choice persists in `localStorage` and first visits
   language-detect from the browser (Turkish browsers get Turkish). Catalogues

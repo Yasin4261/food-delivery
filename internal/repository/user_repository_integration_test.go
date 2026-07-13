@@ -110,3 +110,26 @@ func TestUserRepository_UpdateProfile(t *testing.T) {
 		t.Errorf("unknown user = %v, want ErrUserNotFound", err)
 	}
 }
+
+func TestUserRepository_EmailNotifications(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewUserRepository(testDB)
+	user := seedUser(t, "notify@example.com")
+
+	got, err := repo.FindByID(ctx(), user.ID)
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if !got.EmailNotifications {
+		t.Fatal("email_notifications must default to true")
+	}
+
+	got.EmailNotifications = false
+	if err := repo.UpdateProfile(ctx(), got); err != nil {
+		t.Fatalf("opt out: %v", err)
+	}
+	after, _ := repo.FindByID(ctx(), user.ID)
+	if after.EmailNotifications {
+		t.Error("opt-out not persisted")
+	}
+}

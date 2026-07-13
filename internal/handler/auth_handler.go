@@ -198,6 +198,8 @@ type updateProfileRequest struct {
 	ZipCode     string   `json:"zip_code"`
 	Latitude    *float64 `json:"latitude"`
 	Longitude   *float64 `json:"longitude"`
+	// Omitting the field keeps the current preference (pointer, not bool).
+	EmailNotifications *bool `json:"email_notifications"`
 }
 
 // UpdateProfile handles PUT /api/v2/users/me (auth) — the caller edits their
@@ -216,13 +218,14 @@ func (h *AuthHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.auth.UpdateProfile(r.Context(), claims.UserID, service.UpdateProfileInput{
-		PhoneNumber: req.PhoneNumber,
-		Address:     req.Address,
-		City:        req.City,
-		State:       req.State,
-		ZipCode:     req.ZipCode,
-		Latitude:    req.Latitude,
-		Longitude:   req.Longitude,
+		PhoneNumber:        req.PhoneNumber,
+		Address:            req.Address,
+		City:               req.City,
+		State:              req.State,
+		ZipCode:            req.ZipCode,
+		Latitude:           req.Latitude,
+		Longitude:          req.Longitude,
+		EmailNotifications: req.EmailNotifications,
 	})
 	if err != nil {
 		var ve service.ValidationError

@@ -16,8 +16,10 @@ import (
 
 // fakeUserRepo is an in-memory domain.UserRepository for tests. Because the
 // service depends on the interface (a port), no database is needed here — this
-// is the payoff of the hexagonal layering.
+// is the payoff of the hexagonal layering. The mutex matters: the order
+// notifier reads users from its send goroutines while tests mutate them.
 type fakeUserRepo struct {
+	mu     sync.Mutex
 	users  map[int]*domain.User
 	nextID int
 }
@@ -27,6 +29,8 @@ func newFakeUserRepo() *fakeUserRepo {
 }
 
 func (f *fakeUserRepo) Create(_ context.Context, u *domain.User) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	u.ID = f.nextID
 	f.nextID++
 	cp := *u
@@ -35,6 +39,8 @@ func (f *fakeUserRepo) Create(_ context.Context, u *domain.User) error {
 }
 
 func (f *fakeUserRepo) FindByID(_ context.Context, id int) (*domain.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if u, ok := f.users[id]; ok {
 		cp := *u
 		return &cp, nil
@@ -43,6 +49,8 @@ func (f *fakeUserRepo) FindByID(_ context.Context, id int) (*domain.User, error)
 }
 
 func (f *fakeUserRepo) FindByEmail(_ context.Context, email string) (*domain.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, u := range f.users {
 		if u.Email == email {
 			cp := *u
@@ -53,6 +61,8 @@ func (f *fakeUserRepo) FindByEmail(_ context.Context, email string) (*domain.Use
 }
 
 func (f *fakeUserRepo) FindByUsername(_ context.Context, username string) (*domain.User, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, u := range f.users {
 		if u.Username == username {
 			cp := *u
@@ -62,6 +72,8 @@ func (f *fakeUserRepo) FindByUsername(_ context.Context, username string) (*doma
 	return nil, domain.ErrUserNotFound
 }
 func (f *fakeUserRepo) UpdatePassword(_ context.Context, userID int, passwordHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if u, ok := f.users[userID]; ok {
 		u.PasswordHash = passwordHash
 		return nil
@@ -70,6 +82,8 @@ func (f *fakeUserRepo) UpdatePassword(_ context.Context, userID int, passwordHas
 }
 
 func (f *fakeUserRepo) UpdateProfile(_ context.Context, u *domain.User) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	stored, ok := f.users[u.ID]
 	if !ok {
 		return domain.ErrUserNotFound
@@ -81,6 +95,7 @@ func (f *fakeUserRepo) UpdateProfile(_ context.Context, u *domain.User) error {
 	stored.ZipCode = u.ZipCode
 	stored.Latitude = u.Latitude
 	stored.Longitude = u.Longitude
+	stored.EmailNotifications = u.EmailNotifications
 	return nil
 }
 
@@ -527,6 +542,31 @@ func TestAuthService_UpdateProfile(t *testing.T) {
 	t.Run("unknown user", func(t *testing.T) {
 		if _, err := svc.UpdateProfile(ctx, 999, service.UpdateProfileInput{}); !errors.Is(err, domain.ErrUserNotFound) {
 			t.Errorf("err = %v, want ErrUserNotFound", err)
+		}
+	})
+
+	t.Run("email notifications: default on, toggle off, omitted keeps", func(t *testing.T) {
+		stored, _ := repo.FindByID(ctx, uid)
+		if !stored.EmailNotifications {
+			t.Fatal("email notifications must default to on for new accounts")
+		}
+
+		off := false
+		got, err := svc.UpdateProfile(ctx, uid, service.UpdateProfileInput{EmailNotifications: &off})
+		if err != nil {
+			t.Fatalf("opt out: %v", err)
+		}
+		if got.EmailNotifications {
+			t.Error("opt-out not applied")
+		}
+
+		// A later update that omits the field keeps the opt-out.
+		got, err = svc.UpdateProfile(ctx, uid, service.UpdateProfileInput{City: "Ankara"})
+		if err != nil {
+			t.Fatalf("unrelated update: %v", err)
+		}
+		if got.EmailNotifications {
+			t.Error("omitted field must keep the stored preference")
 		}
 	})
 }
