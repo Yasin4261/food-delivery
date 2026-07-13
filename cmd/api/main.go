@@ -135,8 +135,10 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, menuRepo, menuItemRepo)
 	paymentService := service.NewPaymentService(paymentSessionRepo, orderRepo, userRepo, gateway, cfg.AppBaseURL)
+	addressRepo := repository.NewAddressRepository(db.DB)
+	addressService := service.NewAddressService(addressRepo)
 	orderNotifier := service.NewOrderNotifier(mail, userRepo, chefRepo)
-	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, paymentService, orderNotifier)
+	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, addressRepo, paymentService, orderNotifier)
 	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
 	reviewService := service.NewReviewService(reviewRepo, orderRepo)
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
@@ -174,6 +176,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
+	addressHandler := handler.NewAddressHandler(addressService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	earningsHandler := handler.NewEarningsHandler(earningsService)
 	searchHandler := handler.NewSearchHandler(searchService)
@@ -181,6 +184,6 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	versionHandler := handler.NewVersionHandler(version)
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
 	return r.Setup()
 }

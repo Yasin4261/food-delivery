@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { useCartStore } from '@/stores/cart'
@@ -13,16 +13,34 @@ const notes = ref('')
 const error = ref('')
 const placing = ref(false)
 
+// Saved address book: preselect the default; "other" reveals the free-text
+// input. selectedAddressId === 0 means "type a one-off address".
+const savedAddresses = ref([])
+const selectedAddressId = ref(0)
+const usingSaved = computed(() => selectedAddressId.value !== 0)
+
+onMounted(async () => {
+  try {
+    savedAddresses.value = await api.get('/addresses')
+    const def = savedAddresses.value.find((a) => a.is_default) || savedAddresses.value[0]
+    if (def) selectedAddressId.value = def.id
+  } catch {
+    /* no book -> free-text input only */
+  }
+})
+
 async function placeOrder() {
   error.value = ''
   placing.value = true
   try {
-    const order = await api.post('/orders', {
-      delivery_address: deliveryAddress.value,
+    const payload = {
       payment_method: paymentMethod.value,
       customer_notes: notes.value,
       items: cart.lines.map((l) => ({ menu_item_id: l.menuItemId, quantity: l.quantity })),
-    })
+    }
+    if (usingSaved.value) payload.address_id = selectedAddressId.value
+    else payload.delivery_address = deliveryAddress.value
+    const order = await api.post('/orders', payload)
     cart.clear()
     router.push({ name: 'orders', query: { placed: order.id } })
   } catch (e) {
@@ -76,7 +94,13 @@ async function placeOrder() {
       <form class="card space-y-4" @submit.prevent="placeOrder">
         <div>
           <label class="label">{{ $t('cart.deliveryAddress') }}</label>
-          <input v-model="deliveryAddress" class="input" required />
+          <select v-if="savedAddresses.length" v-model="selectedAddressId" class="input mb-2">
+            <option v-for="a in savedAddresses" :key="a.id" :value="a.id">
+              {{ a.label }} — {{ a.address }}<template v-if="a.city">, {{ a.city }}</template>
+            </option>
+            <option :value="0">{{ $t('cart.otherAddress') }}</option>
+          </select>
+          <input v-if="!usingSaved" v-model="deliveryAddress" class="input" required />
         </div>
         <div>
           <label class="label">{{ $t('cart.paymentLabel') }}</label>

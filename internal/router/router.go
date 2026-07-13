@@ -18,6 +18,7 @@ type Router struct {
 	menuHandler     *handler.MenuHandler
 	orderHandler    *handler.OrderHandler
 	favoriteHandler *handler.FavoriteHandler
+	addressHandler  *handler.AddressHandler
 	reviewHandler   *handler.ReviewHandler
 	earningsHandler *handler.EarningsHandler
 	searchHandler   *handler.SearchHandler
@@ -36,6 +37,7 @@ func NewRouter(
 	menuHandler *handler.MenuHandler,
 	orderHandler *handler.OrderHandler,
 	favoriteHandler *handler.FavoriteHandler,
+	addressHandler *handler.AddressHandler,
 	reviewHandler *handler.ReviewHandler,
 	earningsHandler *handler.EarningsHandler,
 	searchHandler *handler.SearchHandler,
@@ -53,6 +55,7 @@ func NewRouter(
 		menuHandler:     menuHandler,
 		orderHandler:    orderHandler,
 		favoriteHandler: favoriteHandler,
+		addressHandler:  addressHandler,
 		reviewHandler:   reviewHandler,
 		earningsHandler: earningsHandler,
 		searchHandler:   searchHandler,
@@ -136,6 +139,12 @@ func (r *Router) Setup() http.Handler {
 	r.handleAuth("GET /api/v2/favorites", r.favoriteHandler.List)
 	r.handleAuth("POST /api/v2/favorites/{chefId}", r.favoriteHandler.Add)
 	r.handleAuth("DELETE /api/v2/favorites/{chefId}", r.favoriteHandler.Remove)
+
+	// Address book: auth-only; the service enforces per-address ownership.
+	r.handleAuth("GET /api/v2/addresses", r.addressHandler.List)
+	r.handleAuth("POST /api/v2/addresses", r.addressHandler.Create)
+	r.handleAuth("PUT /api/v2/addresses/{id}", r.addressHandler.Update)
+	r.handleAuth("DELETE /api/v2/addresses/{id}", r.addressHandler.Delete)
 
 	// Reviews: customers rate chefs/dishes from their orders (auth); reads are
 	// public.

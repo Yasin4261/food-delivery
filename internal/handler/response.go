@@ -56,14 +56,19 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrMenuItemNotFound),
 		errors.Is(err, domain.ErrOrderNotFound),
 		errors.Is(err, domain.ErrConversationNotFound),
-		errors.Is(err, domain.ErrPaymentSessionNotFound):
+		errors.Is(err, domain.ErrPaymentSessionNotFound),
+		errors.Is(err, domain.ErrAddressNotFound):
 		respondError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, domain.ErrForbidden):
 		respondError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, domain.ErrInvalidRating),
 		errors.Is(err, domain.ErrInvalidReviewTarget),
 		errors.Is(err, domain.ErrInvalidResetToken),
-		errors.Is(err, domain.ErrEmptyMessage):
+		errors.Is(err, domain.ErrEmptyMessage),
+		errors.Is(err, domain.ErrAddressLabelRequired),
+		errors.Is(err, domain.ErrAddressLabelTooLong),
+		errors.Is(err, domain.ErrAddressRequired),
+		errors.Is(err, domain.ErrCoordinatesIncomplete):
 		respondError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrEmptyOrder),
 		errors.Is(err, domain.ErrItemNotOrderable),

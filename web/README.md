@@ -80,8 +80,10 @@ src/
 
 - Profile: `/profile` (navbar avatar chip) — edit contact/default location,
   change password (current password required), toggle order-email
-  notifications, and for chefs the kitchen profile (name, specialty, address,
-  radius, coordinates).
+  notifications, manage the **address book** (labels, one default), and for
+  chefs the kitchen profile (name, specialty, address, radius, coordinates).
+- Checkout: the cart preselects your default saved address (or pick another /
+  type a one-off address); orders snapshot the address text.
 - Localisation: full **Turkish + English** UI (vue-i18n). The navbar switcher
   toggles TR/EN; the choice persists in `localStorage` and first visits
   language-detect from the browser (Turkish browsers get Turkish). Catalogues

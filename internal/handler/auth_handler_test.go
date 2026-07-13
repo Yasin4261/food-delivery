@@ -162,8 +162,10 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	chefService := service.NewChefService(chefRepo)
 	menuService := service.NewMenuService(chefRepo, newFakeMenuRepo(), itemRepo)
 	orderRepo := newFakeOrderRepo()
+	addressRepo := newFakeAddressRepo()
 	paymentService := service.NewPaymentService(newFakePaymentSessionRepo(), orderRepo, userRepo, payment.NewMock("http://app.test"), "http://app.test")
-	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo, paymentService, nil)
+	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo, addressRepo, paymentService, nil)
+	addressService := service.NewAddressService(addressRepo)
 	favoriteService := service.NewFavoriteService(newFakeFavoriteRepo(chefRepo), chefRepo)
 	reviewService := service.NewReviewService(newFakeReviewRepo(), orderRepo)
 	earningsService := service.NewEarningsService(newFakeEarningsRepo(), chefRepo)
@@ -177,6 +179,7 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	menuHandler := handler.NewMenuHandler(menuService)
 	orderHandler := handler.NewOrderHandler(orderService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
+	addressHandler := handler.NewAddressHandler(addressService)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	earningsHandler := handler.NewEarningsHandler(earningsService)
 	searchHandler := handler.NewSearchHandler(searchService)
@@ -185,7 +188,7 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 	// A generous budget so no test trips the per-IP throttle accidentally.
 	authLimiter := middleware.NewRateLimiter(1000, time.Minute)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup(), mail
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup(), mail
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.

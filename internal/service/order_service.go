@@ -14,18 +14,20 @@ import (
 // orders (which may span several chefs), and a chef advances the status of
 // orders containing their items. It depends only on domain ports.
 type OrderService struct {
-	orders   domain.OrderRepository
-	items    domain.MenuItemRepository
-	chefs    domain.ChefRepository
-	refunder domain.PaymentRefunder // refunds card payments on cancel; may be nil
-	notifier *OrderNotifier         // fire-and-forget order emails; may be nil
+	orders    domain.OrderRepository
+	items     domain.MenuItemRepository
+	chefs     domain.ChefRepository
+	addresses domain.AddressRepository // resolves saved address_id at placement; may be nil
+	refunder  domain.PaymentRefunder   // refunds card payments on cancel; may be nil
+	notifier  *OrderNotifier           // fire-and-forget order emails; may be nil
 }
 
-// NewOrderService builds an OrderService. refunder handles gateway refunds
-// when a paid card order is cancelled (nil disables refunds); notifier sends
-// order emails (nil disables them).
-func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, refunder domain.PaymentRefunder, notifier *OrderNotifier) *OrderService {
-	return &OrderService{orders: orders, items: items, chefs: chefs, refunder: refunder, notifier: notifier}
+// NewOrderService builds an OrderService. addresses resolves a saved
+// address_id at placement (nil rejects address_id orders); refunder handles
+// gateway refunds when a paid card order is cancelled (nil disables refunds);
+// notifier sends order emails (nil disables them).
+func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, addresses domain.AddressRepository, refunder domain.PaymentRefunder, notifier *OrderNotifier) *OrderService {
+	return &OrderService{orders: orders, items: items, chefs: chefs, addresses: addresses, refunder: refunder, notifier: notifier}
 }
 
 // OrderLineInput is one requested dish in a new order.
@@ -35,8 +37,12 @@ type OrderLineInput struct {
 	SpecialInstructions string
 }
 
-// PlaceOrderInput is the data needed to create an order.
+// PlaceOrderInput is the data needed to create an order. AddressID selects a
+// saved address-book entry instead of a one-off DeliveryAddress; the entry's
+// text is snapshotted onto the order, so later edits to the book never touch
+// order history.
 type PlaceOrderInput struct {
+	AddressID         *int
 	DeliveryAddress   string
 	DeliveryCity      string
 	DeliveryLatitude  *float64
@@ -52,6 +58,31 @@ type PlaceOrderInput struct {
 func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrderInput) (*domain.Order, error) {
 	in.DeliveryAddress = strings.TrimSpace(in.DeliveryAddress)
 	in.PaymentMethod = strings.TrimSpace(in.PaymentMethod)
+
+	// A saved address (owner-checked) fills the delivery fields; a one-off
+	// delivery_address in the same request would be ambiguous, so it is
+	// rejected rather than silently overridden.
+	if in.AddressID != nil {
+		if s.addresses == nil {
+			return nil, ValidationError{Msg: "address_id is not supported"}
+		}
+		if in.DeliveryAddress != "" {
+			return nil, ValidationError{Msg: "provide either address_id or delivery_address, not both"}
+		}
+		saved, err := s.addresses.FindByID(ctx, *in.AddressID)
+		if err != nil {
+			return nil, err
+		}
+		if saved.UserID != userID {
+			return nil, domain.ErrForbidden
+		}
+		in.DeliveryAddress = saved.Address
+		if saved.City != nil {
+			in.DeliveryCity = *saved.City
+		}
+		in.DeliveryLatitude = saved.Latitude
+		in.DeliveryLongitude = saved.Longitude
+	}
 
 	if in.DeliveryAddress == "" {
 		return nil, ValidationError{Msg: "delivery_address is required"}
