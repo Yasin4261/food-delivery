@@ -6,13 +6,17 @@ chefs, order (possibly from several chefs at once), pay cash or card, and track
 their order through to delivery.
 
 Built in Go with a **hexagonal (ports & adapters) architecture** and fully
-Dockerized. For the architecture deep-dive, database plan, and the
-feature-by-feature build recipe, see [CLAUDE.md](./CLAUDE.md).
+Dockerized, with a Vue 3 SPA (`web/`) covering the whole product in Turkish and
+English. For the architecture deep-dive, database plan, and the
+feature-by-feature build recipe, see [CLAUDE.md](./CLAUDE.md). To contribute,
+start with [CONTRIBUTING.md](./CONTRIBUTING.md); to report a vulnerability,
+see [SECURITY.md](./SECURITY.md).
 
-> **Status:** actively being rebuilt from scratch on a clean foundation.
-> Implemented today: health check + **authentication** (register, login, logout,
-> profile). Chefs, menus, orders, favorites, reviews, chat and earnings are on
-> the roadmap.
+> **Status:** feature-complete and released (see the
+> [tags](https://github.com/Yasin4261/food-delivery/tags)) — the full product
+> brief is implemented end-to-end, including multi-chef orders with per-chef
+> sub-order status, iyzico card payments, real-time chat, and a production
+> deploy behind Caddy. Development continues issue by issue.
 
 ---
 
@@ -213,17 +217,23 @@ make fmt            # go fmt ./...
 
 ## Roadmap
 
-Following the inside-out recipe in [CLAUDE.md §2](./CLAUDE.md):
+Built inside-out following the recipe in [CLAUDE.md §2](./CLAUDE.md):
 
 - [x] Dockerized hexagonal skeleton + health check
-- [x] Authentication (register, login, logout, profile)
-- [x] Chef profiles (create, get, list, nearby by location)
-- [ ] Forgot / reset password
-- [ ] Menus & dishes
-- [ ] Orders (multi-chef cart, status lifecycle, cash/card)
-- [ ] Favorites, reviews & ratings
-- [ ] Real-time chat
-- [ ] Chef earnings & online/offline status
+- [x] Authentication (register, login, logout, profile) + forgot/reset password over SMTP
+- [x] Chef profiles (create, get, list, nearby by location) + online/offline
+- [x] Menus & dishes (chef-owned CRUD, stock)
+- [x] Orders — multi-chef cart, status lifecycle, **per-chef sub-order status**, cash/card
+- [x] Card payments (iyzico hosted checkout, refunds incl. partial per-slice)
+- [x] Favorites, reviews & ratings, search
+- [x] Real-time chat (WebSocket)
+- [x] Chef earnings (per delivered slice)
+- [x] In-app + email notifications
+- [x] Vue 3 SPA (Turkish + English) and production deploy (Caddy, auto-HTTPS)
+
+What's next lives in the [open issues](https://github.com/Yasin4261/food-delivery/issues):
+photos, profile management, fees/commission, address book, saved cards, admin
+panel, and the ops track (CD, observability, backups, staging).
 
 ## License
 

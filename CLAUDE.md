@@ -202,6 +202,7 @@ When asked to "implement X", build it inside-out with the §2 recipe (domain →
 - Nullable DB columns → pointer fields (`*string`, `*float64`) in domain structs; `PasswordHash` is always cleared (`""`) before returning a user.
 - API is versioned under `/api/v2`.
 - Keep code `gofmt`-clean and `go vet`-clean — CI (`.github/workflows/test.yml`) enforces both, plus `go test -race`.
+- **Docs ship with the code (same PR):** `README.md`/`web/README.md` for user-visible features and commands, this file (§6 current state per feature, §9 tag history per release, §10 when the security posture moves), `SECURITY.md` when auth/payment behaviour changes, `DEPLOY.md` for anything operational, `CONTRIBUTING.md` when the workflow changes. A PR that changes behaviour but leaves the docs stale is incomplete.
 
 ## 7a. Testing (this project already has tests — keep adding them)
 
