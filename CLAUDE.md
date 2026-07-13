@@ -259,6 +259,8 @@ Tag history:
 | `v3.2.0` | web UI feature-complete — the Vue SPA covers the entire product brief incl. real-time chat; config tests at 100%; WS query-token auth (closes #24, #26–#31, #36) |
 | `v3.3.0` | money flow complete — cash settles on delivery; iyzico card checkout via the `PaymentGateway` port + refund-on-cancel; `/version`; Vitest in CI (closes #33, #42, #43) |
 | `v4.0.0` | **production release** — one-origin deploy behind Caddy with auto-HTTPS (`DEPLOY.md`); Redis-backed denylist + rate limiter for multi-instance (closes #32, #44) |
+| `v4.1.0` | per-chef sub-order status — `sub_orders` + derived order status, partial refunds on decline, per-slice earnings; TR/EN web UI incl. i18n (PR #60/#61, closes #56, #34) |
+| `v4.2.0` | order email notifications — new order → chef, sub-order status changes → customer; fire-and-forget over `domain.Mailer` (PR #62, closes #58) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
