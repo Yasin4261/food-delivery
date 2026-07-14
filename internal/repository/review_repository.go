@@ -146,3 +146,11 @@ func (r *ReviewRepository) list(ctx context.Context, query string, args ...any) 
 	}
 	return reviews, rows.Err()
 }
+
+// ListByUserOrder returns one user's reviews on one order, oldest first (the
+// order they were left in).
+func (r *ReviewRepository) ListByUserOrder(ctx context.Context, userID, orderID int) ([]*domain.Review, error) {
+	return r.list(ctx, `SELECT`+reviewColumns+`
+		FROM reviews WHERE user_id = $1 AND order_id = $2
+		ORDER BY id`, userID, orderID)
+}

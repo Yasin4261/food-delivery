@@ -112,3 +112,46 @@ func TestReviewRepository_DuplicateRejected(t *testing.T) {
 		t.Errorf("duplicate = %v, want ErrReviewExists", err)
 	}
 }
+
+func TestReviewRepository_ListByUserOrder(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewReviewRepository(testDB)
+	customer := seedUser(t, "cust@example.com")
+	stranger := seedUser(t, "stranger@example.com")
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+	menu := seedMenu(t, chef.ID)
+	item := seedItem(t, menu.ID, chef.ID, 5, 10)
+
+	order := buildOrder(customer.ID, "ORD-HIST",
+		domain.NewOrderItem(item.ID, chef.ID, item.Name, 1, 5))
+	if err := repository.NewOrderRepository(testDB).Create(ctx(), order); err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	comment := "tasty"
+	for _, rv := range []*domain.Review{
+		{UserID: customer.ID, OrderID: order.ID, ChefID: &chef.ID, Rating: 5, Comment: &comment},
+		{UserID: customer.ID, OrderID: order.ID, MenuItemID: &item.ID, Rating: 4},
+	} {
+		if err := repo.Create(ctx(), rv); err != nil {
+			t.Fatalf("create review: %v", err)
+		}
+	}
+
+	mine, err := repo.ListByUserOrder(ctx(), customer.ID, order.ID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(mine) != 2 || mine[0].ChefID == nil || mine[1].MenuItemID == nil {
+		t.Errorf("history wrong: %+v", mine)
+	}
+
+	// Scoped by user: a stranger sees nothing for the same order.
+	foreign, err := repo.ListByUserOrder(ctx(), stranger.ID, order.ID)
+	if err != nil {
+		t.Fatalf("foreign list: %v", err)
+	}
+	if len(foreign) != 0 {
+		t.Errorf("foreign history = %d, want 0", len(foreign))
+	}
+}

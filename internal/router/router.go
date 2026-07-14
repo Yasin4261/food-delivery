@@ -149,6 +149,7 @@ func (r *Router) Setup() http.Handler {
 	// Reviews: customers rate chefs/dishes from their orders (auth); reads are
 	// public.
 	r.handleAuth("POST /api/v2/reviews", r.reviewHandler.Create)
+	r.handleAuth("GET /api/v2/orders/{id}/reviews", r.reviewHandler.ListForOrder)
 	r.mux.HandleFunc("GET /api/v2/chefs/{id}/reviews", r.reviewHandler.ListForChef)
 	r.mux.HandleFunc("GET /api/v2/menu-items/{id}/reviews", r.reviewHandler.ListForMenuItem)
 

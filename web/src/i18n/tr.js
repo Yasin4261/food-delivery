@@ -167,6 +167,8 @@ export default {
     submit: 'Gönder',
     saving: 'Kaydediliyor…',
     commentPlaceholder: 'Birkaç kelime yazın (isteğe bağlı)',
+    yourRating: '✓ puanınız',
+    nothingDeliveredYet: 'Henüz teslim edilen bir şey yok — her şefin payı ulaştığında puanlayabilirsiniz.',
   },
   dashboard: {
     subtitle: 'Şef paneli',

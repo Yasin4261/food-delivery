@@ -51,22 +51,49 @@ func (s *ReviewService) Create(ctx context.Context, userID int, in CreateReviewI
 	if order.UserID != userID {
 		return nil, domain.ErrForbidden
 	}
-	if order.Status != domain.OrderStatusDelivered {
-		return nil, domain.ErrOrderNotReviewable
-	}
 
 	// The reviewed target must actually appear in the order.
-	if review.TargetsChef() && !order.HasChef(*review.ChefID) {
-		return nil, domain.ErrReviewTargetNotInOrder
+	targetChefID := 0
+	switch {
+	case review.TargetsChef():
+		if !order.HasChef(*review.ChefID) {
+			return nil, domain.ErrReviewTargetNotInOrder
+		}
+		targetChefID = *review.ChefID
+	case review.TargetsMenuItem():
+		if !order.HasMenuItem(*review.MenuItemID) {
+			return nil, domain.ErrReviewTargetNotInOrder
+		}
+		for _, it := range order.Items {
+			if it.MenuItemID == *review.MenuItemID {
+				targetChefID = it.ChefID
+				break
+			}
+		}
 	}
-	if review.TargetsMenuItem() && !order.HasMenuItem(*review.MenuItemID) {
-		return nil, domain.ErrReviewTargetNotInOrder
+
+	// You can only review food you actually received: the target chef's own
+	// slice must be delivered. In a multi-chef order a chef who delivered is
+	// reviewable immediately (even while another chef is still cooking), and
+	// a chef who declined never is. Orders predating sub-orders were
+	// backfilled with the order-level status, so history behaves identically.
+	sub := order.SubOrderFor(targetChefID)
+	if sub == nil || sub.Status != domain.OrderStatusDelivered {
+		return nil, domain.ErrOrderNotReviewable
 	}
 
 	if err := s.reviews.Create(ctx, review); err != nil {
 		return nil, err
 	}
 	return review, nil
+}
+
+// ListForOrder returns the caller's own reviews on one order — the rating
+// history the UI shows instead of an empty form once something was rated. The
+// query is scoped to (userID, orderID), so it can never expose another user's
+// reviews.
+func (s *ReviewService) ListForOrder(ctx context.Context, userID, orderID int) ([]*domain.Review, error) {
+	return s.reviews.ListByUserOrder(ctx, userID, orderID)
 }
 
 // ListForChef returns a page of a chef's reviews and the total.

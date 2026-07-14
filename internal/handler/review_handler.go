@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
@@ -95,4 +96,29 @@ func respondReviewError(w http.ResponseWriter, err error) {
 		return
 	}
 	respondDomainError(w, err)
+}
+
+// ListForOrder handles GET /api/v2/orders/{id}/reviews (auth) — the caller's
+// own rating history for that order. The query is user-scoped, so asking
+// about someone else's order simply returns an empty list.
+func (h *ReviewHandler) ListForOrder(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	orderID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid order id")
+		return
+	}
+	reviews, err := h.reviews.ListForOrder(r.Context(), claims.UserID, orderID)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	if reviews == nil {
+		reviews = []*domain.Review{}
+	}
+	respondJSON(w, http.StatusOK, reviews)
 }

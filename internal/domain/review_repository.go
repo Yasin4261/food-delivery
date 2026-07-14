@@ -14,4 +14,7 @@ type ReviewRepository interface {
 	ListByChef(ctx context.Context, chefID, limit, offset int) ([]*Review, int, error)
 	// ListByMenuItem returns a page of a dish's reviews (newest first) and the total.
 	ListByMenuItem(ctx context.Context, menuItemID, limit, offset int) ([]*Review, int, error)
+	// ListByUserOrder returns the caller's own reviews for one order (their
+	// rating history for that order) — scoped to the user by construction.
+	ListByUserOrder(ctx context.Context, userID, orderID int) ([]*Review, error)
 }

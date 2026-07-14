@@ -148,3 +148,63 @@ func TestReview_Guards(t *testing.T) {
 		t.Errorf("pending order review = %d, want 422", rec.Code)
 	}
 }
+
+func (f *fakeReviewRepo) ListByUserOrder(_ context.Context, userID, orderID int) ([]*domain.Review, error) {
+	out := make([]*domain.Review, 0)
+	for _, rv := range f.reviews {
+		if rv.UserID == userID && rv.OrderID == orderID {
+			cp := *rv
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
+// The rating history endpoint: the caller sees their own reviews for an
+// order; other users get an empty list, anonymous callers a 401.
+func TestReview_HistoryForOrder(t *testing.T) {
+	srv := newTestServer()
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	orderID := placeAndDeliverOrder(t, srv, chefToken, customer, itemID)
+	path := "/api/v2/orders/" + itoa(orderID) + "/reviews"
+
+	if rec := do(t, srv, http.MethodGet, path, "", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("history without token = %d, want 401", rec.Code)
+	}
+
+	// Before rating: empty history.
+	rec := do(t, srv, http.MethodGet, path, customer, "")
+	var history []domain.Review
+	_ = json.Unmarshal(rec.Body.Bytes(), &history)
+	if rec.Code != http.StatusOK || len(history) != 0 {
+		t.Fatalf("pre-rating history = %d/%d reviews, want 200/0", rec.Code, len(history))
+	}
+
+	// Rate the chef and the dish, then the history shows both.
+	for _, body := range []string{
+		`{"order_id":` + itoa(orderID) + `,"chef_id":1,"rating":5,"comment":"great"}`,
+		`{"order_id":` + itoa(orderID) + `,"menu_item_id":` + itoa(itemID) + `,"rating":4}`,
+	} {
+		if rec := do(t, srv, http.MethodPost, "/api/v2/reviews", customer, body); rec.Code != http.StatusCreated {
+			t.Fatalf("review = %d (%s)", rec.Code, rec.Body)
+		}
+	}
+	rec = do(t, srv, http.MethodGet, path, customer, "")
+	_ = json.Unmarshal(rec.Body.Bytes(), &history)
+	if len(history) != 2 {
+		t.Fatalf("history = %d reviews, want 2", len(history))
+	}
+	if history[0].ChefID == nil || *history[0].ChefID != 1 || history[0].Rating != 5 {
+		t.Errorf("chef review wrong in history: %+v", history[0])
+	}
+
+	// Another user asking about this order sees nothing (no leak, no 404
+	// probe signal beyond emptiness).
+	other := registerCustomerToken(t, srv, "other", "other@example.com")
+	rec = do(t, srv, http.MethodGet, path, other, "")
+	_ = json.Unmarshal(rec.Body.Bytes(), &history)
+	if rec.Code != http.StatusOK || len(history) != 0 {
+		t.Errorf("foreign history = %d/%d, want 200/0", rec.Code, len(history))
+	}
+}

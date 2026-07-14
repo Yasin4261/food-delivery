@@ -168,6 +168,8 @@ export default {
     submit: 'Submit',
     saving: 'Saving…',
     commentPlaceholder: 'Say a few words (optional)',
+    yourRating: '✓ your rating',
+    nothingDeliveredYet: 'Nothing delivered yet — you can rate each chef as soon as their part arrives.',
   },
   dashboard: {
     subtitle: 'Chef dashboard',

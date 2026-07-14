@@ -133,7 +133,7 @@ onBeforeUnmount(() => clearInterval(poll))
           {{ paying === order.id ? $t('orders.redirecting') : $t('orders.payNow') }}
         </button>
         <button
-          v-if="order.status === 'delivered'"
+          v-if="order.status === 'delivered' || order.sub_orders?.some((s) => s.status === 'delivered')"
           class="btn-ghost"
           @click="reviewing[order.id] = !reviewing[order.id]"
         >
