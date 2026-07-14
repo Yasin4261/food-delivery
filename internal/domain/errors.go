@@ -36,6 +36,11 @@ var (
 	// ErrUnsupportedImage marks an upload that is not a decodable JPEG or PNG.
 	ErrUnsupportedImage = errors.New("image must be a valid JPEG or PNG")
 
+	ErrInvalidWeekday     = errors.New("weekday must be between 0 (Sunday) and 6 (Saturday)")
+	ErrInvalidHoursWindow = errors.New("opening hours must be within the day and not empty")
+	// ErrChefClosed rejects orders placed outside a chef's working hours.
+	ErrChefClosed = errors.New("the chef is currently closed")
+
 	ErrAddressNotFound       = errors.New("address not found")
 	ErrAddressLabelRequired  = errors.New("address label is required")
 	ErrAddressLabelTooLong   = errors.New("address label must be at most 50 characters")

@@ -209,6 +209,12 @@ export default {
     needProfile: 'You need a kitchen profile before adding menus.',
     needProfileLink: 'Set it up on the dashboard',
   },
+  hours: {
+    title: 'Working hours',
+    hint: 'Days left unchecked are closed. No checked days at all means always open. Orders outside your hours are rejected automatically.',
+    closed: 'closed',
+    closedBadge: 'closed now',
+  },
   filters: {
     sortDefault: 'Sort: featured',
     sortRating: 'Sort: best rated',

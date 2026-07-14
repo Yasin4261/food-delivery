@@ -100,7 +100,7 @@ func notifierFixture(t *testing.T) (*service.OrderService, *channelMailer, *fake
 	items := newFakeMenuItemRepo()
 	mailer := newChannelMailer()
 	notifier := service.NewOrderNotifier(mailer, users, chefs)
-	svc := service.NewOrderService(newFakeOrderRepo(), items, chefs, nil, nil, notifier)
+	svc := service.NewOrderService(newFakeOrderRepo(), items, chefs, nil, nil, nil, nil, notifier)
 	return svc, mailer, items, users
 }
 

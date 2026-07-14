@@ -191,7 +191,7 @@ func TestOrderService_PlaceWithSavedAddress(t *testing.T) {
 	items := newFakeMenuItemRepo()
 	item := seedItem(t, items, 1, 5, 10)
 	addresses := newFakeAddressRepo()
-	svc := service.NewOrderService(newFakeOrderRepo(), items, chefRepo, addresses, nil, nil)
+	svc := service.NewOrderService(newFakeOrderRepo(), items, chefRepo, addresses, nil, nil, nil, nil)
 
 	lat, lng := 41.0, 29.0
 	saved, err := service.NewAddressService(addresses).Create(ctx, 100, service.AddressInput{

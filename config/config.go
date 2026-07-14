@@ -41,6 +41,10 @@ type Config struct {
 	// UploadDir is where uploaded photos are stored (a Docker volume in
 	// production so files survive restarts).
 	UploadDir string
+
+	// Timezone is the platform time zone chefs' working hours are written and
+	// evaluated in (the product targets Turkey).
+	Timezone string
 }
 
 // LoadConfig reads configuration from the environment (and a local .env file
@@ -71,6 +75,8 @@ func LoadConfig() (*Config, error) {
 		RedisURL: getEnv("REDIS_URL", ""),
 
 		UploadDir: getEnv("UPLOAD_DIR", "uploads"),
+
+		Timezone: getEnv("TIMEZONE", "Europe/Istanbul"),
 	}
 
 	if cfg.DatabaseURL == "" {
