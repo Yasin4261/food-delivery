@@ -26,6 +26,9 @@ services:
       retries: 10
 
   api:
+    # CD (#72) pulls this image by tag; `make prod` builds it locally under
+    # the same name (image+build combo), so both paths work.
+    image: ghcr.io/yasin4261/food-delivery-api:${TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -71,6 +74,7 @@ services:
       - /tmp
 
   web:
+    image: ghcr.io/yasin4261/food-delivery-web:${TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.web
