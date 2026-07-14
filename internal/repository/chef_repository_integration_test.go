@@ -160,3 +160,20 @@ func TestChefRepository_Update(t *testing.T) {
 		t.Errorf("unknown chef = %v, want ErrChefNotFound", err)
 	}
 }
+
+func TestChefRepository_SetImageURL(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewChefRepository(testDB)
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+
+	if err := repo.SetImageURL(ctx(), chef.ID, "/uploads/abc.jpg"); err != nil {
+		t.Fatalf("set image: %v", err)
+	}
+	got, _ := repo.FindByID(ctx(), chef.ID)
+	if got.ImageURL == nil || *got.ImageURL != "/uploads/abc.jpg" {
+		t.Errorf("image_url = %v, want /uploads/abc.jpg", got.ImageURL)
+	}
+	if err := repo.SetImageURL(ctx(), 9999, "/uploads/x.jpg"); err != domain.ErrChefNotFound {
+		t.Errorf("unknown chef = %v, want ErrChefNotFound", err)
+	}
+}

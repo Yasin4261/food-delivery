@@ -103,6 +103,24 @@ async function deleteItem(entry, item) {
   }
 }
 
+// Dish photo upload (JPEG/PNG, max 5 MB — the API validates and re-encodes).
+const uploadingItem = ref(0)
+async function uploadPhoto(item, event) {
+  const file = event.target.files?.[0]
+  event.target.value = '' // allow re-picking the same file
+  if (!file) return
+  uploadingItem.value = item.id
+  error.value = ''
+  try {
+    const out = await api.upload(`/menu-items/${item.id}/image`, file)
+    item.image_url = out.image_url
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    uploadingItem.value = 0
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -142,15 +160,24 @@ onMounted(load)
         </div>
 
         <p v-if="!entry.items.length" class="text-sm text-gray-500">{{ $t('menus.noDishesYet') }}</p>
-        <div v-for="item in entry.items" :key="item.id" class="flex items-center justify-between border-t border-gray-100 pt-2 text-sm">
-          <div>
-            <span class="font-medium">{{ item.name }}</span>
-            <span class="ml-2 text-gray-500">${{ item.price?.toFixed(2) }}</span>
-            <span class="ml-2 text-gray-400">
-              {{ item.is_unlimited ? $t('menus.unlimited') : $t('menus.stockN', { n: item.available_quantity ?? 0 }) }}
-            </span>
+        <div v-for="item in entry.items" :key="item.id" class="flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-sm">
+          <div class="flex min-w-0 items-center gap-2">
+            <img v-if="item.image_url" :src="item.image_url" :alt="item.name" class="h-9 w-9 shrink-0 rounded-lg object-cover" />
+            <div class="min-w-0">
+              <span class="font-medium">{{ item.name }}</span>
+              <span class="ml-2 text-gray-500">${{ item.price?.toFixed(2) }}</span>
+              <span class="ml-2 text-gray-400">
+                {{ item.is_unlimited ? $t('menus.unlimited') : $t('menus.stockN', { n: item.available_quantity ?? 0 }) }}
+              </span>
+            </div>
           </div>
-          <button class="text-red-600 hover:underline" @click="deleteItem(entry, item)">{{ $t('menus.remove') }}</button>
+          <div class="flex shrink-0 items-center gap-2">
+            <label class="cursor-pointer text-brand-600 hover:underline">
+              {{ uploadingItem === item.id ? $t('menus.uploading') : item.image_url ? $t('menus.changePhoto') : $t('menus.addPhoto') }}
+              <input type="file" accept="image/jpeg,image/png" class="hidden" :disabled="uploadingItem === item.id" @change="uploadPhoto(item, $event)" />
+            </label>
+            <button class="text-red-600 hover:underline" @click="deleteItem(entry, item)">{{ $t('menus.remove') }}</button>
+          </div>
         </div>
 
         <form class="grid grid-cols-2 items-end gap-2 border-t border-gray-100 pt-3 sm:grid-cols-6" @submit.prevent="addItem(entry)">

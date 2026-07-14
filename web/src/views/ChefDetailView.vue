@@ -84,7 +84,8 @@ onMounted(async () => {
 
     <template v-else-if="chef">
       <div class="card flex items-start gap-4">
-        <div class="avatar h-14 w-14 text-2xl">{{ (chef.business_name || '?')[0].toUpperCase() }}</div>
+        <img v-if="chef.image_url" :src="chef.image_url" :alt="chef.business_name" class="h-14 w-14 rounded-xl object-cover" />
+        <div v-else class="avatar h-14 w-14 text-2xl">{{ (chef.business_name || '?')[0].toUpperCase() }}</div>
         <div class="min-w-0 grow">
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="page-title">{{ chef.business_name }}</h1>
@@ -117,7 +118,8 @@ onMounted(async () => {
         </div>
         <div v-else class="grid gap-3 sm:grid-cols-2">
           <div v-for="item in items" :key="item.id" class="card-hover flex items-start justify-between gap-3">
-            <div class="min-w-0">
+            <img v-if="item.image_url" :src="item.image_url" :alt="item.name" class="h-16 w-16 shrink-0 rounded-lg object-cover" />
+            <div class="min-w-0 grow">
               <h3 class="font-medium">{{ item.name }}</h3>
               <p v-if="item.description" class="truncate text-sm text-gray-500">{{ item.description }}</p>
               <p class="mt-1.5">

@@ -45,6 +45,9 @@ services:
       # Emailed links (password reset) open the SPA, not the API.
       APP_BASE_URL: "${APP_BASE_URL:-http://localhost:5173}"
       AUTO_MIGRATE: "true"
+      UPLOAD_DIR: "/app/uploads"
+    volumes:
+      - uploads_data:/app/uploads
     networks:
       - food_delivery_network
 
@@ -64,6 +67,7 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:
     driver: local
 
 networks:

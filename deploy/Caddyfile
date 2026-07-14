@@ -16,6 +16,10 @@ handle /health {
 handle /version {
 	reverse_proxy api:8080
 }
+# Uploaded photos (dish/kitchen images) are stored and served by the API.
+handle /uploads/* {
+	reverse_proxy api:8080
+}
 
 # SPA: static files with history-mode fallback to index.html.
 handle {

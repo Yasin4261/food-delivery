@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
@@ -65,6 +66,7 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrInvalidReviewTarget),
 		errors.Is(err, domain.ErrInvalidResetToken),
 		errors.Is(err, domain.ErrEmptyMessage),
+		errors.Is(err, domain.ErrUnsupportedImage),
 		errors.Is(err, domain.ErrAddressLabelRequired),
 		errors.Is(err, domain.ErrAddressLabelTooLong),
 		errors.Is(err, domain.ErrAddressRequired),
@@ -88,6 +90,9 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrAccountInactive):
 		respondError(w, http.StatusUnauthorized, err.Error())
 	default:
+		// Unexpected errors are logged server-side (the client only ever sees
+		// the generic message) — otherwise 500s are undiagnosable in prod.
+		slog.Error("unhandled error in request", "error", err)
 		respondError(w, http.StatusInternalServerError, "internal server error")
 	}
 }

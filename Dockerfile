@@ -25,6 +25,10 @@ WORKDIR /app
 COPY --from=builder /app/bin/api ./api
 COPY migrations ./migrations
 
+# Owned by the app user so the uploads volume (first-mount copies ownership
+# from this path) is writable by the non-root process.
+RUN mkdir -p /app/uploads && chown app:app /app/uploads
+
 USER app
 EXPOSE 8080
 

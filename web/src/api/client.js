@@ -44,12 +44,31 @@ async function request(method, path, body) {
   return data
 }
 
+// upload POSTs a single file as multipart form data (field "image") — the
+// browser sets the multipart Content-Type with its boundary itself.
+async function upload(path, file) {
+  const form = new FormData()
+  form.append('image', file)
+  const headers = {}
+  const t = token()
+  if (t) headers.Authorization = `Bearer ${t}`
+
+  const res = await fetch(BASE + path, { method: 'POST', headers, body: form })
+  if (res.status === 401) onUnauthorized()
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new ApiError(res.status, data.error || `upload failed (${res.status})`)
+  }
+  return data
+}
+
 export const api = {
   get: (path) => request('GET', path),
   post: (path, body) => request('POST', path, body),
   put: (path, body) => request('PUT', path, body),
   patch: (path, body) => request('PATCH', path, body),
   del: (path) => request('DELETE', path),
+  upload,
 }
 
 // page unwraps the standard list envelope { data, limit, offset, total }.

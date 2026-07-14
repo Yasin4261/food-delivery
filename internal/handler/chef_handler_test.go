@@ -227,3 +227,12 @@ func TestChef_Nearby(t *testing.T) {
 		t.Errorf("nearby returned %d chefs, want 1", len(p.Data))
 	}
 }
+
+func (f *fakeChefRepo) SetImageURL(_ context.Context, chefID int, url string) error {
+	c, ok := f.chefs[chefID]
+	if !ok {
+		return domain.ErrChefNotFound
+	}
+	c.ImageURL = &url
+	return nil
+}

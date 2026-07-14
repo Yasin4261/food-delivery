@@ -200,3 +200,15 @@ func collectMenuItems(rows *sql.Rows) ([]*domain.MenuItem, error) {
 	}
 	return items, rows.Err()
 }
+
+// SetImageURL updates the dish photo URL.
+func (r *MenuItemRepository) SetImageURL(ctx context.Context, id int, url string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE menu_items SET image_url = $2, updated_at = now() WHERE id = $1`, id, url)
+	if err != nil {
+		return fmt.Errorf("set item image: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrMenuItemNotFound
+	}
+	return nil
+}

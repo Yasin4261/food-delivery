@@ -240,3 +240,12 @@ func isValidation(err error) bool {
 	var ve service.ValidationError
 	return errors.As(err, &ve)
 }
+
+func (f *fakeMenuItemRepo) SetImageURL(_ context.Context, id int, url string) error {
+	it, ok := f.items[id]
+	if !ok {
+		return domain.ErrMenuItemNotFound
+	}
+	it.ImageURL = &url
+	return nil
+}

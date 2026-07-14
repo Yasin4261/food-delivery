@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/payment"
 	"github.com/Yasin4261/food-delivery/internal/router"
 	"github.com/Yasin4261/food-delivery/internal/service"
+	"github.com/Yasin4261/food-delivery/internal/storage"
 )
 
 // fakeUserRepo is a minimal in-memory domain.UserRepository for HTTP tests.
@@ -180,6 +182,10 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	orderHandler := handler.NewOrderHandler(orderService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	addressHandler := handler.NewAddressHandler(addressService)
+	uploadDir := os.TempDir() + "/food-delivery-test-uploads"
+	fileStore, _ := storage.NewLocal(uploadDir)
+	uploadService := service.NewUploadService(fileStore, chefRepo, itemRepo)
+	uploadHandler := handler.NewUploadHandler(uploadService, uploadDir)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	earningsHandler := handler.NewEarningsHandler(earningsService)
 	searchHandler := handler.NewSearchHandler(searchService)
@@ -188,7 +194,7 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 	// A generous budget so no test trips the per-IP throttle accidentally.
 	authLimiter := middleware.NewRateLimiter(1000, time.Minute)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup(), mail
+	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup(), mail
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.

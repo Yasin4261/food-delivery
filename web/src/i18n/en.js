@@ -189,6 +189,9 @@ export default {
   menus: {
     title: 'My menus',
     back: '← Dashboard',
+    addPhoto: 'Add photo',
+    changePhoto: 'Change photo',
+    uploading: 'Uploading…',
     newMenu: 'New menu name',
     newMenuPlaceholder: 'Dinner menu',
     createMenu: 'Create menu',
@@ -241,6 +244,7 @@ export default {
     passwordChanged: 'Password updated.',
     kitchen: 'My kitchen',
     bio: 'Bio',
+    addKitchenPhoto: 'Add a kitchen photo',
     emailNotifications: 'Email me about my orders',
     emailNotificationsHint: 'New-order and delivery-status emails. Password-reset emails are always sent.',
   },

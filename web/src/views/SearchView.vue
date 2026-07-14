@@ -168,7 +168,8 @@ onMounted(() => {
       <!-- Dish results -->
       <div v-else class="grid gap-3 sm:grid-cols-2">
         <div v-for="item in results" :key="item.id" class="card-hover flex items-start justify-between gap-3">
-          <div class="min-w-0">
+          <img v-if="item.image_url" :src="item.image_url" :alt="item.name" class="h-16 w-16 shrink-0 rounded-lg object-cover" />
+          <div class="min-w-0 grow">
             <h3 class="font-medium">{{ item.name }}</h3>
             <p v-if="item.description" class="truncate text-sm text-gray-500">{{ item.description }}</p>
             <p class="mt-1.5 flex items-center gap-1.5">

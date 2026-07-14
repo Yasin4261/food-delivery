@@ -86,6 +86,9 @@ src/
   chefs the kitchen profile (name, specialty, address, radius, coordinates).
 - Checkout: the cart preselects your default saved address (or pick another /
   type a one-off address); orders snapshot the address text.
+- Photos: chefs upload dish photos from My menus and a kitchen photo from the
+  profile page (JPEG/PNG ≤ 5 MB; the API re-encodes and strips metadata);
+  images show on browse, chef detail and search cards.
 - Localisation: full **Turkish + English** UI (vue-i18n). The navbar switcher
   toggles TR/EN; the choice persists in `localStorage` and first visits
   language-detect from the browser (Turkish browsers get Turkish). Catalogues
