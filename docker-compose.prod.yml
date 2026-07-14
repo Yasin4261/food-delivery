@@ -87,6 +87,33 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  # Nightly pg_dump + uploads snapshot with retention (#74). Backups land on
+  # the HOST (./backups) so they survive `docker compose down -v`; copy them
+  # off-site too — a backup on the same disk is only half a backup.
+  db-backup:
+    image: postgres:16-alpine
+    container_name: food_delivery_backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${DB_USER:-postgres}
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: ${DB_NAME:-food_delivery}
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 3 * * *}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups:/backups
+      - ./deploy/backup/backup.sh:/usr/local/bin/backup.sh:ro
+      - ./deploy/backup/entrypoint.sh:/usr/local/bin/backup-entrypoint.sh:ro
+      - uploads_data:/uploads:ro
+    entrypoint: ["/usr/local/bin/backup-entrypoint.sh"]
+    networks: [prod]
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   postgres_data_prod:
     driver: local
