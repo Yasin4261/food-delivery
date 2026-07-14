@@ -103,7 +103,7 @@ func orderFixture(t *testing.T, userIDs ...int) (*service.OrderService, *fakeMen
 		}
 	}
 	itemRepo := newFakeMenuItemRepo()
-	svc := service.NewOrderService(newFakeOrderRepo(), itemRepo, chefRepo, nil, nil, nil, nil, nil)
+	svc := service.NewOrderService(newFakeOrderRepo(), itemRepo, chefRepo, nil, nil, nil, domain.FeePolicy{}, nil, nil)
 	return svc, itemRepo, chefRepo
 }
 
@@ -318,7 +318,7 @@ func placeMultiChef(t *testing.T, method string, refunder domain.PaymentRefunder
 	a := seedItem(t, items, 1, 5, 10)
 	b := seedItem(t, items, 2, 3, 10)
 	orders := newFakeOrderRepo()
-	svc := service.NewOrderService(orders, items, chefRepo, nil, nil, nil, refunder, nil)
+	svc := service.NewOrderService(orders, items, chefRepo, nil, nil, nil, domain.FeePolicy{}, refunder, nil)
 
 	order, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
 		DeliveryAddress: "x", PaymentMethod: method,
@@ -490,6 +490,87 @@ func TestOrderService_CustomerCancelWithSubOrders(t *testing.T) {
 	for _, s := range cancelled.SubOrders {
 		if s.Status != domain.OrderStatusCancelled {
 			t.Errorf("sub-order chef %d = %q, want cancelled", s.ChefID, s.Status)
+		}
+	}
+}
+
+// The money model (#65): distance-based delivery fee per slice (base only
+// without coordinates), commission snapshotted from the policy, order total =
+// subtotal + delivery fees, and a declined card-paid slice refunds food +
+// its delivery fee.
+func TestOrderService_FeesAndCommission(t *testing.T) {
+	ctx := context.Background()
+	chefRepo := newFakeChefRepo()
+	// Chef 1 has kitchen coordinates ~10 km from the delivery point; chef 2
+	// has none (base fee only).
+	lat1, lng1 := 41.0, 29.0
+	if err := chefRepo.Create(ctx, &domain.Chef{UserID: 1, IsActive: true, KitchenLatitude: &lat1, KitchenLongitude: &lng1}); err != nil {
+		t.Fatalf("seed chef1: %v", err)
+	}
+	if err := chefRepo.Create(ctx, &domain.Chef{UserID: 2, IsActive: true}); err != nil {
+		t.Fatalf("seed chef2: %v", err)
+	}
+	items := newFakeMenuItemRepo()
+	a := seedItem(t, items, 1, 100, 10)
+	b := seedItem(t, items, 2, 50, 10)
+	orders := newFakeOrderRepo()
+	refunder := &recordingRefunder{}
+	policy := domain.FeePolicy{DeliveryBaseFee: 10, DeliveryFeePerKm: 2, CommissionRate: 10}
+	svc := service.NewOrderService(orders, items, chefRepo, nil, nil, nil, policy, refunder, nil)
+
+	// Delivery point ~0.09 degrees north of chef 1 (~10.0 km Haversine).
+	dlat, dlng := 41.09, 29.0
+	order, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
+		DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCard,
+		DeliveryLatitude: &dlat, DeliveryLongitude: &dlng,
+		Lines: []service.OrderLineInput{
+			{MenuItemID: a.ID, Quantity: 1}, // chef1: 100
+			{MenuItemID: b.ID, Quantity: 1}, // chef2: 50
+		},
+	})
+	if err != nil {
+		t.Fatalf("place: %v", err)
+	}
+
+	sub1, sub2 := order.SubOrderFor(1), order.SubOrderFor(2)
+	// Chef 1: base 10 + 2/km over ~10 km => ~30; allow Haversine wiggle.
+	if sub1.DeliveryFee < 29 || sub1.DeliveryFee > 31 {
+		t.Errorf("chef1 delivery fee = %v, want ~30 (distance-based)", sub1.DeliveryFee)
+	}
+	// Chef 2 has no coordinates: base only.
+	if sub2.DeliveryFee != 10 {
+		t.Errorf("chef2 delivery fee = %v, want 10 (base only)", sub2.DeliveryFee)
+	}
+	// Commission: 10% of each food subtotal, never charged to the customer.
+	if sub1.Commission != 10 || sub2.Commission != 5 {
+		t.Errorf("commissions = %v/%v, want 10/5", sub1.Commission, sub2.Commission)
+	}
+	wantTotal := domain.RoundMoney(150 + sub1.DeliveryFee + sub2.DeliveryFee)
+	if order.DeliveryFee != domain.RoundMoney(sub1.DeliveryFee+sub2.DeliveryFee) || order.TotalPrice != wantTotal {
+		t.Errorf("order fees/total = %v/%v, want %v/%v", order.DeliveryFee, order.TotalPrice, sub1.DeliveryFee+sub2.DeliveryFee, wantTotal)
+	}
+
+	// Declining a paid slice refunds food + its delivery fee.
+	stored, _ := orders.FindByID(ctx, order.ID)
+	_ = stored.MarkPaid()
+	_ = orders.UpdateStatus(ctx, stored)
+	if _, err := svc.AdvanceForChef(ctx, 2, order.ID, service.OrderActionDecline); err != nil {
+		t.Fatalf("decline: %v", err)
+	}
+	if len(refunder.partialAmounts) != 1 || refunder.partialAmounts[0] != 50+10 {
+		t.Errorf("refund = %v, want [60] (food 50 + delivery 10)", refunder.partialAmounts)
+	}
+}
+
+// A zero-value policy keeps everything free — the pre-#65 behaviour.
+func TestOrderService_ZeroPolicyIsFree(t *testing.T) {
+	_, _, order := placeMultiChef(t, domain.PaymentMethodCash, nil)
+	if order.DeliveryFee != 0 || order.TotalPrice != order.Subtotal {
+		t.Errorf("zero policy charged fees: %+v", order)
+	}
+	for _, sub := range order.SubOrders {
+		if sub.DeliveryFee != 0 || sub.Commission != 0 {
+			t.Errorf("zero policy sub fees: %+v", sub)
 		}
 	}
 }

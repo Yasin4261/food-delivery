@@ -46,6 +46,9 @@ services:
       APP_BASE_URL: "${APP_BASE_URL:-http://localhost:5173}"
       AUTO_MIGRATE: "true"
       UPLOAD_DIR: "/app/uploads"
+      DELIVERY_BASE_FEE: "${DELIVERY_BASE_FEE:-0}"
+      DELIVERY_FEE_PER_KM: "${DELIVERY_FEE_PER_KM:-0}"
+      COMMISSION_PERCENT: "${COMMISSION_PERCENT:-0}"
     volumes:
       - uploads_data:/app/uploads
     networks:

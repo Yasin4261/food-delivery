@@ -106,8 +106,15 @@ onBeforeUnmount(() => clearInterval(poll))
 
     <div v-if="earnings" class="grid gap-4 sm:grid-cols-3">
       <div class="card">
-        <p class="text-sm text-gray-500">{{ $t('dashboard.earnings') }}</p>
-        <p class="text-2xl font-bold">${{ earnings.total_earnings?.toFixed(2) }}</p>
+        <p class="text-sm text-gray-500">{{ $t('dashboard.netEarnings') }}</p>
+        <p class="text-2xl font-bold">${{ (earnings.net_earnings ?? earnings.total_earnings)?.toFixed(2) }}</p>
+        <p v-if="earnings.commission > 0 || earnings.delivery_fees > 0" class="mt-1 text-xs text-gray-400">
+          {{ $t('dashboard.earningsBreakdown', {
+            gross: `$${earnings.total_earnings?.toFixed(2)}`,
+            delivery: `$${earnings.delivery_fees?.toFixed(2)}`,
+            commission: `$${earnings.commission?.toFixed(2)}`,
+          }) }}
+        </p>
       </div>
       <div class="card">
         <p class="text-sm text-gray-500">{{ $t('dashboard.deliveredOrders') }}</p>

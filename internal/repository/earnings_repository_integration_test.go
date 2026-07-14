@@ -133,3 +133,43 @@ func TestEarningsRepository_EmptyIsZero(t *testing.T) {
 		t.Errorf("empty earnings should be zero, got %+v", got)
 	}
 }
+
+// Net earnings (#65): delivery fees are kept in full, the snapshotted
+// commission is deducted, and only delivered slices on paid orders count.
+func TestEarningsRepository_FeesAndCommission(t *testing.T) {
+	resetDB(t)
+	orderRepo := repository.NewOrderRepository(testDB)
+	earnRepo := repository.NewEarningsRepository(testDB)
+
+	customer := seedUser(t, "cust@example.com")
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+	menu := seedMenu(t, chef.ID)
+	item := seedItem(t, menu.ID, chef.ID, 50, 100)
+
+	order := buildOrder(customer.ID, "ORD-FEES",
+		domain.NewOrderItem(item.ID, chef.ID, item.Name, 2, item.Price)) // food 100
+	order.SubOrders[0].DeliveryFee = 25
+	order.SubOrders[0].Commission = 10
+	if err := orderRepo.Create(ctx(), order); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	setOrderState(t, order.ID, domain.OrderStatusDelivered, domain.PaymentStatusPaid)
+
+	// A second, undelivered order must not count.
+	pending := buildOrder(customer.ID, "ORD-PEND",
+		domain.NewOrderItem(item.ID, chef.ID, item.Name, 1, item.Price))
+	pending.SubOrders[0].DeliveryFee = 99
+	pending.SubOrders[0].Commission = 99
+	_ = orderRepo.Create(ctx(), pending)
+
+	got, err := earnRepo.ChefEarnings(ctx(), chef.ID, nil)
+	if err != nil {
+		t.Fatalf("earnings: %v", err)
+	}
+	if got.TotalEarnings != 100 || got.DeliveryFees != 25 || got.Commission != 10 {
+		t.Errorf("gross/fees/commission = %v/%v/%v, want 100/25/10", got.TotalEarnings, got.DeliveryFees, got.Commission)
+	}
+	if got.NetEarnings != 115 { // 100 + 25 - 10
+		t.Errorf("net = %v, want 115", got.NetEarnings)
+	}
+}

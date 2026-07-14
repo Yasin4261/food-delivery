@@ -19,10 +19,11 @@ func NewEarningsRepository(db *sql.DB) *EarningsRepository {
 	return &EarningsRepository{db: db}
 }
 
-// ChefEarnings sums a chef's line items from sub-orders they delivered on paid
-// orders — the chef's own slice counts once *their* sub-order is delivered,
-// regardless of other chefs in the same order. since (nullable) bounds the
-// window by the order's created_at.
+// ChefEarnings sums a chef's slices delivered on paid orders — the chef's own
+// slice counts once *their* sub-order is delivered, regardless of other chefs
+// in the same order. Money model (#65): gross food subtotal + delivery fees
+// (kept in full) − the commission snapshotted at placement = net. since
+// (nullable) bounds the window by the order's created_at.
 func (r *EarningsRepository) ChefEarnings(ctx context.Context, chefID int, since *time.Time) (*domain.Earnings, error) {
 	const query = `
 		SELECT
@@ -43,5 +44,24 @@ func (r *EarningsRepository) ChefEarnings(ctx context.Context, chefID int, since
 	if err != nil {
 		return nil, fmt.Errorf("chef earnings: %w", err)
 	}
+
+	// Fees and commission live on the sub-orders (one row per delivered
+	// slice, so no de-duplication concerns like the items join above).
+	const feeQuery = `
+		SELECT
+			COALESCE(SUM(s.delivery_fee), 0),
+			COALESCE(SUM(s.commission), 0)
+		FROM sub_orders s
+		JOIN orders o ON o.id = s.order_id
+		WHERE s.chef_id = $1
+		  AND s.status = 'delivered'
+		  AND o.payment_status = 'paid'
+		  AND ($2::timestamp IS NULL OR o.created_at >= $2)`
+
+	if err := r.db.QueryRowContext(ctx, feeQuery, chefID, since).
+		Scan(&e.DeliveryFees, &e.Commission); err != nil {
+		return nil, fmt.Errorf("chef earnings fees: %w", err)
+	}
+	e.NetEarnings = e.TotalEarnings + e.DeliveryFees - e.Commission
 	return e, nil
 }

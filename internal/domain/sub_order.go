@@ -18,6 +18,12 @@ type SubOrder struct {
 	Status   string  `json:"status"`
 	Subtotal float64 `json:"subtotal"`
 
+	// DeliveryFee (customer pays, chef keeps) and Commission (platform's cut
+	// of the subtotal) are snapshots taken at placement from the FeePolicy of
+	// the day — rate changes never rewrite history.
+	DeliveryFee float64 `json:"delivery_fee"`
+	Commission  float64 `json:"commission"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 

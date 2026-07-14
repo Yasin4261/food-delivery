@@ -153,7 +153,12 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	}
 	uploadService := service.NewUploadService(fileStore, chefRepo, menuItemRepo)
 	orderNotifier := service.NewOrderNotifier(mail, userRepo, chefRepo)
-	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, addressRepo, chefHoursRepo, loc, paymentService, orderNotifier)
+	feePolicy := domain.FeePolicy{
+		DeliveryBaseFee:  cfg.DeliveryBaseFee,
+		DeliveryFeePerKm: cfg.DeliveryFeePerKm,
+		CommissionRate:   cfg.CommissionPercent,
+	}
+	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, addressRepo, chefHoursRepo, loc, feePolicy, paymentService, orderNotifier)
 	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
 	reviewService := service.NewReviewService(reviewRepo, orderRepo)
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
