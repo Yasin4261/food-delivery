@@ -239,7 +239,7 @@ make fmt            # go fmt ./...
 
 App auto-runs migrations on boot when `AutoMigrate` is enabled (see `cmd/api/main.go`). Config comes from `.env*` files (see `.env.example`).
 
-**Production** (`docker-compose.prod.yml` + `make prod`, runbook in `DEPLOY.md`): Caddy (`Dockerfile.web` + `deploy/Caddyfile`) serves the built SPA and proxies `/api`/`/health`/`/version` to the Go API on **one origin** (no CORS; auto-HTTPS via `SITE_ADDRESS=<domain>`); DB and API have no host ports. `.env.prod` (from `.env.prod.example`, gitignored) is enforced by compose `${VAR:?}` **and** the API's `ENV=production` fail-fasts.
+**Production** (`docker-compose.prod.yml` + `make prod`, runbook in `DEPLOY.md`): Caddy (`Dockerfile.web` + `deploy/Caddyfile`) serves the built SPA and proxies `/api`/`/health`/`/version`/`/uploads` to the Go API on **one origin** (no CORS; auto-HTTPS via `SITE_ADDRESS=<domain>`); DB and API have no host ports. `.env.prod` (from `.env.prod.example`, gitignored) is enforced by compose `${VAR:?}` **and** the API's `ENV=production` fail-fasts. **Backups (#74):** the `db-backup` sidecar (postgres:16-alpine + `deploy/backup/`) takes a nightly `pg_dump -Fc` + uploads tarball into `./backups/` on the host (also once at startup), pruned after `BACKUP_RETENTION_DAYS` (default 14); restore runbook + drill procedure in `DEPLOY.md`, executed drill recorded on issue #74. Off-site copying of `./backups/` is an operator step.
 
 ---
 

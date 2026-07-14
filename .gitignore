@@ -77,3 +77,4 @@ AUX
 test-results/
 coverage.html
 *.log
+backups/
