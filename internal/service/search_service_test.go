@@ -56,11 +56,11 @@ func TestSearchService_FilterValidation(t *testing.T) {
 	ctx := context.Background()
 
 	cases := map[string]domain.SearchFilters{
-		"unknown sort":         {Sort: "cheapest'; DROP TABLE chefs;--"},
-		"price sort on chefs":  {Sort: domain.SortPriceAsc}, // chefs don't have prices
-		"rating out of range":  {MinRating: 9},
-		"negative price":       {MinPrice: -1},
-		"min above max":        {MinPrice: 10, MaxPrice: 5},
+		"unknown sort":        {Sort: "cheapest'; DROP TABLE chefs;--"},
+		"price sort on chefs": {Sort: domain.SortPriceAsc}, // chefs don't have prices
+		"rating out of range": {MinRating: 9},
+		"negative price":      {MinPrice: -1},
+		"min above max":       {MinPrice: 10, MaxPrice: 5},
 	}
 	for name, f := range cases {
 		t.Run(name, func(t *testing.T) {
