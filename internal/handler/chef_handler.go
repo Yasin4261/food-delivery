@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
@@ -106,9 +107,23 @@ func (h *ChefHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *ChefHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 20)
 	offset := queryInt(r, "offset", 0)
+	minRating, ok := queryFloat(r, "min_rating")
+	if !ok {
+		respondError(w, http.StatusBadRequest, "min_rating must be a number")
+		return
+	}
 
-	chefs, total, err := h.chefs.List(r.Context(), limit, offset, queryBool(r, "online"))
+	chefs, total, err := h.chefs.List(r.Context(), domain.ChefListFilters{
+		OnlineOnly: queryBool(r, "online"),
+		MinRating:  minRating,
+		Sort:       r.URL.Query().Get("sort"),
+	}, limit, offset)
 	if err != nil {
+		var ve service.ValidationError
+		if errors.As(err, &ve) {
+			respondError(w, http.StatusBadRequest, ve.Msg)
+			return
+		}
 		respondDomainError(w, err)
 		return
 	}
@@ -164,6 +179,20 @@ func queryInt(r *http.Request, key string, def int) int {
 		return v
 	}
 	return def
+}
+
+// queryFloat parses an optional float query parameter. A missing parameter
+// yields 0 with ok=true; garbage yields ok=false so handlers can 400.
+func queryFloat(r *http.Request, key string) (float64, bool) {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return 0, true
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, false
+	}
+	return v, true
 }
 
 // queryBool reports whether a query parameter is set to "true".

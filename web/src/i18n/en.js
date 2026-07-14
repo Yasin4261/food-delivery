@@ -206,6 +206,16 @@ export default {
     needProfile: 'You need a kitchen profile before adding menus.',
     needProfileLink: 'Set it up on the dashboard',
   },
+  filters: {
+    sortDefault: 'Sort: featured',
+    sortRating: 'Sort: best rated',
+    sortPopular: 'Sort: most popular',
+    sortPriceAsc: 'Sort: price ↑',
+    sortPriceDesc: 'Sort: price ↓',
+    anyRating: 'Any rating',
+    minPrice: 'Min $',
+    maxPrice: 'Max $',
+  },
   addresses: {
     title: 'Address book',
     empty: 'No saved addresses yet — add one below and pick it at checkout.',

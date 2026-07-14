@@ -18,10 +18,10 @@ type fakeSearchRepo struct{}
 
 func newFakeSearchRepo() *fakeSearchRepo { return &fakeSearchRepo{} }
 
-func (fakeSearchRepo) SearchChefs(_ context.Context, q string, limit, offset int) ([]*domain.Chef, int, error) {
+func (fakeSearchRepo) SearchChefs(_ context.Context, q string, _ domain.SearchFilters, limit, offset int) ([]*domain.Chef, int, error) {
 	return []*domain.Chef{{ID: 1, BusinessName: "Match " + q}}, 1, nil
 }
-func (fakeSearchRepo) SearchMenuItems(_ context.Context, q string, limit, offset int) ([]*domain.MenuItem, int, error) {
+func (fakeSearchRepo) SearchMenuItems(_ context.Context, q string, _ domain.SearchFilters, limit, offset int) ([]*domain.MenuItem, int, error) {
 	return []*domain.MenuItem{{ID: 1, Name: "Match " + q}}, 1, nil
 }
 func (fakeSearchRepo) SearchUsers(_ context.Context, q string, limit, offset int) ([]*domain.User, int, error) {

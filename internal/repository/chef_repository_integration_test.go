@@ -105,7 +105,7 @@ func TestChefRepository_List(t *testing.T) {
 			t.Fatalf("create: %v", err)
 		}
 	}
-	chefs, total, err := repo.List(ctx(), 2, 0, false)
+	chefs, total, err := repo.List(ctx(), domain.ChefListFilters{}, 2, 0)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

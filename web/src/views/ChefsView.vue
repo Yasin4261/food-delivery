@@ -17,6 +17,10 @@ const lat = ref('')
 const lng = ref('')
 const nearbyActive = ref(false)
 
+// Sort + minimum rating for the browse list (server-validated whitelist).
+const sort = ref('')
+const minRating = ref('')
+
 // Customers see and use the favorite hearts; chefs don't favorite themselves.
 const canFavorite = auth.isAuthenticated && !auth.isChef
 
@@ -33,7 +37,10 @@ async function loadAll() {
   error.value = ''
   nearbyActive.value = false
   try {
-    chefs.value = page(await api.get('/chefs?limit=50')).items
+    const p = new URLSearchParams({ limit: '50' })
+    if (sort.value) p.set('sort', sort.value)
+    if (minRating.value) p.set('min_rating', minRating.value)
+    chefs.value = page(await api.get(`/chefs?${p}`)).items
   } catch (e) {
     error.value = e.message
   } finally {
@@ -82,6 +89,20 @@ onMounted(() => {
         <button class="btn-ghost">{{ $t('browse.nearby') }}</button>
         <button v-if="nearbyActive" type="button" class="btn-ghost" @click="loadAll">{{ $t('browse.showAll') }}</button>
       </form>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <select v-model="sort" class="input w-auto py-1.5" @change="loadAll">
+        <option value="">{{ $t('filters.sortDefault') }}</option>
+        <option value="rating">{{ $t('filters.sortRating') }}</option>
+        <option value="popular">{{ $t('filters.sortPopular') }}</option>
+      </select>
+      <select v-model="minRating" class="input w-auto py-1.5" @change="loadAll">
+        <option value="">{{ $t('filters.anyRating') }}</option>
+        <option value="3">★ 3+</option>
+        <option value="4">★ 4+</option>
+        <option value="4.5">★ 4.5+</option>
+      </select>
     </div>
 
     <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>

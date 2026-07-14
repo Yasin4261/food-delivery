@@ -31,16 +31,31 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
 
+	minRating, ok1 := queryFloat(r, "min_rating")
+	minPrice, ok2 := queryFloat(r, "min_price")
+	maxPrice, ok3 := queryFloat(r, "max_price")
+	if !ok1 || !ok2 || !ok3 {
+		respondError(w, http.StatusBadRequest, "min_rating, min_price and max_price must be numbers")
+		return
+	}
+	filters := domain.SearchFilters{
+		MinRating: minRating,
+		MinPrice:  minPrice,
+		MaxPrice:  maxPrice,
+		Cuisine:   r.URL.Query().Get("cuisine"),
+		Sort:      r.URL.Query().Get("sort"),
+	}
+
 	switch r.URL.Query().Get("type") {
 	case "chef":
-		chefs, total, err := h.search.Chefs(r.Context(), q, limit, offset)
+		chefs, total, err := h.search.Chefs(r.Context(), q, filters, limit, offset)
 		if err != nil {
 			respondSearchError(w, err)
 			return
 		}
 		respondPage(w, chefs, limit, offset, total)
 	case "food":
-		foods, total, err := h.search.Foods(r.Context(), q, limit, offset)
+		foods, total, err := h.search.Foods(r.Context(), q, filters, limit, offset)
 		if err != nil {
 			respondSearchError(w, err)
 			return

@@ -45,10 +45,10 @@ func (f *fakeChefRepo) FindByUserID(_ context.Context, userID int) (*domain.Chef
 	return nil, domain.ErrChefNotFound
 }
 
-func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, int, error) {
+func (f *fakeChefRepo) List(_ context.Context, fl domain.ChefListFilters, limit, offset int) ([]*domain.Chef, int, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
-		if c.IsActive && (!onlineOnly || c.IsOnline) {
+		if c.IsActive && (!fl.OnlineOnly || c.IsOnline) && c.Rating >= fl.MinRating {
 			cp := *c
 			out = append(out, &cp)
 		}
@@ -181,5 +181,20 @@ func TestNearby_FiltersByRadius(t *testing.T) {
 	}
 	if len(got) != 1 || got[0].UserID != 1 {
 		t.Errorf("nearby returned %d chefs, want only the Istanbul chef", len(got))
+	}
+}
+
+func TestChefService_ListFilterValidation(t *testing.T) {
+	svc := service.NewChefService(newFakeChefRepo())
+	ctx := context.Background()
+
+	if _, _, err := svc.List(ctx, domain.ChefListFilters{Sort: "bogus"}, 20, 0); !isValidation(err) {
+		t.Errorf("unknown sort = %v, want ValidationError", err)
+	}
+	if _, _, err := svc.List(ctx, domain.ChefListFilters{MinRating: 6}, 20, 0); !isValidation(err) {
+		t.Errorf("rating 6 = %v, want ValidationError", err)
+	}
+	if _, _, err := svc.List(ctx, domain.ChefListFilters{Sort: domain.SortPopular, MinRating: 4}, 20, 0); err != nil {
+		t.Errorf("valid filters = %v, want nil", err)
 	}
 }
