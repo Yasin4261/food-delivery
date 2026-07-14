@@ -93,6 +93,7 @@ async function load() {
   if (auth.isChef) {
     try {
       const chef = await api.get('/chefs/me')
+      kitchenImage.value = chef.image_url || ''
       kitchen.value = {
         business_name: chef.business_name || '',
         specialty: chef.specialty || '',
@@ -141,6 +142,25 @@ async function changePassword() {
     pwErr.value = e.message
   } finally {
     savingPw.value = false
+  }
+}
+
+// Kitchen photo upload (JPEG/PNG, max 5 MB).
+const kitchenImage = ref('')
+const uploadingKitchen = ref(false)
+async function uploadKitchenPhoto(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  uploadingKitchen.value = true
+  kitchenErr.value = ''
+  try {
+    const out = await api.upload('/chefs/me/image', file)
+    kitchenImage.value = out.image_url
+  } catch (e) {
+    kitchenErr.value = e.message
+  } finally {
+    uploadingKitchen.value = false
   }
 }
 
@@ -270,6 +290,14 @@ onMounted(() => {
     <!-- Kitchen (chefs with a profile) -->
     <form v-if="kitchen" class="card space-y-4" @submit.prevent="saveKitchen">
       <h2 class="font-semibold">{{ $t('profile.kitchen') }}</h2>
+      <div class="flex items-center gap-3">
+        <img v-if="kitchenImage" :src="kitchenImage" :alt="kitchen.business_name" class="h-16 w-16 rounded-xl object-cover" />
+        <div v-else class="flex h-16 w-16 items-center justify-center rounded-xl bg-gray-100 text-2xl">🍲</div>
+        <label class="cursor-pointer text-sm text-brand-600 hover:underline">
+          {{ uploadingKitchen ? $t('menus.uploading') : kitchenImage ? $t('menus.changePhoto') : $t('profile.addKitchenPhoto') }}
+          <input type="file" accept="image/jpeg,image/png" class="hidden" :disabled="uploadingKitchen" @change="uploadKitchenPhoto" />
+        </label>
+      </div>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
           <label class="label">{{ $t('onboarding.businessName') }}</label>

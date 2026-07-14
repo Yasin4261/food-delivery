@@ -198,3 +198,12 @@ func TestChefService_ListFilterValidation(t *testing.T) {
 		t.Errorf("valid filters = %v, want nil", err)
 	}
 }
+
+func (f *fakeChefRepo) SetImageURL(_ context.Context, chefID int, url string) error {
+	c, ok := f.chefs[chefID]
+	if !ok {
+		return domain.ErrChefNotFound
+	}
+	c.ImageURL = &url
+	return nil
+}

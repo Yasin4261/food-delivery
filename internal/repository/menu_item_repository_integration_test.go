@@ -138,3 +138,22 @@ func TestMenuItemRepository_DecrementUnlimited(t *testing.T) {
 		t.Errorf("decrement unlimited = %v, want ErrItemOutOfStock", err)
 	}
 }
+
+func TestMenuItemRepository_SetImageURL(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewMenuItemRepository(testDB)
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+	menu := seedMenu(t, chef.ID)
+	item := seedItem(t, menu.ID, chef.ID, 5, 10)
+
+	if err := repo.SetImageURL(ctx(), item.ID, "/uploads/dish.png"); err != nil {
+		t.Fatalf("set image: %v", err)
+	}
+	got, _ := repo.FindByID(ctx(), item.ID)
+	if got.ImageURL == nil || *got.ImageURL != "/uploads/dish.png" {
+		t.Errorf("image_url = %v, want /uploads/dish.png", got.ImageURL)
+	}
+	if err := repo.SetImageURL(ctx(), 9999, "/uploads/x.png"); err != domain.ErrMenuItemNotFound {
+		t.Errorf("unknown item = %v, want ErrMenuItemNotFound", err)
+	}
+}

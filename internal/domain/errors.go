@@ -33,6 +33,9 @@ var (
 	ErrInvalidStatusTransition  = errors.New("invalid order status transition")
 	ErrInvalidPaymentTransition = errors.New("invalid payment status transition")
 
+	// ErrUnsupportedImage marks an upload that is not a decodable JPEG or PNG.
+	ErrUnsupportedImage = errors.New("image must be a valid JPEG or PNG")
+
 	ErrAddressNotFound       = errors.New("address not found")
 	ErrAddressLabelRequired  = errors.New("address label is required")
 	ErrAddressLabelTooLong   = errors.New("address label must be at most 50 characters")

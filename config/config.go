@@ -37,6 +37,10 @@ type Config struct {
 	// across API instances. Empty keeps the in-memory implementations
 	// (correct for a single instance).
 	RedisURL string
+
+	// UploadDir is where uploaded photos are stored (a Docker volume in
+	// production so files survive restarts).
+	UploadDir string
 }
 
 // LoadConfig reads configuration from the environment (and a local .env file
@@ -65,6 +69,8 @@ func LoadConfig() (*Config, error) {
 		IyzicoBaseURL:   getEnv("IYZICO_BASE_URL", "https://sandbox-api.iyzipay.com"),
 
 		RedisURL: getEnv("REDIS_URL", ""),
+
+		UploadDir: getEnv("UPLOAD_DIR", "uploads"),
 	}
 
 	if cfg.DatabaseURL == "" {

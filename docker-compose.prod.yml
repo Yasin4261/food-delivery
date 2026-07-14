@@ -55,6 +55,10 @@ services:
       IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:?set IYZICO_SECRET_KEY in .env.prod}
       IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}
       AUTO_MIGRATE: "true"
+      UPLOAD_DIR: "/app/uploads"
+    volumes:
+      # Uploaded photos must survive container restarts/redeploys.
+      - uploads_data:/app/uploads
     networks: [prod]
     security_opt:
       - no-new-privileges:true
@@ -87,6 +91,8 @@ volumes:
   postgres_data_prod:
     driver: local
   caddy_data:
+    driver: local
+  uploads_data:
     driver: local
   caddy_config:
     driver: local

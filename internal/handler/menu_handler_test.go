@@ -291,3 +291,12 @@ func TestMenu_Validation(t *testing.T) {
 		t.Errorf("zero price = %d, want 400", rec.Code)
 	}
 }
+
+func (f *fakeMenuItemRepo) SetImageURL(_ context.Context, id int, url string) error {
+	it, ok := f.items[id]
+	if !ok {
+		return domain.ErrMenuItemNotFound
+	}
+	it.ImageURL = &url
+	return nil
+}

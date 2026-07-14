@@ -19,6 +19,7 @@ type Router struct {
 	orderHandler    *handler.OrderHandler
 	favoriteHandler *handler.FavoriteHandler
 	addressHandler  *handler.AddressHandler
+	uploadHandler   *handler.UploadHandler
 	reviewHandler   *handler.ReviewHandler
 	earningsHandler *handler.EarningsHandler
 	searchHandler   *handler.SearchHandler
@@ -38,6 +39,7 @@ func NewRouter(
 	orderHandler *handler.OrderHandler,
 	favoriteHandler *handler.FavoriteHandler,
 	addressHandler *handler.AddressHandler,
+	uploadHandler *handler.UploadHandler,
 	reviewHandler *handler.ReviewHandler,
 	earningsHandler *handler.EarningsHandler,
 	searchHandler *handler.SearchHandler,
@@ -56,6 +58,7 @@ func NewRouter(
 		orderHandler:    orderHandler,
 		favoriteHandler: favoriteHandler,
 		addressHandler:  addressHandler,
+		uploadHandler:   uploadHandler,
 		reviewHandler:   reviewHandler,
 		earningsHandler: earningsHandler,
 		searchHandler:   searchHandler,
@@ -101,6 +104,11 @@ func (r *Router) Setup() http.Handler {
 	r.handleRole("GET /api/v2/chefs/me", r.chefHandler.Me)
 	r.handleRole("PUT /api/v2/chefs/me", r.chefHandler.UpdateMe)
 	r.handleRole("PATCH /api/v2/chefs/me/status", r.chefHandler.SetStatus)
+	// Photos: chef-only uploads (ownership in the service); public serving is
+	// gated on the store's generated-name pattern (no traversal).
+	r.handleRole("POST /api/v2/chefs/me/image", r.uploadHandler.KitchenImage)
+	r.handleRole("POST /api/v2/menu-items/{id}/image", r.uploadHandler.DishImage)
+	r.mux.HandleFunc("GET /uploads/{file}", r.uploadHandler.Serve)
 	r.handleRole("GET /api/v2/chefs/me/earnings", r.earningsHandler.Get)
 
 	// A chef's menus and dishes (public reads).

@@ -188,6 +188,9 @@ export default {
   menus: {
     title: 'Menülerim',
     back: '← Panel',
+    addPhoto: 'Fotoğraf ekle',
+    changePhoto: 'Fotoğrafı değiştir',
+    uploading: 'Yükleniyor…',
     newMenu: 'Yeni menü adı',
     newMenuPlaceholder: 'Akşam menüsü',
     createMenu: 'Menü oluştur',
@@ -240,6 +243,7 @@ export default {
     passwordChanged: 'Şifre güncellendi.',
     kitchen: 'Mutfağım',
     bio: 'Tanıtım',
+    addKitchenPhoto: 'Mutfak fotoğrafı ekle',
     emailNotifications: 'Siparişlerim hakkında e-posta gönder',
     emailNotificationsHint: 'Yeni sipariş ve teslimat durumu e-postaları. Şifre sıfırlama e-postaları her zaman gönderilir.',
   },

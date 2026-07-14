@@ -20,7 +20,7 @@ func NewChefRepository(db *sql.DB) *ChefRepository {
 }
 
 const chefColumns = `
-	id, user_id, business_name, bio, specialty, experience_years,
+	id, user_id, business_name, bio, specialty, experience_years, image_url,
 	kitchen_address, kitchen_city, kitchen_latitude, kitchen_longitude, delivery_radius,
 	food_license_number, health_certificate_url, is_verified, verified_at,
 	rating, total_reviews, total_orders, is_active, is_accepting_orders, is_online,
@@ -29,7 +29,7 @@ const chefColumns = `
 func scanChef(s interface{ Scan(...any) error }) (*domain.Chef, error) {
 	c := &domain.Chef{}
 	err := s.Scan(
-		&c.ID, &c.UserID, &c.BusinessName, &c.Bio, &c.Specialty, &c.ExperienceYears,
+		&c.ID, &c.UserID, &c.BusinessName, &c.Bio, &c.Specialty, &c.ExperienceYears, &c.ImageURL,
 		&c.KitchenAddress, &c.KitchenCity, &c.KitchenLatitude, &c.KitchenLongitude, &c.DeliveryRadius,
 		&c.FoodLicenseNumber, &c.HealthCertificateURL, &c.IsVerified, &c.VerifiedAt,
 		&c.Rating, &c.TotalReviews, &c.TotalOrders, &c.IsActive, &c.IsAcceptingOrders, &c.IsOnline,
@@ -155,6 +155,18 @@ func (r *ChefRepository) SetOnline(ctx context.Context, chefID int, online bool)
 	res, err := r.db.ExecContext(ctx, `UPDATE chefs SET is_online = $2, updated_at = now() WHERE id = $1`, chefID, online)
 	if err != nil {
 		return fmt.Errorf("set chef online: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrChefNotFound
+	}
+	return nil
+}
+
+// SetImageURL updates the chef's kitchen photo URL.
+func (r *ChefRepository) SetImageURL(ctx context.Context, chefID int, url string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE chefs SET image_url = $2, updated_at = now() WHERE id = $1`, chefID, url)
+	if err != nil {
+		return fmt.Errorf("set chef image: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return domain.ErrChefNotFound

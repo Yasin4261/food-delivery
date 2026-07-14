@@ -13,6 +13,7 @@ type Chef struct {
 	Bio             *string `json:"bio,omitempty"`
 	Specialty       *string `json:"specialty,omitempty"`
 	ExperienceYears *int    `json:"experience_years,omitempty"`
+	ImageURL        *string `json:"image_url,omitempty"` // kitchen photo
 
 	// Location
 	KitchenAddress   string   `json:"kitchen_address"`

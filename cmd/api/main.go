@@ -25,6 +25,7 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/repository"
 	"github.com/Yasin4261/food-delivery/internal/router"
 	"github.com/Yasin4261/food-delivery/internal/service"
+	"github.com/Yasin4261/food-delivery/internal/storage"
 )
 
 // version is stamped at build time via:
@@ -137,6 +138,11 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	paymentService := service.NewPaymentService(paymentSessionRepo, orderRepo, userRepo, gateway, cfg.AppBaseURL)
 	addressRepo := repository.NewAddressRepository(db.DB)
 	addressService := service.NewAddressService(addressRepo)
+	fileStore, err := storage.NewLocal(cfg.UploadDir)
+	if err != nil {
+		log.Fatalf("upload storage: %v", err)
+	}
+	uploadService := service.NewUploadService(fileStore, chefRepo, menuItemRepo)
 	orderNotifier := service.NewOrderNotifier(mail, userRepo, chefRepo)
 	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, addressRepo, paymentService, orderNotifier)
 	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
@@ -177,6 +183,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	orderHandler := handler.NewOrderHandler(orderService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	addressHandler := handler.NewAddressHandler(addressService)
+	uploadHandler := handler.NewUploadHandler(uploadService, cfg.UploadDir)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	earningsHandler := handler.NewEarningsHandler(earningsService)
 	searchHandler := handler.NewSearchHandler(searchService)
@@ -184,6 +191,6 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	versionHandler := handler.NewVersionHandler(version)
 	paymentHandler := handler.NewPaymentHandler(paymentService)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
 	return r.Setup()
 }

@@ -129,8 +129,9 @@ onMounted(() => {
           {{ favorites.has(chef.id) ? '❤️' : '🤍' }}
         </button>
         <div class="flex items-start gap-3" :class="canFavorite && 'pr-7'">
-          <div class="avatar relative">
-            {{ initial(chef) }}
+          <div class="relative">
+            <img v-if="chef.image_url" :src="chef.image_url" :alt="chef.business_name" class="h-10 w-10 rounded-full object-cover" />
+            <div v-else class="avatar">{{ initial(chef) }}</div>
             <span
               v-if="chef.is_online"
               class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-green-500"

@@ -117,11 +117,14 @@ func seedChefWithItem(t *testing.T, srv http.Handler, username, email string) (t
 	t.Helper()
 	token = registerAndToken(t, srv, username, email)
 	createChefProfile(t, srv, token)
-	if rec := do(t, srv, http.MethodPost, "/api/v2/menus", token, `{"name":"Dinner"}`); rec.Code != http.StatusCreated {
-		t.Fatalf("seed menu = %d (%s)", rec.Code, rec.Body)
+	menuRec := do(t, srv, http.MethodPost, "/api/v2/menus", token, `{"name":"Dinner"}`)
+	if menuRec.Code != http.StatusCreated {
+		t.Fatalf("seed menu = %d (%s)", menuRec.Code, menuRec.Body)
 	}
+	var menu domain.Menu
+	_ = json.Unmarshal(menuRec.Body.Bytes(), &menu)
 	rec := do(t, srv, http.MethodPost, "/api/v2/menu-items", token,
-		`{"menu_id":1,"name":"Soup","price":5,"available_quantity":10}`)
+		`{"menu_id":`+itoa(menu.ID)+`,"name":"Soup","price":5,"available_quantity":10}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("seed item = %d (%s)", rec.Code, rec.Body)
 	}
