@@ -43,6 +43,44 @@ APP_BASE_URL=https://food.example.com  # public URL used in emails + payment cal
 `SITE_ADDRESS=:80` keeps plain HTTP — only for a local prod test or when TLS
 terminates upstream (cloud load balancer).
 
+## Continuous deployment (deploy on tag)
+
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`: it builds the API
+and web images, pushes them to **GHCR** stamped with the tag (and `:latest`),
+then — when the host is configured — rolls production to that tag over SSH
+(`docker compose pull && up -d --no-build`, then a `/health` smoke check).
+
+The `image:` lines in `docker-compose.prod.yml` select the tag via `${TAG}`, so
+the running stack and the images are always the same version. `make prod` still
+works: it carries a `build:` block too, so a manual deploy builds locally under
+the same image name.
+
+**One-time host setup** (a checkout with `.env.prod`, images pulled by compose):
+
+```bash
+git clone git@github.com:Yasin4261/food-delivery.git /opt/food-delivery
+cd /opt/food-delivery && cp .env.prod.example .env.prod && $EDITOR .env.prod
+```
+
+**GitHub repo configuration** (Settings → Secrets and variables → Actions):
+
+| Kind | Name | Value |
+|---|---|---|
+| Variable | `DEPLOY_ENABLED` | `true` to turn the deploy job on (absent = build+push only) |
+| Secret | `DEPLOY_HOST` | server hostname/IP |
+| Secret | `DEPLOY_USER` | SSH user (in the `docker` group) |
+| Secret | `DEPLOY_SSH_KEY` | private key for that user |
+| Secret | `DEPLOY_PATH` | e.g. `/opt/food-delivery` |
+
+The deploy job runs in a `production` GitHub Environment — add required
+reviewers there to gate releases behind an approval. GHCR images are private by
+default; the host's Docker must `docker login ghcr.io` once (a PAT with
+`read:packages`), or make the packages public.
+
+Rollback = deploy the previous tag: `git push origin :refs/tags/vX.Y.Z`-free —
+just re-run by pushing an older tag, or on the host `TAG=vX.Y.(Z-1) docker
+compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build`.
+
 ## Verify
 
 ```bash

@@ -267,6 +267,11 @@ Tag history:
 | `v4.0.0` | **production release** — one-origin deploy behind Caddy with auto-HTTPS (`DEPLOY.md`); Redis-backed denylist + rate limiter for multi-instance (closes #32, #44) |
 | `v4.1.0` | per-chef sub-order status — `sub_orders` + derived order status, partial refunds on decline, per-slice earnings; TR/EN web UI incl. i18n (PR #60/#61, closes #56, #34) |
 | `v4.2.0` | order email notifications — new order → chef, sub-order status changes → customer; fire-and-forget over `domain.Mailer` (PR #62, closes #58) |
+| `v4.3.0` | account self-service — profile management (#64), email-notification opt-out (#71), customer address book (#66); SECURITY.md + CONTRIBUTING.md |
+| `v4.4.0` | review history + per-slice reviewability (PR #81); search filters & whitelisted sorting (#68, PR #82) |
+| `v4.5.0` | photo upload — dish + kitchen photos via the `FileStore` port, EXIF-stripping re-encode, traversal-proof serving (#63, PR #83) |
+| `v4.6.0` | chef working hours — weekly schedules (overnight + split shifts), order-time enforcement in Europe/Istanbul, `is_open_now` (#70, PR #84) |
+| `v4.7.0` | money model — distance-based delivery fees + chef commission with per-slice snapshots (#65, PR #86); nightly DB backups + restore runbook (#74, PR #85) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
@@ -276,7 +281,7 @@ git tag -a vX.Y.Z -m "vX.Y.Z — <summary>"
 git push origin vX.Y.Z
 ```
 
-`git describe --tags` then yields human-readable build versions; wire it into the binary via ldflags if/when a `version` endpoint is added.
+`git describe --tags` feeds the binary version via ldflags (`GET /version`). **Pushing the tag also triggers CD** (`.github/workflows/release.yml`, #72): it builds + pushes the API/web images to GHCR stamped with the tag and, when `DEPLOY_ENABLED=true` + the `DEPLOY_*` secrets are set, rolls the production host to that tag over SSH (pull + `up -d --no-build` + `/health` smoke check). `docker-compose.prod.yml` selects the image by `${TAG}`; `make prod` still builds locally. Rollback = push/deploy an older tag. See `DEPLOY.md`.
 
 ---
 
