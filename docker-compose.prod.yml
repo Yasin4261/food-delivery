@@ -56,6 +56,10 @@ services:
       IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}
       AUTO_MIGRATE: "true"
       UPLOAD_DIR: "/app/uploads"
+      TIMEZONE: ${TIMEZONE:-Europe/Istanbul}
+      DELIVERY_BASE_FEE: ${DELIVERY_BASE_FEE:-0}
+      DELIVERY_FEE_PER_KM: ${DELIVERY_FEE_PER_KM:-0}
+      COMMISSION_PERCENT: ${COMMISSION_PERCENT:-0}
     volumes:
       # Uploaded photos must survive container restarts/redeploys.
       - uploads_data:/app/uploads

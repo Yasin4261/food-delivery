@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,6 +46,13 @@ type Config struct {
 	// Timezone is the platform time zone chefs' working hours are written and
 	// evaluated in (the product targets Turkey).
 	Timezone string
+
+	// Money model (#65): distance-based delivery fee charged to the customer
+	// per chef slice, and a commission percentage deducted from the chef.
+	// Amounts are snapshotted onto orders at placement.
+	DeliveryBaseFee   float64
+	DeliveryFeePerKm  float64
+	CommissionPercent float64
 }
 
 // LoadConfig reads configuration from the environment (and a local .env file
@@ -99,7 +107,36 @@ func LoadConfig() (*Config, error) {
 	}
 	cfg.JWTExpiration = exp
 
+	if cfg.DeliveryBaseFee, err = envFloat("DELIVERY_BASE_FEE", 0); err != nil {
+		return nil, err
+	}
+	if cfg.DeliveryFeePerKm, err = envFloat("DELIVERY_FEE_PER_KM", 0); err != nil {
+		return nil, err
+	}
+	if cfg.CommissionPercent, err = envFloat("COMMISSION_PERCENT", 0); err != nil {
+		return nil, err
+	}
+	if cfg.DeliveryBaseFee < 0 || cfg.DeliveryFeePerKm < 0 {
+		return nil, fmt.Errorf("delivery fees cannot be negative")
+	}
+	if cfg.CommissionPercent < 0 || cfg.CommissionPercent > 100 {
+		return nil, fmt.Errorf("COMMISSION_PERCENT must be between 0 and 100")
+	}
+
 	return cfg, nil
+}
+
+// envFloat parses an optional float variable, failing fast on garbage.
+func envFloat(key string, fallback float64) (float64, error) {
+	raw := getEnv(key, "")
+	if raw == "" {
+		return fallback, nil
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
+	}
+	return v, nil
 }
 
 // placeholderJWTSecret is the value historically committed to compose files. It

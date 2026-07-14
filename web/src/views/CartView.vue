@@ -90,6 +90,7 @@ async function placeOrder() {
         <span>{{ $t('cart.total') }}</span>
         <span>${{ cart.total.toFixed(2) }}</span>
       </div>
+      <p class="text-xs text-gray-400">{{ $t('cart.deliveryFeeHint') }}</p>
 
       <form class="card space-y-4" @submit.prevent="placeOrder">
         <div>

@@ -23,6 +23,7 @@ type OrderService struct {
 	refunder  domain.PaymentRefunder     // refunds card payments on cancel; may be nil
 	notifier  *OrderNotifier             // fire-and-forget order emails; may be nil
 	loc       *time.Location             // platform TZ for the working-hours check
+	policy    domain.FeePolicy           // delivery fees + commission (#65); zero value = free
 }
 
 // NewOrderService builds an OrderService. addresses resolves a saved
@@ -30,11 +31,11 @@ type OrderService struct {
 // chef working hours at placement (nil disables the check; loc nil = UTC);
 // refunder handles gateway refunds when a paid card order is cancelled (nil
 // disables refunds); notifier sends order emails (nil disables them).
-func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, addresses domain.AddressRepository, hours domain.ChefHoursRepository, loc *time.Location, refunder domain.PaymentRefunder, notifier *OrderNotifier) *OrderService {
+func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, addresses domain.AddressRepository, hours domain.ChefHoursRepository, loc *time.Location, policy domain.FeePolicy, refunder domain.PaymentRefunder, notifier *OrderNotifier) *OrderService {
 	if loc == nil {
 		loc = time.UTC
 	}
-	return &OrderService{orders: orders, items: items, chefs: chefs, addresses: addresses, hours: hours, loc: loc, refunder: refunder, notifier: notifier}
+	return &OrderService{orders: orders, items: items, chefs: chefs, addresses: addresses, hours: hours, loc: loc, policy: policy, refunder: refunder, notifier: notifier}
 }
 
 // OrderLineInput is one requested dish in a new order.
@@ -132,7 +133,6 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 	}
 
 	order.Subtotal = subtotal
-	order.TotalPrice = subtotal + order.DeliveryFee + order.ServiceFee + order.Tax - order.Discount
 
 	// One sub-order per participating chef (in first-seen item order): the
 	// chef-scoped slice that carries its own status lifecycle.
@@ -144,11 +144,14 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 		order.SubOrders = append(order.SubOrders, domain.NewSubOrder(oi.ChefID, oi.Subtotal))
 	}
 
-	// Every participating chef must be inside their working hours right now —
-	// an order a closed kitchen can't start cooking is rejected up front.
-	if s.hours != nil {
-		now := time.Now().In(s.loc)
-		for _, sub := range order.SubOrders {
+	// Money model (#65), snapshotted per slice: the customer pays a
+	// distance-based delivery fee per chef (base only when either side lacks
+	// coordinates); the platform's commission comes out of the chef's food
+	// subtotal, never the customer's total. Working hours are checked in the
+	// same pass so each chef is fetched once.
+	now := time.Now().In(s.loc)
+	for _, sub := range order.SubOrders {
+		if s.hours != nil {
 			schedule, err := s.hours.ListByChef(ctx, sub.ChefID)
 			if err != nil {
 				return nil, err
@@ -157,7 +160,22 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 				return nil, domain.ErrChefClosed
 			}
 		}
+
+		chef, err := s.chefs.FindByID(ctx, sub.ChefID)
+		if err != nil {
+			return nil, err
+		}
+		distance := -1.0 // unknown: base fee only
+		if chef.HasLocation() && in.DeliveryLatitude != nil && in.DeliveryLongitude != nil {
+			distance = domain.CalculateDistance(*chef.KitchenLatitude, *chef.KitchenLongitude, *in.DeliveryLatitude, *in.DeliveryLongitude)
+		}
+		sub.DeliveryFee = s.policy.DeliveryFee(distance)
+		sub.Commission = s.policy.Commission(sub.Subtotal)
+		order.DeliveryFee += sub.DeliveryFee
 	}
+	order.DeliveryFee = domain.RoundMoney(order.DeliveryFee)
+
+	order.TotalPrice = domain.RoundMoney(subtotal + order.DeliveryFee + order.ServiceFee + order.Tax - order.Discount)
 
 	if err := s.orders.Create(ctx, order); err != nil {
 		return nil, err
@@ -310,10 +328,12 @@ func (s *OrderService) AdvanceForChef(ctx context.Context, userID, orderID int, 
 	if err := applyChefAction(sub, action); err != nil {
 		return nil, err
 	}
-	// Declining a slice of a card-paid order returns that chef's money before
-	// anything persists — if the partial refund fails, the decline aborts.
+	// Declining a slice of a card-paid order returns that chef's money —
+	// food subtotal plus its delivery fee, since nothing will be delivered —
+	// before anything persists. If the partial refund fails, the decline
+	// aborts.
 	if action == OrderActionDecline && order.IsCardPaid() && s.refunder != nil {
-		if err := s.refunder.RefundSubOrderPayment(ctx, order, sub.Subtotal); err != nil {
+		if err := s.refunder.RefundSubOrderPayment(ctx, order, sub.Subtotal+sub.DeliveryFee); err != nil {
 			return nil, err
 		}
 	}

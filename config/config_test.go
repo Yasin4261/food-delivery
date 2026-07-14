@@ -16,6 +16,7 @@ func setBase(t *testing.T) {
 		"PORT", "ENV", "DATABASE_URL", "JWT_SECRET", "JWT_EXPIRATION", "AUTO_MIGRATE",
 		"ALLOWED_ORIGINS", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD",
 		"MAIL_FROM", "APP_BASE_URL", "IYZICO_API_KEY", "IYZICO_SECRET_KEY", "IYZICO_BASE_URL",
+		"DELIVERY_BASE_FEE", "DELIVERY_FEE_PER_KM", "COMMISSION_PERCENT",
 	} {
 		t.Setenv(k, "")
 	}
@@ -195,5 +196,46 @@ func TestLoadConfig_InvalidJWTExpiration(t *testing.T) {
 	}
 	if cfg.JWTExpiration != 90*time.Minute {
 		t.Errorf("expiration = %v, want 90m", cfg.JWTExpiration)
+	}
+}
+
+func TestLoadConfig_Fees(t *testing.T) {
+	setBase(t)
+
+	// Defaults: everything free (pre-#65 behaviour).
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.DeliveryBaseFee != 0 || cfg.DeliveryFeePerKm != 0 || cfg.CommissionPercent != 0 {
+		t.Errorf("fee defaults = %v/%v/%v, want zeros", cfg.DeliveryBaseFee, cfg.DeliveryFeePerKm, cfg.CommissionPercent)
+	}
+
+	// Valid values parse.
+	t.Setenv("DELIVERY_BASE_FEE", "10.5")
+	t.Setenv("DELIVERY_FEE_PER_KM", "2")
+	t.Setenv("COMMISSION_PERCENT", "15")
+	cfg, err = config.LoadConfig()
+	if err != nil {
+		t.Fatalf("load with fees: %v", err)
+	}
+	if cfg.DeliveryBaseFee != 10.5 || cfg.DeliveryFeePerKm != 2 || cfg.CommissionPercent != 15 {
+		t.Errorf("fees = %v/%v/%v", cfg.DeliveryBaseFee, cfg.DeliveryFeePerKm, cfg.CommissionPercent)
+	}
+
+	// Garbage and out-of-range values fail fast.
+	for name, set := range map[string]func(){
+		"garbage base":     func() { t.Setenv("DELIVERY_BASE_FEE", "free") },
+		"negative per-km":  func() { t.Setenv("DELIVERY_FEE_PER_KM", "-1") },
+		"percent over 100": func() { t.Setenv("COMMISSION_PERCENT", "150") },
+	} {
+		set()
+		if _, err := config.LoadConfig(); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+		// Reset to valid for the next case.
+		t.Setenv("DELIVERY_BASE_FEE", "1")
+		t.Setenv("DELIVERY_FEE_PER_KM", "1")
+		t.Setenv("COMMISSION_PERCENT", "10")
 	}
 }

@@ -56,7 +56,8 @@ src/
 - Customer: browse chefs, find nearby, view a chef's menu, multi-chef cart,
   place an order (cash/card), see order history, cancel pending/confirmed.
 - Chef: **onboarding** (create the kitchen profile when none exists), dashboard
-  with earnings + online/offline toggle, incoming orders with status actions
+  with **net earnings** (food + delivery fees − platform commission) +
+  online/offline toggle, incoming orders with status actions
   (accept → preparing → ready → delivering → delivered, or decline), and
   **My menus** — create/delete menus and add/remove dishes (price, stock or
   unlimited).

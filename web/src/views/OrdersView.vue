@@ -112,7 +112,12 @@ onBeforeUnmount(() => clearInterval(poll))
             {{ order.payment_method === 'card' ? '💳' : '💵' }} {{ $t(`payment.${order.payment_status}`) }}
           </span>
         </div>
-        <span class="font-semibold">${{ order.total_price?.toFixed(2) }}</span>
+        <span class="text-right">
+          <span class="font-semibold">${{ order.total_price?.toFixed(2) }}</span>
+          <span v-if="order.delivery_fee > 0" class="block text-xs text-gray-400">
+            {{ $t('orders.inclDelivery', { fee: `$${order.delivery_fee.toFixed(2)}` }) }}
+          </span>
+        </span>
       </div>
       <!-- Multi-chef orders: each chef's slice advances on its own. -->
       <div v-if="order.sub_orders?.length > 1" class="flex flex-wrap gap-2 text-sm">

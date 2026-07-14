@@ -48,13 +48,13 @@ const orderItemColumns = `
 	special_instructions, created_at`
 
 const subOrderColumns = `
-	s.id, s.order_id, s.chef_id, s.status, s.subtotal, s.created_at, s.updated_at,
-	c.business_name`
+	s.id, s.order_id, s.chef_id, s.status, s.subtotal, s.delivery_fee, s.commission,
+	s.created_at, s.updated_at, c.business_name`
 
 func scanSubOrder(s interface{ Scan(...any) error }) (*domain.SubOrder, error) {
 	so := &domain.SubOrder{}
 	err := s.Scan(
-		&so.ID, &so.OrderID, &so.ChefID, &so.Status, &so.Subtotal,
+		&so.ID, &so.OrderID, &so.ChefID, &so.Status, &so.Subtotal, &so.DeliveryFee, &so.Commission,
 		&so.CreatedAt, &so.UpdatedAt, &so.ChefName,
 	)
 	return so, err
@@ -119,13 +119,13 @@ func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
 	}
 
 	subQuery := `
-		INSERT INTO sub_orders (order_id, chef_id, status, subtotal)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO sub_orders (order_id, chef_id, status, subtotal, delivery_fee, commission)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at, updated_at`
 
 	for _, s := range o.SubOrders {
 		s.OrderID = o.ID
-		err = tx.QueryRowContext(ctx, subQuery, s.OrderID, s.ChefID, s.Status, s.Subtotal).
+		err = tx.QueryRowContext(ctx, subQuery, s.OrderID, s.ChefID, s.Status, s.Subtotal, s.DeliveryFee, s.Commission).
 			Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
 		if err != nil {
 			return fmt.Errorf("create sub-order: %w", err)

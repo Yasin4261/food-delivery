@@ -167,7 +167,7 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	orderRepo := newFakeOrderRepo()
 	addressRepo := newFakeAddressRepo()
 	paymentService := service.NewPaymentService(newFakePaymentSessionRepo(), orderRepo, userRepo, payment.NewMock("http://app.test"), "http://app.test")
-	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo, addressRepo, hoursRepo, nil, paymentService, nil)
+	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo, addressRepo, hoursRepo, nil, domain.FeePolicy{}, paymentService, nil)
 	addressService := service.NewAddressService(addressRepo)
 	favoriteService := service.NewFavoriteService(newFakeFavoriteRepo(chefRepo), chefRepo)
 	reviewService := service.NewReviewService(newFakeReviewRepo(), orderRepo)
