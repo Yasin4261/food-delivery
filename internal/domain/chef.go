@@ -40,6 +40,10 @@ type Chef struct {
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// IsOpenNow is derived from the chef's working hours at read time (nil
+	// when not computed); it is not a column. See ChefHours / IsOpenAt.
+	IsOpenNow *bool `json:"is_open_now,omitempty"`
 }
 
 const defaultDeliveryRadiusKm = 5

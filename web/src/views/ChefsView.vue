@@ -139,7 +139,10 @@ onMounted(() => {
             ></span>
           </div>
           <div class="min-w-0">
-            <h2 class="truncate font-semibold">{{ chef.business_name }}</h2>
+            <h2 class="truncate font-semibold">
+              {{ chef.business_name }}
+              <span v-if="chef.is_open_now === false" class="badge ml-1 bg-gray-100 text-gray-500">{{ $t('hours.closedBadge') }}</span>
+            </h2>
             <p v-if="chef.specialty" class="truncate text-sm text-gray-500">{{ chef.specialty }}</p>
           </div>
         </div>

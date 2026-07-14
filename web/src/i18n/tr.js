@@ -208,6 +208,12 @@ export default {
     needProfile: 'Menü eklemeden önce mutfak profilinizi oluşturmalısınız.',
     needProfileLink: 'Panelden hemen kurun',
   },
+  hours: {
+    title: 'Çalışma saatleri',
+    hint: 'İşaretlenmeyen günler kapalıdır. Hiçbir gün işaretli değilse her zaman açıksınız. Saatleriniz dışındaki siparişler otomatik reddedilir.',
+    closed: 'kapalı',
+    closedBadge: 'şu an kapalı',
+  },
   filters: {
     sortDefault: 'Sıralama: öne çıkan',
     sortRating: 'Sıralama: en yüksek puan',

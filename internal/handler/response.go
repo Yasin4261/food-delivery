@@ -67,12 +67,15 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrInvalidResetToken),
 		errors.Is(err, domain.ErrEmptyMessage),
 		errors.Is(err, domain.ErrUnsupportedImage),
+		errors.Is(err, domain.ErrInvalidWeekday),
+		errors.Is(err, domain.ErrInvalidHoursWindow),
 		errors.Is(err, domain.ErrAddressLabelRequired),
 		errors.Is(err, domain.ErrAddressLabelTooLong),
 		errors.Is(err, domain.ErrAddressRequired),
 		errors.Is(err, domain.ErrCoordinatesIncomplete):
 		respondError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrEmptyOrder),
+		errors.Is(err, domain.ErrChefClosed),
 		errors.Is(err, domain.ErrItemNotOrderable),
 		errors.Is(err, domain.ErrItemOutOfStock),
 		errors.Is(err, domain.ErrInvalidStatusTransition),

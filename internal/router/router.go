@@ -107,6 +107,9 @@ func (r *Router) Setup() http.Handler {
 	// Photos: chef-only uploads (ownership in the service); public serving is
 	// gated on the store's generated-name pattern (no traversal).
 	r.handleRole("POST /api/v2/chefs/me/image", r.uploadHandler.KitchenImage)
+	// Working hours: the chef edits their own schedule; reads are public.
+	r.handleRole("PUT /api/v2/chefs/me/hours", r.chefHandler.SetHours)
+	r.mux.HandleFunc("GET /api/v2/chefs/{id}/hours", r.chefHandler.Hours)
 	r.handleRole("POST /api/v2/menu-items/{id}/image", r.uploadHandler.DishImage)
 	r.mux.HandleFunc("GET /uploads/{file}", r.uploadHandler.Serve)
 	r.handleRole("GET /api/v2/chefs/me/earnings", r.earningsHandler.Get)

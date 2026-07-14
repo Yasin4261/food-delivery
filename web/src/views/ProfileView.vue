@@ -1,9 +1,11 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { api, ApiError } from '@/api/client'
+import { i18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
+const locale = i18n.global.locale
 
 // --- account (contact + default location + notification preference) ---
 const account = reactive({
@@ -94,6 +96,8 @@ async function load() {
     try {
       const chef = await api.get('/chefs/me')
       kitchenImage.value = chef.image_url || ''
+      chefId.value = chef.id
+      loadHours(chef.id)
       kitchen.value = {
         business_name: chef.business_name || '',
         specialty: chef.specialty || '',
@@ -142,6 +146,48 @@ async function changePassword() {
     pwErr.value = e.message
   } finally {
     savingPw.value = false
+  }
+}
+
+// --- working hours (one window per day in the editor) ---
+const chefId = ref(0)
+const days = Array.from({ length: 7 }, (_, d) => d)
+const schedule = reactive(
+  days.map(() => ({ enabled: false, opens: '09:00', closes: '17:00' })),
+)
+const hoursMsg = ref('')
+const hoursErr = ref('')
+const savingHours = ref(false)
+
+function dayName(d) {
+  // Weekday labels in the active UI language; 2026-07-12+d walks Sun..Sat.
+  return new Intl.DateTimeFormat(locale.value, { weekday: 'long' }).format(new Date(2026, 6, 12 + d))
+}
+
+async function loadHours(id) {
+  try {
+    const hours = await api.get(`/chefs/${id}/hours`)
+    for (const h of hours) {
+      schedule[h.weekday] = { enabled: true, opens: h.opens, closes: h.closes }
+    }
+  } catch (e) {
+    hoursErr.value = e.message
+  }
+}
+
+async function saveHours() {
+  savingHours.value = true
+  hoursMsg.value = hoursErr.value = ''
+  try {
+    const payload = days
+      .filter((d) => schedule[d].enabled)
+      .map((d) => ({ weekday: d, opens: schedule[d].opens, closes: schedule[d].closes }))
+    await api.put('/chefs/me/hours', payload)
+    hoursMsg.value = 'saved'
+  } catch (e) {
+    hoursErr.value = e.message
+  } finally {
+    savingHours.value = false
   }
 }
 
@@ -339,6 +385,27 @@ onMounted(() => {
       <p v-if="kitchenErr" class="text-sm text-red-600">{{ kitchenErr }}</p>
       <p v-if="kitchenMsg" class="text-sm text-green-700">{{ $t('profile.saved') }}</p>
       <button class="btn-primary" :disabled="savingKitchen">{{ $t('profile.save') }}</button>
+    </form>
+
+    <!-- Working hours (chefs with a profile) -->
+    <form v-if="kitchen" class="card space-y-3" @submit.prevent="saveHours">
+      <h2 class="font-semibold">{{ $t('hours.title') }}</h2>
+      <p class="text-xs text-gray-400">{{ $t('hours.hint') }}</p>
+      <div v-for="d in days" :key="d" class="flex flex-wrap items-center gap-3 text-sm">
+        <label class="flex w-32 items-center gap-2">
+          <input v-model="schedule[d].enabled" type="checkbox" class="h-4 w-4 rounded border-gray-300" />
+          <span class="capitalize">{{ dayName(d) }}</span>
+        </label>
+        <template v-if="schedule[d].enabled">
+          <input v-model="schedule[d].opens" type="time" class="input w-28 py-1" required />
+          <span class="text-gray-400">–</span>
+          <input v-model="schedule[d].closes" type="time" class="input w-28 py-1" required />
+        </template>
+        <span v-else class="text-gray-400">{{ $t('hours.closed') }}</span>
+      </div>
+      <p v-if="hoursErr" class="text-sm text-red-600">{{ hoursErr }}</p>
+      <p v-if="hoursMsg" class="text-sm text-green-700">{{ $t('profile.saved') }}</p>
+      <button class="btn-primary" :disabled="savingHours">{{ $t('profile.save') }}</button>
     </form>
   </div>
 </template>

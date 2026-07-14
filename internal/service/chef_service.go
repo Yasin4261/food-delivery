@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 )
@@ -11,11 +12,17 @@ import (
 // domain.ChefRepository port.
 type ChefService struct {
 	chefs domain.ChefRepository
+	hours domain.ChefHoursRepository // nil disables working-hours features
+	loc   *time.Location             // platform TZ for open/closed evaluation
 }
 
-// NewChefService builds a ChefService.
-func NewChefService(chefs domain.ChefRepository) *ChefService {
-	return &ChefService{chefs: chefs}
+// NewChefService builds a ChefService. hours powers the working-hours
+// schedule (nil disables it); loc is the platform time zone (nil = UTC).
+func NewChefService(chefs domain.ChefRepository, hours domain.ChefHoursRepository, loc *time.Location) *ChefService {
+	if loc == nil {
+		loc = time.UTC
+	}
+	return &ChefService{chefs: chefs, hours: hours, loc: loc}
 }
 
 // CreateProfileInput is the data needed to open a chef profile.
@@ -111,9 +118,16 @@ func (s *ChefService) UpdateProfile(ctx context.Context, userID int, in CreatePr
 	return chef, nil
 }
 
-// Get returns a chef by id.
+// Get returns a chef by id, with the derived open/closed state.
 func (s *ChefService) Get(ctx context.Context, id int) (*domain.Chef, error) {
-	return s.chefs.FindByID(ctx, id)
+	chef, err := s.chefs.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.decorateOpenNow(ctx, []*domain.Chef{chef}); err != nil {
+		return nil, err
+	}
+	return chef, nil
 }
 
 // MyProfile returns the chef profile owned by userID, or ErrChefNotFound when
@@ -132,14 +146,28 @@ func (s *ChefService) List(ctx context.Context, f domain.ChefListFilters, limit,
 		return nil, 0, ValidationError{Msg: "min_rating must be between 0 and 5"}
 	}
 	limit, offset = normalisePaging(limit, offset)
-	return s.chefs.List(ctx, f, limit, offset)
+	chefs, total, err := s.chefs.List(ctx, f, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := s.decorateOpenNow(ctx, chefs); err != nil {
+		return nil, 0, err
+	}
+	return chefs, total, nil
 }
 
 // Nearby returns chefs that can deliver to (lat, lng); onlineOnly restricts to
 // chefs currently online.
 func (s *ChefService) Nearby(ctx context.Context, lat, lng float64, limit int, onlineOnly bool) ([]*domain.Chef, error) {
 	limit, _ = normalisePaging(limit, 0)
-	return s.chefs.FindNearby(ctx, lat, lng, limit, onlineOnly)
+	chefs, err := s.chefs.FindNearby(ctx, lat, lng, limit, onlineOnly)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.decorateOpenNow(ctx, chefs); err != nil {
+		return nil, err
+	}
+	return chefs, nil
 }
 
 // SetOnline toggles the live presence of the caller's chef profile and returns
@@ -176,4 +204,50 @@ func normalisePaging(limit, offset int) (int, int) {
 		offset = 0
 	}
 	return limit, offset
+}
+
+// SetHours replaces the caller's whole weekly schedule. An empty list clears
+// it (always open). Every window is validated before anything persists.
+func (s *ChefService) SetHours(ctx context.Context, userID int, hours []*domain.ChefHours) ([]*domain.ChefHours, error) {
+	chef, err := s.chefs.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	for _, h := range hours {
+		if err := h.Validate(); err != nil {
+			return nil, err
+		}
+		h.ChefID = chef.ID
+	}
+	if err := s.hours.ReplaceForChef(ctx, chef.ID, hours); err != nil {
+		return nil, err
+	}
+	return s.hours.ListByChef(ctx, chef.ID)
+}
+
+// HoursFor returns a chef's public weekly schedule.
+func (s *ChefService) HoursFor(ctx context.Context, chefID int) ([]*domain.ChefHours, error) {
+	return s.hours.ListByChef(ctx, chefID)
+}
+
+// decorateOpenNow stamps IsOpenNow on the chefs from their schedules in one
+// batched query. Chefs without windows are open by definition.
+func (s *ChefService) decorateOpenNow(ctx context.Context, chefs []*domain.Chef) error {
+	if s.hours == nil || len(chefs) == 0 {
+		return nil
+	}
+	ids := make([]int, 0, len(chefs))
+	for _, c := range chefs {
+		ids = append(ids, c.ID)
+	}
+	byChef, err := s.hours.ListByChefs(ctx, ids)
+	if err != nil {
+		return err
+	}
+	now := time.Now().In(s.loc)
+	for _, c := range chefs {
+		open := domain.IsOpenAt(byChef[c.ID], now)
+		c.IsOpenNow = &open
+	}
+	return nil
 }

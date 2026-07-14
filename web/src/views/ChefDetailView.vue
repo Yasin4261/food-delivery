@@ -90,6 +90,7 @@ onMounted(async () => {
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="page-title">{{ chef.business_name }}</h1>
             <span v-if="chef.is_online" class="badge bg-green-100 text-green-700">{{ $t('chef.online') }}</span>
+            <span v-if="chef.is_open_now === false" class="badge bg-gray-100 text-gray-500">{{ $t('hours.closedBadge') }}</span>
             <button
               v-if="canFavorite"
               class="ml-auto text-2xl transition hover:scale-110"

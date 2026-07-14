@@ -3,8 +3,10 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
@@ -235,4 +237,83 @@ func (h *ChefHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, chef)
+}
+
+// hoursEntry is the wire shape of one working-hours window: HH:MM strings,
+// friendlier for the editor UI than raw minutes.
+type hoursEntry struct {
+	Weekday int    `json:"weekday"`
+	Opens   string `json:"opens"`
+	Closes  string `json:"closes"`
+}
+
+func parseClock(s string) (int, error) {
+	t, err := time.Parse("15:04", s)
+	if err != nil {
+		return 0, err
+	}
+	return t.Hour()*60 + t.Minute(), nil
+}
+
+func formatClock(minutes int) string {
+	return fmt.Sprintf("%02d:%02d", minutes/60, minutes%60)
+}
+
+func toHoursEntries(hours []*domain.ChefHours) []hoursEntry {
+	out := make([]hoursEntry, 0, len(hours))
+	for _, h := range hours {
+		out = append(out, hoursEntry{Weekday: h.Weekday, Opens: formatClock(h.OpensAt), Closes: formatClock(h.ClosesAt)})
+	}
+	return out
+}
+
+// SetHours handles PUT /api/v2/chefs/me/hours (chef role) — full replace of
+// the weekly schedule; an empty list clears it (always open).
+func (h *ChefHandler) SetHours(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req []hoursEntry
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	hours := make([]*domain.ChefHours, 0, len(req))
+	for _, e := range req {
+		opens, err := parseClock(e.Opens)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "opens must be HH:MM")
+			return
+		}
+		closes, err := parseClock(e.Closes)
+		if err != nil {
+			respondError(w, http.StatusBadRequest, "closes must be HH:MM")
+			return
+		}
+		hours = append(hours, &domain.ChefHours{Weekday: e.Weekday, OpensAt: opens, ClosesAt: closes})
+	}
+
+	saved, err := h.chefs.SetHours(r.Context(), claims.UserID, hours)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, toHoursEntries(saved))
+}
+
+// Hours handles GET /api/v2/chefs/{id}/hours (public).
+func (h *ChefHandler) Hours(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid chef id")
+		return
+	}
+	hours, err := h.chefs.HoursFor(r.Context(), id)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, toHoursEntries(hours))
 }

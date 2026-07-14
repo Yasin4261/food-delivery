@@ -100,7 +100,7 @@ func validProfile() service.CreateProfileInput {
 }
 
 func TestCreateProfile_Success(t *testing.T) {
-	svc := service.NewChefService(newFakeChefRepo())
+	svc := service.NewChefService(newFakeChefRepo(), nil, nil)
 
 	chef, err := svc.CreateProfile(context.Background(), 42, validProfile())
 	if err != nil {
@@ -115,7 +115,7 @@ func TestCreateProfile_Success(t *testing.T) {
 }
 
 func TestCreateProfile_OnePerUser(t *testing.T) {
-	svc := service.NewChefService(newFakeChefRepo())
+	svc := service.NewChefService(newFakeChefRepo(), nil, nil)
 	ctx := context.Background()
 	if _, err := svc.CreateProfile(ctx, 42, validProfile()); err != nil {
 		t.Fatalf("first profile failed: %v", err)
@@ -128,7 +128,7 @@ func TestCreateProfile_OnePerUser(t *testing.T) {
 }
 
 func TestCreateProfile_Validation(t *testing.T) {
-	svc := service.NewChefService(newFakeChefRepo())
+	svc := service.NewChefService(newFakeChefRepo(), nil, nil)
 	lat := 41.0
 	cases := map[string]func(*service.CreateProfileInput){
 		"missing business name": func(in *service.CreateProfileInput) { in.BusinessName = "  " },
@@ -150,7 +150,7 @@ func TestCreateProfile_Validation(t *testing.T) {
 }
 
 func TestGetChef_NotFound(t *testing.T) {
-	svc := service.NewChefService(newFakeChefRepo())
+	svc := service.NewChefService(newFakeChefRepo(), nil, nil)
 	if _, err := svc.Get(context.Background(), 999); !errors.Is(err, domain.ErrChefNotFound) {
 		t.Errorf("err = %v, want ErrChefNotFound", err)
 	}
@@ -158,7 +158,7 @@ func TestGetChef_NotFound(t *testing.T) {
 
 func TestNearby_FiltersByRadius(t *testing.T) {
 	repo := newFakeChefRepo()
-	svc := service.NewChefService(repo)
+	svc := service.NewChefService(repo, nil, nil)
 	ctx := context.Background()
 
 	lat, lng := 41.0082, 28.9784
@@ -185,7 +185,7 @@ func TestNearby_FiltersByRadius(t *testing.T) {
 }
 
 func TestChefService_ListFilterValidation(t *testing.T) {
-	svc := service.NewChefService(newFakeChefRepo())
+	svc := service.NewChefService(newFakeChefRepo(), nil, nil)
 	ctx := context.Background()
 
 	if _, _, err := svc.List(ctx, domain.ChefListFilters{Sort: "bogus"}, 20, 0); !isValidation(err) {

@@ -131,9 +131,18 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 		gateway = payment.NewMock(cfg.AppBaseURL)
 	}
 
+	// Platform time zone: chefs' working hours are written and evaluated in
+	// it (falls back to UTC with a warning rather than failing the boot).
+	loc, err := time.LoadLocation(cfg.Timezone)
+	if err != nil {
+		slog.Warn("invalid TIMEZONE; falling back to UTC", "timezone", cfg.Timezone, "error", err)
+		loc = time.UTC
+	}
+
 	// Services (use cases).
 	authService := service.NewAuthService(userRepo, passwordResetRepo, mail, cfg.JWTSecret, cfg.JWTExpiration, cfg.AppBaseURL)
-	chefService := service.NewChefService(chefRepo)
+	chefHoursRepo := repository.NewChefHoursRepository(db.DB)
+	chefService := service.NewChefService(chefRepo, chefHoursRepo, loc)
 	menuService := service.NewMenuService(chefRepo, menuRepo, menuItemRepo)
 	paymentService := service.NewPaymentService(paymentSessionRepo, orderRepo, userRepo, gateway, cfg.AppBaseURL)
 	addressRepo := repository.NewAddressRepository(db.DB)
@@ -144,7 +153,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	}
 	uploadService := service.NewUploadService(fileStore, chefRepo, menuItemRepo)
 	orderNotifier := service.NewOrderNotifier(mail, userRepo, chefRepo)
-	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, addressRepo, paymentService, orderNotifier)
+	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, addressRepo, chefHoursRepo, loc, paymentService, orderNotifier)
 	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
 	reviewService := service.NewReviewService(reviewRepo, orderRepo)
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)

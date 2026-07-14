@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 )
@@ -17,17 +18,23 @@ type OrderService struct {
 	orders    domain.OrderRepository
 	items     domain.MenuItemRepository
 	chefs     domain.ChefRepository
-	addresses domain.AddressRepository // resolves saved address_id at placement; may be nil
-	refunder  domain.PaymentRefunder   // refunds card payments on cancel; may be nil
-	notifier  *OrderNotifier           // fire-and-forget order emails; may be nil
+	addresses domain.AddressRepository   // resolves saved address_id at placement; may be nil
+	hours     domain.ChefHoursRepository // rejects orders outside working hours; may be nil
+	refunder  domain.PaymentRefunder     // refunds card payments on cancel; may be nil
+	notifier  *OrderNotifier             // fire-and-forget order emails; may be nil
+	loc       *time.Location             // platform TZ for the working-hours check
 }
 
 // NewOrderService builds an OrderService. addresses resolves a saved
-// address_id at placement (nil rejects address_id orders); refunder handles
-// gateway refunds when a paid card order is cancelled (nil disables refunds);
-// notifier sends order emails (nil disables them).
-func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, addresses domain.AddressRepository, refunder domain.PaymentRefunder, notifier *OrderNotifier) *OrderService {
-	return &OrderService{orders: orders, items: items, chefs: chefs, addresses: addresses, refunder: refunder, notifier: notifier}
+// address_id at placement (nil rejects address_id orders); hours enforces
+// chef working hours at placement (nil disables the check; loc nil = UTC);
+// refunder handles gateway refunds when a paid card order is cancelled (nil
+// disables refunds); notifier sends order emails (nil disables them).
+func NewOrderService(orders domain.OrderRepository, items domain.MenuItemRepository, chefs domain.ChefRepository, addresses domain.AddressRepository, hours domain.ChefHoursRepository, loc *time.Location, refunder domain.PaymentRefunder, notifier *OrderNotifier) *OrderService {
+	if loc == nil {
+		loc = time.UTC
+	}
+	return &OrderService{orders: orders, items: items, chefs: chefs, addresses: addresses, hours: hours, loc: loc, refunder: refunder, notifier: notifier}
 }
 
 // OrderLineInput is one requested dish in a new order.
@@ -135,6 +142,21 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 			continue
 		}
 		order.SubOrders = append(order.SubOrders, domain.NewSubOrder(oi.ChefID, oi.Subtotal))
+	}
+
+	// Every participating chef must be inside their working hours right now —
+	// an order a closed kitchen can't start cooking is rejected up front.
+	if s.hours != nil {
+		now := time.Now().In(s.loc)
+		for _, sub := range order.SubOrders {
+			schedule, err := s.hours.ListByChef(ctx, sub.ChefID)
+			if err != nil {
+				return nil, err
+			}
+			if !domain.IsOpenAt(schedule, now) {
+				return nil, domain.ErrChefClosed
+			}
+		}
 	}
 
 	if err := s.orders.Create(ctx, order); err != nil {
