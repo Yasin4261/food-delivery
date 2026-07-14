@@ -22,12 +22,35 @@ func NewSearchRepository(db *sql.DB) *SearchRepository {
 // like wraps a query term for a case-insensitive substring match.
 func like(q string) string { return "%" + q + "%" }
 
-// SearchChefs finds active chefs by business name, specialty or city.
-func (r *SearchRepository) SearchChefs(ctx context.Context, q string, limit, offset int) ([]*domain.Chef, int, error) {
-	const where = ` WHERE is_active = true
-		  AND (business_name ILIKE $1 OR specialty ILIKE $1 OR kitchen_city ILIKE $1)`
-	rows, err := r.db.QueryContext(ctx, `SELECT`+chefColumns+` FROM chefs`+where+`
-		ORDER BY rating DESC, created_at DESC LIMIT $2 OFFSET $3`, like(q), limit, offset)
+// Sort whitelists: the client's sort value selects one of these fixed ORDER BY
+// expressions — it is never interpolated. Every ordering ends with the id so
+// pagination is stable when the sort key ties.
+var chefOrder = map[string]string{
+	domain.SortDefault: `rating DESC, created_at DESC, id DESC`,
+	domain.SortRating:  `rating DESC, total_reviews DESC, id DESC`,
+	domain.SortPopular: `total_orders DESC, rating DESC, id DESC`,
+}
+
+var dishOrder = map[string]string{
+	domain.SortDefault:   `is_featured DESC, rating DESC, created_at DESC, id DESC`,
+	domain.SortRating:    `rating DESC, total_reviews DESC, id DESC`,
+	domain.SortPopular:   `total_orders DESC, rating DESC, id DESC`,
+	domain.SortPriceAsc:  `price ASC, id DESC`,
+	domain.SortPriceDesc: `price DESC, id DESC`,
+}
+
+// SearchChefs finds active chefs by business name, specialty or city,
+// narrowed by min rating and ordered by the whitelisted sort.
+func (r *SearchRepository) SearchChefs(ctx context.Context, q string, f domain.SearchFilters, limit, offset int) ([]*domain.Chef, int, error) {
+	where := ` WHERE is_active = true
+		  AND (business_name ILIKE $1 OR specialty ILIKE $1 OR kitchen_city ILIKE $1)
+		  AND rating >= $2`
+	args := []any{like(q), f.MinRating}
+
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT`+chefColumns+` FROM chefs`+where+`
+		ORDER BY `+chefOrder[f.Sort]+` LIMIT $3 OFFSET $4`,
+		append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("search chefs: %w", err)
 	}
@@ -36,16 +59,29 @@ func (r *SearchRepository) SearchChefs(ctx context.Context, q string, limit, off
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := r.count(ctx, `SELECT count(*) FROM chefs`+where, like(q))
+	total, err := r.count(ctx, `SELECT count(*) FROM chefs`+where, args...)
 	return chefs, total, err
 }
 
-// SearchMenuItems finds active & available dishes.
-func (r *SearchRepository) SearchMenuItems(ctx context.Context, q string, limit, offset int) ([]*domain.MenuItem, int, error) {
-	const where = ` WHERE is_active = true AND is_available = true
-		  AND (name ILIKE $1 OR description ILIKE $1 OR category ILIKE $1 OR cuisine ILIKE $1)`
-	rows, err := r.db.QueryContext(ctx, `SELECT`+menuItemColumns+` FROM menu_items`+where+`
-		ORDER BY is_featured DESC, rating DESC, created_at DESC LIMIT $2 OFFSET $3`, like(q), limit, offset)
+// SearchMenuItems finds active & available dishes, narrowed by rating, price
+// range and cuisine, ordered by the whitelisted sort.
+func (r *SearchRepository) SearchMenuItems(ctx context.Context, q string, f domain.SearchFilters, limit, offset int) ([]*domain.MenuItem, int, error) {
+	where := ` WHERE is_active = true AND is_available = true
+		  AND (name ILIKE $1 OR description ILIKE $1 OR category ILIKE $1 OR cuisine ILIKE $1)
+		  AND rating >= $2
+		  AND price >= $3
+		  AND ($4 = 0 OR price <= $4)
+		  AND ($5 = '' OR cuisine ILIKE $5)`
+	cuisineArg := ""
+	if f.Cuisine != "" {
+		cuisineArg = like(f.Cuisine)
+	}
+	args := []any{like(q), f.MinRating, f.MinPrice, f.MaxPrice, cuisineArg}
+
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT`+menuItemColumns+` FROM menu_items`+where+`
+		ORDER BY `+dishOrder[f.Sort]+` LIMIT $6 OFFSET $7`,
+		append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("search menu items: %w", err)
 	}
@@ -54,7 +90,7 @@ func (r *SearchRepository) SearchMenuItems(ctx context.Context, q string, limit,
 	if err != nil {
 		return nil, 0, err
 	}
-	total, err := r.count(ctx, `SELECT count(*) FROM menu_items`+where, like(q))
+	total, err := r.count(ctx, `SELECT count(*) FROM menu_items`+where, args...)
 	return items, total, err
 }
 
@@ -83,9 +119,9 @@ func (r *SearchRepository) SearchUsers(ctx context.Context, q string, limit, off
 	return users, total, err
 }
 
-func (r *SearchRepository) count(ctx context.Context, query string, arg any) (int, error) {
+func (r *SearchRepository) count(ctx context.Context, query string, args ...any) (int, error) {
 	var total int
-	if err := r.db.QueryRowContext(ctx, query, arg).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&total); err != nil {
 		return 0, fmt.Errorf("count search: %w", err)
 	}
 	return total, nil

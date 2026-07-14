@@ -90,15 +90,17 @@ func (r *ChefRepository) FindByUserID(ctx context.Context, userID int) (*domain.
 	return c, nil
 }
 
-// List returns a page of active chefs, highest-rated first. When onlineOnly is
-// true only chefs currently online are returned.
-func (r *ChefRepository) List(ctx context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, int, error) {
+// List returns a page of active chefs narrowed/ordered by f. The sort value
+// selects a fixed ORDER BY from the chefOrder whitelist (see
+// search_repository.go) — it is never interpolated from input.
+func (r *ChefRepository) List(ctx context.Context, f domain.ChefListFilters, limit, offset int) ([]*domain.Chef, int, error) {
+	const where = ` WHERE is_active = true AND ($1 = false OR is_online = true) AND rating >= $2`
 	query := `SELECT` + chefColumns + `
-		FROM chefs WHERE is_active = true AND ($3 = false OR is_online = true)
-		ORDER BY rating DESC, created_at DESC
-		LIMIT $1 OFFSET $2`
+		FROM chefs` + where + `
+		ORDER BY ` + chefOrder[f.Sort] + `
+		LIMIT $3 OFFSET $4`
 
-	rows, err := r.db.QueryContext(ctx, query, limit, offset, onlineOnly)
+	rows, err := r.db.QueryContext(ctx, query, f.OnlineOnly, f.MinRating, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list chefs: %w", err)
 	}
@@ -111,7 +113,7 @@ func (r *ChefRepository) List(ctx context.Context, limit, offset int, onlineOnly
 
 	var total int
 	if err := r.db.QueryRowContext(ctx,
-		`SELECT count(*) FROM chefs WHERE is_active = true AND ($1 = false OR is_online = true)`, onlineOnly).Scan(&total); err != nil {
+		`SELECT count(*) FROM chefs`+where, f.OnlineOnly, f.MinRating).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count chefs: %w", err)
 	}
 	return chefs, total, nil

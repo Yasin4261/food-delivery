@@ -205,6 +205,16 @@ export default {
     needProfile: 'Menü eklemeden önce mutfak profilinizi oluşturmalısınız.',
     needProfileLink: 'Panelden hemen kurun',
   },
+  filters: {
+    sortDefault: 'Sıralama: öne çıkan',
+    sortRating: 'Sıralama: en yüksek puan',
+    sortPopular: 'Sıralama: en popüler',
+    sortPriceAsc: 'Sıralama: fiyat ↑',
+    sortPriceDesc: 'Sıralama: fiyat ↓',
+    anyRating: 'Tüm puanlar',
+    minPrice: 'Min ₺',
+    maxPrice: 'Maks ₺',
+  },
   addresses: {
     title: 'Adres defteri',
     empty: 'Henüz kayıtlı adres yok — aşağıdan ekleyin, siparişte seçin.',

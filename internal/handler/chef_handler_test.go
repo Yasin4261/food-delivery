@@ -42,10 +42,10 @@ func (f *fakeChefRepo) FindByUserID(_ context.Context, userID int) (*domain.Chef
 	}
 	return nil, domain.ErrChefNotFound
 }
-func (f *fakeChefRepo) List(_ context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, int, error) {
+func (f *fakeChefRepo) List(_ context.Context, fl domain.ChefListFilters, limit, offset int) ([]*domain.Chef, int, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
-		if c.IsActive && (!onlineOnly || c.IsOnline) {
+		if c.IsActive && (!fl.OnlineOnly || c.IsOnline) && c.Rating >= fl.MinRating {
 			cp := *c
 			out = append(out, &cp)
 		}

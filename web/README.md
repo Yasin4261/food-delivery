@@ -65,7 +65,9 @@ src/
 - Reviews: rate delivered orders (chef + dishes, stars + comment) from My
   orders; chef detail shows the reviews list and per-dish ratings.
 - Search: `/search` with chef ↔ dish tabs over `GET /api/v2/search`; add to
-  cart straight from dish results.
+  cart straight from dish results. Filter by minimum rating and (for dishes)
+  price range; sort by rating, popularity or price. Browse gets the same
+  sort + rating filter.
 - Password reset: "Forgot password?" on login → emailed link opens
   `/reset-password?token=…` (in dev the link is printed by the API's logging
   mailer — `docker logs food_delivery_api`).

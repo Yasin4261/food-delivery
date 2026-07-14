@@ -19,6 +19,23 @@ const searched = ref(false)
 const error = ref('')
 const justAdded = ref(0)
 
+// Filters/sort: whitelisted values, validated again server-side.
+const sort = ref('')
+const minRating = ref('')
+const minPrice = ref('')
+const maxPrice = ref('')
+
+function filterParams() {
+  const p = new URLSearchParams({ q: q.value.trim(), type: type.value, limit: '30' })
+  if (sort.value) p.set('sort', sort.value)
+  if (minRating.value) p.set('min_rating', minRating.value)
+  if (type.value === 'food') {
+    if (minPrice.value) p.set('min_price', minPrice.value)
+    if (maxPrice.value) p.set('max_price', maxPrice.value)
+  }
+  return p
+}
+
 async function search() {
   const term = q.value.trim()
   if (!term) return
@@ -27,7 +44,7 @@ async function search() {
   // Keep the query shareable/bookmarkable.
   router.replace({ query: { q: term, type: type.value } })
   try {
-    const p = page(await api.get(`/search?q=${encodeURIComponent(term)}&type=${type.value}&limit=30`))
+    const p = page(await api.get(`/search?${filterParams()}`))
     results.value = p.items
     total.value = p.total
     searched.value = true
@@ -42,6 +59,7 @@ function setType(t) {
   if (type.value === t) return
   type.value = t
   results.value = []
+  if (sort.value.startsWith('price') && t === 'chef') sort.value = '' // chefs have no price sort
   if (q.value.trim()) search()
 }
 
@@ -85,6 +103,29 @@ onMounted(() => {
         </button>
       </div>
     </form>
+
+    <!-- Filters + sort -->
+    <div class="flex flex-wrap items-center gap-2 text-sm">
+      <select v-model="sort" class="input w-auto py-1.5" @change="search">
+        <option value="">{{ $t('filters.sortDefault') }}</option>
+        <option value="rating">{{ $t('filters.sortRating') }}</option>
+        <option value="popular">{{ $t('filters.sortPopular') }}</option>
+        <template v-if="type === 'food'">
+          <option value="price_asc">{{ $t('filters.sortPriceAsc') }}</option>
+          <option value="price_desc">{{ $t('filters.sortPriceDesc') }}</option>
+        </template>
+      </select>
+      <select v-model="minRating" class="input w-auto py-1.5" @change="search">
+        <option value="">{{ $t('filters.anyRating') }}</option>
+        <option value="3">★ 3+</option>
+        <option value="4">★ 4+</option>
+        <option value="4.5">★ 4.5+</option>
+      </select>
+      <template v-if="type === 'food'">
+        <input v-model="minPrice" class="input w-24 py-1.5" type="number" min="0" step="0.5" :placeholder="$t('filters.minPrice')" @change="search" />
+        <input v-model="maxPrice" class="input w-24 py-1.5" type="number" min="0" step="0.5" :placeholder="$t('filters.maxPrice')" @change="search" />
+      </template>
+    </div>
 
     <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
 

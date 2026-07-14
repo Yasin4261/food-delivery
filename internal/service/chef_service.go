@@ -122,11 +122,17 @@ func (s *ChefService) MyProfile(ctx context.Context, userID int) (*domain.Chef, 
 	return s.chefs.FindByUserID(ctx, userID)
 }
 
-// List returns a page of chefs. limit is clamped to a sane range. onlineOnly
-// restricts the result to chefs currently online.
-func (s *ChefService) List(ctx context.Context, limit, offset int, onlineOnly bool) ([]*domain.Chef, int, error) {
+// List returns a page of chefs narrowed/ordered by f. limit is clamped to a
+// sane range; unknown sorts and out-of-range ratings are rejected.
+func (s *ChefService) List(ctx context.Context, f domain.ChefListFilters, limit, offset int) ([]*domain.Chef, int, error) {
+	if !chefSorts[f.Sort] {
+		return nil, 0, ValidationError{Msg: "unknown sort: must be rating or popular"}
+	}
+	if f.MinRating < 0 || f.MinRating > 5 {
+		return nil, 0, ValidationError{Msg: "min_rating must be between 0 and 5"}
+	}
 	limit, offset = normalisePaging(limit, offset)
-	return s.chefs.List(ctx, limit, offset, onlineOnly)
+	return s.chefs.List(ctx, f, limit, offset)
 }
 
 // Nearby returns chefs that can deliver to (lat, lng); onlineOnly restricts to
