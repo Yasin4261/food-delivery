@@ -1,0 +1,9 @@
+# Dashboard provider: loads JSON dashboards from the mounted directory (#73).
+apiVersion: 1
+providers:
+  - name: food-delivery
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

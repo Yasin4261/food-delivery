@@ -6,6 +6,12 @@
 
 encode gzip
 
+# Metrics are internal-only: Prometheus scrapes api:8080/metrics on the Docker
+# network. Block the path on the public origin so it can never leak.
+handle /metrics {
+	respond 404
+}
+
 # API (includes WebSocket upgrades for /api/v2/chat/.../ws).
 handle /api/* {
 	reverse_proxy api:8080

@@ -81,6 +81,31 @@ Rollback = deploy the previous tag: `git push origin :refs/tags/vX.Y.Z`-free —
 just re-run by pushing an older tag, or on the host `TAG=vX.Y.(Z-1) docker
 compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build`.
 
+## Monitoring (optional)
+
+The API exposes Prometheus metrics at `/metrics` on its **internal** port —
+Caddy 404s the path on the public origin, so it never leaks. A `monitoring`
+compose profile adds Prometheus (scrapes the API, evaluates alert rules) and
+Grafana (starter dashboard: request rate, 5xx ratio, p50/p95 latency, DB pool,
+orders, payments):
+
+```bash
+# set GRAFANA_ADMIN_PASSWORD in .env.prod, then:
+docker compose -f docker-compose.prod.yml --env-file .env.prod --profile monitoring up -d
+```
+
+Both bind to **localhost only** — reach Grafana over an SSH tunnel, never the
+public internet:
+
+```bash
+ssh -L 3000:localhost:3000 -L 9090:localhost:9090 user@host
+# then open http://localhost:3000 (admin / GRAFANA_ADMIN_PASSWORD)
+```
+
+Alert rules (`deploy/monitoring/alerts.yml`): API down, >5% 5xx rate, p95 > 1s,
+DB pool contention. Wire Prometheus Alertmanager to a real channel for paging;
+the rules fire in the Prometheus UI (Alerts tab) out of the box.
+
 ## Verify
 
 ```bash

@@ -180,7 +180,7 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	authHandler := handler.NewAuthHandler(authService, denylist)
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
-	orderHandler := handler.NewOrderHandler(orderService)
+	orderHandler := handler.NewOrderHandler(orderService, nil)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	addressHandler := handler.NewAddressHandler(addressService)
 	uploadDir := os.TempDir() + "/food-delivery-test-uploads"
@@ -192,7 +192,7 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	searchHandler := handler.NewSearchHandler(searchService)
 	chatHandler := handler.NewChatHandler(chatService)
 	versionHandler := handler.NewVersionHandler("v-test")
-	paymentHandler := handler.NewPaymentHandler(paymentService)
+	paymentHandler := handler.NewPaymentHandler(paymentService, nil)
 	// A generous budget so no test trips the per-IP throttle accidentally.
 	authLimiter := middleware.NewRateLimiter(1000, time.Minute)
 	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup(), mail
