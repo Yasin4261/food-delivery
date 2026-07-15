@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import DietaryBadges from '@/components/DietaryBadges.vue'
 import { api, page, ApiError } from '@/api/client'
 
 // Each entry: { menu, items, form } — form is the inline "add dish" state.
@@ -13,8 +14,27 @@ const newMenuName = ref('')
 const creatingMenu = ref(false)
 
 function blankItemForm() {
-  return { name: '', price: '', description: '', available_quantity: '', is_unlimited: false, saving: false }
+  return {
+    name: '',
+    price: '',
+    description: '',
+    available_quantity: '',
+    is_unlimited: false,
+    is_vegetarian: false,
+    is_vegan: false,
+    is_gluten_free: false,
+    is_halal: false,
+    saving: false,
+  }
 }
+
+// Dietary flag keys shared by the editor + badges.
+const dietary = [
+  { key: 'is_vegetarian', label: 'vegetarian' },
+  { key: 'is_vegan', label: 'vegan' },
+  { key: 'is_gluten_free', label: 'glutenFree' },
+  { key: 'is_halal', label: 'halal' },
+]
 
 async function loadItems(entry) {
   entry.items = page(await api.get(`/menus/${entry.menu.id}/items`)).items
@@ -80,6 +100,10 @@ async function addItem(entry) {
       description: f.description,
       price: Number(f.price),
       is_unlimited: f.is_unlimited,
+      is_vegetarian: f.is_vegetarian,
+      is_vegan: f.is_vegan,
+      is_gluten_free: f.is_gluten_free,
+      is_halal: f.is_halal,
     }
     if (!f.is_unlimited && f.available_quantity !== '') {
       payload.available_quantity = Number(f.available_quantity)
@@ -169,6 +193,7 @@ onMounted(load)
               <span class="ml-2 text-gray-400">
                 {{ item.is_unlimited ? $t('menus.unlimited') : $t('menus.stockN', { n: item.available_quantity ?? 0 }) }}
               </span>
+              <DietaryBadges :item="item" class="ml-1 inline-flex" />
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
@@ -203,6 +228,11 @@ onMounted(load)
             <input v-model="entry.form.is_unlimited" type="checkbox" /> {{ $t('menus.unlimited') }}
           </label>
           <button class="btn-primary" :disabled="entry.form.saving">{{ $t('menus.addDish') }}</button>
+          <div class="col-span-2 flex flex-wrap gap-3 sm:col-span-6">
+            <label v-for="d in dietary" :key="d.key" class="flex items-center gap-1 text-sm text-gray-600">
+              <input v-model="entry.form[d.key]" type="checkbox" /> {{ $t(`dietary.${d.label}`) }}
+            </label>
+          </div>
         </form>
       </div>
     </template>

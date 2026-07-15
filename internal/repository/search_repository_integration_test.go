@@ -201,3 +201,41 @@ func TestChefRepository_ListFiltersAndSorts(t *testing.T) {
 		t.Fatalf("popular list wrong (%v)", err)
 	}
 }
+
+func TestSearchRepository_DietaryFilters(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewSearchRepository(testDB)
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+	menu := seedMenu(t, chef.ID)
+
+	veganGF := seedItem(t, menu.ID, chef.ID, 10, 10)
+	vegOnly := seedItem(t, menu.ID, chef.ID, 10, 10)
+	plain := seedItem(t, menu.ID, chef.ID, 10, 10)
+	if _, err := testDB.Exec(`UPDATE menu_items SET is_vegetarian=true, is_vegan=true, is_gluten_free=true, is_halal=true WHERE id=$1`, veganGF.ID); err != nil {
+		t.Fatalf("flag veganGF: %v", err)
+	}
+	if _, err := testDB.Exec(`UPDATE menu_items SET is_vegetarian=true WHERE id=$1`, vegOnly.ID); err != nil {
+		t.Fatalf("flag vegOnly: %v", err)
+	}
+	_ = plain
+
+	q := "Soup" // seedItem names dishes "Soup"
+
+	// Vegetarian -> the two vegetarian dishes.
+	if _, total, err := repo.SearchMenuItems(ctx(), q, domain.SearchFilters{Vegetarian: true}, 20, 0); err != nil || total != 2 {
+		t.Fatalf("vegetarian -> %d (%v), want 2", total, err)
+	}
+	// Vegan -> only the fully-vegan dish.
+	got, total, err := repo.SearchMenuItems(ctx(), q, domain.SearchFilters{Vegan: true}, 20, 0)
+	if err != nil || total != 1 || got[0].ID != veganGF.ID {
+		t.Fatalf("vegan -> %d (%v), want just veganGF", total, err)
+	}
+	// Combined vegan + gluten-free + halal -> still just that dish.
+	if _, total, _ = repo.SearchMenuItems(ctx(), q, domain.SearchFilters{Vegan: true, GlutenFree: true, Halal: true}, 20, 0); total != 1 {
+		t.Errorf("vegan+gf+halal -> %d, want 1", total)
+	}
+	// No dietary filter -> all three.
+	if _, total, _ = repo.SearchMenuItems(ctx(), q, domain.SearchFilters{}, 20, 0); total != 3 {
+		t.Errorf("no filter -> %d, want 3", total)
+	}
+}

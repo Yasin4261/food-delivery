@@ -46,7 +46,7 @@ test('chef sets up shop, customer orders, chef delivers, cash settles', async ({
 
   await chef.getByPlaceholder('Lentil soup').fill(dish)
   await chef.locator('input[step="0.01"]').fill('9.5')
-  await chef.getByRole('checkbox').check() // unlimited stock
+  await chef.getByRole('checkbox', { name: 'unlimited' }).check() // unlimited stock
   await chef.getByRole('button', { name: 'Add dish' }).click()
   await expect(chef.getByText(dish)).toBeVisible()
 

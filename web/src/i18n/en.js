@@ -247,6 +247,12 @@ export default {
     closed: 'closed',
     closedBadge: 'closed now',
   },
+  dietary: {
+    vegetarian: 'Vegetarian',
+    vegan: 'Vegan',
+    glutenFree: 'Gluten-free',
+    halal: 'Halal',
+  },
   filters: {
     sortDefault: 'Sort: featured',
     sortRating: 'Sort: best rated',

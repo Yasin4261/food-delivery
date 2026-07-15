@@ -4,6 +4,7 @@ import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { api, page } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
+import DietaryBadges from '@/components/DietaryBadges.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +25,15 @@ const sort = ref('')
 const minRating = ref('')
 const minPrice = ref('')
 const maxPrice = ref('')
+// Dietary filter chips (dish tab only). Keyed by the API query param.
+const dietaryChips = ['vegetarian', 'vegan', 'gluten_free', 'halal']
+const dietaryLabel = { vegetarian: 'vegetarian', vegan: 'vegan', gluten_free: 'glutenFree', halal: 'halal' }
+const diet = ref({ vegetarian: false, vegan: false, gluten_free: false, halal: false })
+
+function toggleDiet(key) {
+  diet.value[key] = !diet.value[key]
+  if (q.value.trim()) search()
+}
 
 function filterParams() {
   const p = new URLSearchParams({ q: q.value.trim(), type: type.value, limit: '30' })
@@ -32,6 +42,7 @@ function filterParams() {
   if (type.value === 'food') {
     if (minPrice.value) p.set('min_price', minPrice.value)
     if (maxPrice.value) p.set('max_price', maxPrice.value)
+    for (const k of dietaryChips) if (diet.value[k]) p.set(k, 'true')
   }
   return p
 }
@@ -127,6 +138,20 @@ onMounted(() => {
       </template>
     </div>
 
+    <!-- Dietary chips (dish tab). -->
+    <div v-if="type === 'food'" class="flex flex-wrap gap-2">
+      <button
+        v-for="k in dietaryChips"
+        :key="k"
+        type="button"
+        class="rounded-full border px-3 py-1 text-sm transition"
+        :class="diet[k] ? 'border-green-600 bg-green-50 text-green-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'"
+        @click="toggleDiet(k)"
+      >
+        {{ $t(`dietary.${dietaryLabel[k]}`) }}
+      </button>
+    </div>
+
     <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
 
     <div v-if="loading" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -172,8 +197,9 @@ onMounted(() => {
           <div class="min-w-0 grow">
             <h3 class="font-medium">{{ item.name }}</h3>
             <p v-if="item.description" class="truncate text-sm text-gray-500">{{ item.description }}</p>
-            <p class="mt-1.5 flex items-center gap-1.5">
+            <p class="mt-1.5 flex flex-wrap items-center gap-1.5">
               <span class="badge bg-brand-50 text-brand-700">${{ item.price?.toFixed(2) }}</span>
+              <DietaryBadges :item="item" />
               <RouterLink :to="`/chefs/${item.chef_id}`" class="text-xs text-brand-600 hover:underline">
                 {{ $t('search.viewChef') }}
               </RouterLink>

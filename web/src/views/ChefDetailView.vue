@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { api, page } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useCartStore } from '@/stores/cart'
+import DietaryBadges from '@/components/DietaryBadges.vue'
 import { useFavoritesStore } from '@/stores/favorites'
 
 const props = defineProps({ id: { type: String, required: true } })
@@ -123,11 +124,12 @@ onMounted(async () => {
             <div class="min-w-0 grow">
               <h3 class="font-medium">{{ item.name }}</h3>
               <p v-if="item.description" class="truncate text-sm text-gray-500">{{ item.description }}</p>
-              <p class="mt-1.5">
+              <p class="mt-1.5 flex flex-wrap items-center gap-1">
                 <span class="badge bg-brand-50 text-brand-700">${{ item.price?.toFixed(2) }}</span>
-                <span v-if="item.total_reviews" class="badge ml-1 bg-amber-50 text-amber-700">
+                <span v-if="item.total_reviews" class="badge bg-amber-50 text-amber-700">
                   ★ {{ item.rating?.toFixed(1) }}
                 </span>
+                <DietaryBadges :item="item" />
               </p>
             </div>
             <button
