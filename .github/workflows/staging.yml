@@ -1,0 +1,89 @@
+name: 🧫 Staging
+
+# On every push to main, build the API + web images tagged :main and — when
+# the staging host is configured — deploy them to the staging environment.
+# Tags still go to production via release.yml; main lands on staging.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    name: Build & push :main images
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔖 Derive version + image prefix
+        id: version
+        run: |
+          echo "version=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
+          echo "prefix=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/food-delivery" >> "$GITHUB_OUTPUT"
+
+      - name: 🔧 Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔑 Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐹 Build & push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          push: true
+          tags: ${{ steps.version.outputs.prefix }}-api:main
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 🌐 Build & push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.web
+          push: true
+          tags: ${{ steps.version.outputs.prefix }}-web:main
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: ${{ vars.STAGING_ENABLED == 'true' }}
+    environment: staging
+    steps:
+      - name: 🚀 Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          # STAGING_PATH holds the checkout with .env.staging on the server.
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.STAGING_PATH }}"
+            git fetch --quiet origin main
+            git checkout --quiet -B main origin/main
+            export TAG=main
+            docker compose -f docker-compose.staging.yml --env-file .env.staging pull
+            docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --no-build
+            docker image prune -f
+            sleep 5
+            curl -fsS http://localhost:${HTTP_PORT:-8090}/health

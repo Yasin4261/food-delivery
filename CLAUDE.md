@@ -282,7 +282,7 @@ git tag -a vX.Y.Z -m "vX.Y.Z — <summary>"
 git push origin vX.Y.Z
 ```
 
-`git describe --tags` feeds the binary version via ldflags (`GET /version`). **Pushing the tag also triggers CD** (`.github/workflows/release.yml`, #72): it builds + pushes the API/web images to GHCR stamped with the tag and, when `DEPLOY_ENABLED=true` + the `DEPLOY_*` secrets are set, rolls the production host to that tag over SSH (pull + `up -d --no-build` + `/health` smoke check). `docker-compose.prod.yml` selects the image by `${TAG}`; `make prod` still builds locally. Rollback = push/deploy an older tag. See `DEPLOY.md`.
+`git describe --tags` feeds the binary version via ldflags (`GET /version`). **Pushing the tag also triggers CD** (`.github/workflows/release.yml`, #72): it builds + pushes the API/web images to GHCR stamped with the tag and, when `DEPLOY_ENABLED=true` + the `DEPLOY_*` secrets are set, rolls the production host to that tag over SSH (pull + `up -d --no-build` + `/health` smoke check). `docker-compose.prod.yml` selects the image by `${TAG}`; `make prod` still builds locally. Rollback = push/deploy an older tag. **Staging (#75):** pushes to `main` build `:main` images (`.github/workflows/staging.yml`) and deploy to a staging host when `STAGING_ENABLED=true`; `docker-compose.staging.yml` mirrors prod's topology but `ENV=staging` permits the mock gateway + dev mailer (config's `allowsMocks`) while keeping the strict JWT secret, on isolated volumes/network + ports 8090/8453 (`make staging`). The E2E smoke runs against any environment via `E2E_BASE_URL`. See `DEPLOY.md`.
 
 ---
 

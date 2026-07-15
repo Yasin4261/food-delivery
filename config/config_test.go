@@ -239,3 +239,33 @@ func TestLoadConfig_Fees(t *testing.T) {
 		t.Setenv("COMMISSION_PERCENT", "10")
 	}
 }
+
+func TestLoadConfig_StagingAllowsMocksButKeepsStrictJWT(t *testing.T) {
+	setBase(t)
+	t.Setenv("ENV", "staging")
+
+	// Staging with no SMTP / no iyzico keys is fine — it uses the mocks.
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("staging with mocks should load: %v", err)
+	}
+	if cfg.Env != "staging" {
+		t.Errorf("env = %q, want staging", cfg.Env)
+	}
+
+	// But staging still rejects the placeholder JWT secret (it is internet-
+	// reachable, unlike development).
+	t.Setenv("JWT_SECRET", "change-me-in-production")
+	if _, err := config.LoadConfig(); err == nil {
+		t.Error("staging must reject the placeholder JWT secret")
+	}
+}
+
+func TestLoadConfig_ProductionStillStrict(t *testing.T) {
+	setBase(t)
+	t.Setenv("ENV", "production")
+	// No SMTP, no iyzico -> production must fail fast.
+	if _, err := config.LoadConfig(); err == nil {
+		t.Error("production without SMTP/iyzico must fail")
+	}
+}

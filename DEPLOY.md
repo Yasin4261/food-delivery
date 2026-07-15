@@ -81,6 +81,38 @@ Rollback = deploy the previous tag: `git push origin :refs/tags/vX.Y.Z`-free —
 just re-run by pushing an older tag, or on the host `TAG=vX.Y.(Z-1) docker
 compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build`.
 
+## Staging
+
+A production-shaped throwaway environment (`docker-compose.staging.yml`): the
+same Caddy one-origin topology and fail-fasts, but `ENV=staging` permits the
+mock payment gateway + dev logging mailer (no real charges/emails), and it uses
+isolated names/volumes/network + its own host ports (**8090/8453** by default),
+so it can run **alongside** a prod stack on one host.
+
+```bash
+cp .env.staging.example .env.staging
+$EDITOR .env.staging          # set DB_PASSWORD + a real JWT_SECRET
+make staging                  # one command: builds/pulls, migrates, starts
+curl -fsS http://localhost:8090/health
+make staging-down ARGS=-v     # stop and wipe its data
+```
+
+Provide iyzico **sandbox** keys in `.env.staging` to exercise real checkout
+(pairs with #51); leave them empty for the mock gateway.
+
+**E2E against staging** — the smoke test targets any deployed environment via
+`E2E_BASE_URL` (it self-seeds, so no fixture data is needed):
+
+```bash
+cd web && E2E_BASE_URL=http://localhost:8090 npm run test:e2e
+```
+
+**CD to staging** — `.github/workflows/staging.yml` builds/pushes `:main` images
+on every push to `main` and, when `STAGING_ENABLED=true` + the `STAGING_*`
+secrets are set (same shape as the production `DEPLOY_*` table above), deploys
+them to the staging host. Tags still go to production via `release.yml`; `main`
+lands on staging.
+
 ## Monitoring (optional)
 
 The API exposes Prometheus metrics at `/metrics` on its **internal** port —

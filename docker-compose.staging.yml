@@ -1,0 +1,106 @@
+# Staging stack (#75): a production-shaped throwaway environment — same Caddy
+# one-origin topology and prod fail-fasts, but ENV=staging permits the dev
+# logging mailer + mock payment gateway (no real emails/charges). Isolated
+# names/volumes/network + its own host ports, so it can run alongside prod.
+#
+#   cp .env.staging.example .env.staging   # fill JWT_SECRET + a DB password
+#   make staging                           # pulls :main images (or builds locally)
+#
+# CD (.github/workflows/staging.yml) deploys every main merge here.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: food_delivery_db_staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-food_delivery}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env.staging}
+    volumes:
+      - postgres_data_staging:/var/lib/postgresql/data
+    networks: [staging]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-food_delivery}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    # Staging tracks main: CD builds/pushes :main on every merge. `make
+    # staging` builds locally under the same name via the build block.
+    image: ghcr.io/yasin4261/food-delivery-api:${TAG:-main}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-staging}
+    container_name: food_delivery_api_staging
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      ENV: "staging"
+      DATABASE_URL: "postgres://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-food_delivery}?sslmode=disable"
+      # Staging is internet-reachable, so a real secret is still required
+      # (the API rejects the placeholder outside development).
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.staging (openssl rand -hex 32)}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8090}
+      ALLOWED_ORIGINS: ${APP_BASE_URL:-http://localhost:8090}
+      # SMTP + iyzico are OPTIONAL in staging: absent -> dev logging mailer +
+      # mock gateway. Provide iyzico sandbox keys to exercise real checkout.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      IYZICO_API_KEY: ${IYZICO_API_KEY:-}
+      IYZICO_SECRET_KEY: ${IYZICO_SECRET_KEY:-}
+      IYZICO_BASE_URL: ${IYZICO_BASE_URL:-https://sandbox-api.iyzipay.com}
+      AUTO_MIGRATE: "true"
+      UPLOAD_DIR: "/app/uploads"
+      TIMEZONE: ${TIMEZONE:-Europe/Istanbul}
+      DELIVERY_BASE_FEE: ${DELIVERY_BASE_FEE:-10}
+      DELIVERY_FEE_PER_KM: ${DELIVERY_FEE_PER_KM:-2}
+      COMMISSION_PERCENT: ${COMMISSION_PERCENT:-10}
+    volumes:
+      - uploads_data_staging:/app/uploads
+    networks: [staging]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  web:
+    image: ghcr.io/yasin4261/food-delivery-web:${TAG:-main}
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: food_delivery_web_staging
+    restart: unless-stopped
+    ports:
+      # Distinct host ports so staging coexists with a prod stack on 80/443.
+      - "${HTTP_PORT:-8090}:80"
+      - "${HTTPS_PORT:-8453}:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [staging]
+    volumes:
+      - caddy_data_staging:/data
+      - caddy_config_staging:/config
+
+networks:
+  staging:
+    name: food_delivery_staging
+
+volumes:
+  postgres_data_staging:
+  uploads_data_staging:
+  caddy_data_staging:
+  caddy_config_staging:

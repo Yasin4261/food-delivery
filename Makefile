@@ -26,6 +26,16 @@ prod-down: ## Stop production environment
 prod-logs: ## View production logs
 	docker compose -f docker-compose.prod.yml --env-file .env.prod logs -f api web
 
+# Staging (see DEPLOY.md). Production-shaped, throwaway; ENV=staging permits mocks.
+staging: ## Build & run the staging stack (coexists with prod on ports 8090/8453)
+	VERSION=$(VERSION) docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build
+
+staging-down: ## Stop staging (add ARGS=-v to wipe its data)
+	docker compose -f docker-compose.staging.yml --env-file .env.staging down $(ARGS)
+
+staging-logs: ## View staging logs
+	docker compose -f docker-compose.staging.yml --env-file .env.staging logs -f api web
+
 # Local development (without Docker)
 run: ## Run locally without Docker
 	go run ./cmd/api

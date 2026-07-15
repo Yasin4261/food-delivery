@@ -158,12 +158,20 @@ func validateJWTSecret(cfg *Config) error {
 // validateMail fails fast on a misconfigured mailer outside development. In
 // development an empty SMTP_HOST means "use the dev logging mailer"; in any
 // other environment real SMTP delivery is required (host + from address).
+// allowsMocks reports whether the environment may fall back to the dev logging
+// mailer / mock payment gateway. Development and staging are throwaway
+// environments where real email and real charges are undesirable; production
+// must always be fully configured.
+func allowsMocks(env string) bool {
+	return env == "development" || env == "staging"
+}
+
 func validateMail(cfg *Config) error {
-	if cfg.Env == "development" {
+	if allowsMocks(cfg.Env) {
 		return nil
 	}
 	if cfg.SMTPHost == "" {
-		return fmt.Errorf("SMTP_HOST is required in env=%q (no dev logging mailer outside development)", cfg.Env)
+		return fmt.Errorf("SMTP_HOST is required in env=%q (no dev logging mailer outside development/staging)", cfg.Env)
 	}
 	if cfg.MailFrom == "" {
 		return fmt.Errorf("MAIL_FROM is required when SMTP is configured")
@@ -171,14 +179,14 @@ func validateMail(cfg *Config) error {
 	return nil
 }
 
-// validatePayments fails fast outside development when the payment gateway is
-// not configured — the dev mock gateway must never run in production.
+// validatePayments fails fast in production when the payment gateway is not
+// configured — the dev mock gateway must never run there.
 func validatePayments(cfg *Config) error {
-	if cfg.Env == "development" {
+	if allowsMocks(cfg.Env) {
 		return nil
 	}
 	if cfg.IyzicoAPIKey == "" || cfg.IyzicoSecretKey == "" {
-		return fmt.Errorf("IYZICO_API_KEY and IYZICO_SECRET_KEY are required in env=%q (no dev mock gateway outside development)", cfg.Env)
+		return fmt.Errorf("IYZICO_API_KEY and IYZICO_SECRET_KEY are required in env=%q (no dev mock gateway outside development/staging)", cfg.Env)
 	}
 	return nil
 }
