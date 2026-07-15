@@ -24,7 +24,12 @@ type OrderService struct {
 	notifier  *OrderNotifier             // fire-and-forget order emails; may be nil
 	loc       *time.Location             // platform TZ for the working-hours check
 	policy    domain.FeePolicy           // delivery fees + commission (#65); zero value = free
+	etaWindow time.Duration              // ETA stamped when a chef accepts (#92); 0 disables
 }
+
+// SetETAWindow configures the prep+delivery window used to stamp an order's
+// estimated delivery time when a chef accepts it. Zero disables ETAs.
+func (s *OrderService) SetETAWindow(d time.Duration) { s.etaWindow = d }
 
 // NewOrderService builds an OrderService. addresses resolves a saved
 // address_id at placement (nil rejects address_id orders); hours enforces
@@ -339,6 +344,12 @@ func (s *OrderService) AdvanceForChef(ctx context.Context, userID, orderID int, 
 		if err := s.refunder.RefundSubOrderPayment(ctx, order, sub.Subtotal+sub.DeliveryFee); err != nil {
 			return nil, err
 		}
+	}
+
+	// A chef accepting stamps the ETA (once) — the customer gets a delivery
+	// estimate as soon as the first kitchen commits.
+	if action == OrderActionConfirm {
+		order.SetEstimatedDelivery(s.etaWindow)
 	}
 
 	order.SyncStatusFromSubOrders()

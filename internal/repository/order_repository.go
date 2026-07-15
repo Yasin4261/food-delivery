@@ -335,13 +335,14 @@ func (r *OrderRepository) UpdateSubOrder(ctx context.Context, o *domain.Order, s
 func updateOrderRow(ctx context.Context, tx *sql.Tx, o *domain.Order) error {
 	query := `
 		UPDATE orders
-		SET status = $2, payment_status = $3, actual_delivery_time = $4, cancelled_at = $5, updated_at = now()
+		SET status = $2, payment_status = $3, actual_delivery_time = $4, cancelled_at = $5,
+		    estimated_delivery_time = $6, updated_at = now()
 		WHERE id = $1
 		RETURNING updated_at`
 
 	err := tx.QueryRowContext(
 		ctx, query,
-		o.ID, o.Status, o.PaymentStatus, o.ActualDeliveryTime, o.CancelledAt,
+		o.ID, o.Status, o.PaymentStatus, o.ActualDeliveryTime, o.CancelledAt, o.EstimatedDeliveryTime,
 	).Scan(&o.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.ErrOrderNotFound

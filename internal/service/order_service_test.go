@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/service"
@@ -572,5 +573,38 @@ func TestOrderService_ZeroPolicyIsFree(t *testing.T) {
 		if sub.DeliveryFee != 0 || sub.Commission != 0 {
 			t.Errorf("zero policy sub fees: %+v", sub)
 		}
+	}
+}
+
+// A chef accepting stamps the order ETA (once), when an ETA window is set.
+func TestOrderService_ETAOnConfirm(t *testing.T) {
+	svc, orders, order := placeMultiChef(t, domain.PaymentMethodCash, nil)
+	svc.SetETAWindow(30 * time.Minute)
+	ctx := context.Background()
+
+	// Before any confirm: no ETA.
+	if before, _ := orders.FindByID(ctx, order.ID); before.EstimatedDeliveryTime != nil {
+		t.Fatal("ETA set before any chef confirmed")
+	}
+
+	got, err := svc.AdvanceForChef(ctx, 1, order.ID, service.OrderActionConfirm)
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	if got.EstimatedDeliveryTime == nil {
+		t.Fatal("ETA not stamped on confirm")
+	}
+	first := *got.EstimatedDeliveryTime
+	if d := time.Until(first); d < 29*time.Minute || d > 31*time.Minute {
+		t.Errorf("ETA = %v from now, want ~30m", d)
+	}
+
+	// The second chef confirming does not move the ETA.
+	got2, err := svc.AdvanceForChef(ctx, 2, order.ID, service.OrderActionConfirm)
+	if err != nil {
+		t.Fatalf("confirm 2: %v", err)
+	}
+	if !got2.EstimatedDeliveryTime.Equal(first) {
+		t.Error("ETA drifted when the second chef confirmed")
 	}
 }

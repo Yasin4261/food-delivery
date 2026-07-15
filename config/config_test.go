@@ -16,7 +16,7 @@ func setBase(t *testing.T) {
 		"PORT", "ENV", "DATABASE_URL", "JWT_SECRET", "JWT_EXPIRATION", "AUTO_MIGRATE",
 		"ALLOWED_ORIGINS", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD",
 		"MAIL_FROM", "APP_BASE_URL", "IYZICO_API_KEY", "IYZICO_SECRET_KEY", "IYZICO_BASE_URL",
-		"DELIVERY_BASE_FEE", "DELIVERY_FEE_PER_KM", "COMMISSION_PERCENT",
+		"DELIVERY_BASE_FEE", "DELIVERY_FEE_PER_KM", "COMMISSION_PERCENT", "ETA_MINUTES",
 	} {
 		t.Setenv(k, "")
 	}
@@ -267,5 +267,28 @@ func TestLoadConfig_ProductionStillStrict(t *testing.T) {
 	// No SMTP, no iyzico -> production must fail fast.
 	if _, err := config.LoadConfig(); err == nil {
 		t.Error("production without SMTP/iyzico must fail")
+	}
+}
+
+func TestLoadConfig_ETAMinutes(t *testing.T) {
+	setBase(t)
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.ETAMinutes != 45 {
+		t.Errorf("ETA default = %d, want 45", cfg.ETAMinutes)
+	}
+	t.Setenv("ETA_MINUTES", "60")
+	if cfg, _ = config.LoadConfig(); cfg.ETAMinutes != 60 {
+		t.Errorf("ETA = %d, want 60", cfg.ETAMinutes)
+	}
+	t.Setenv("ETA_MINUTES", "-5")
+	if _, err := config.LoadConfig(); err == nil {
+		t.Error("negative ETA_MINUTES must fail")
+	}
+	t.Setenv("ETA_MINUTES", "soon")
+	if _, err := config.LoadConfig(); err == nil {
+		t.Error("garbage ETA_MINUTES must fail")
 	}
 }

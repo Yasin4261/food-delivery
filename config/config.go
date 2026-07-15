@@ -53,6 +53,10 @@ type Config struct {
 	DeliveryBaseFee   float64
 	DeliveryFeePerKm  float64
 	CommissionPercent float64
+
+	// ETAMinutes is the prep+delivery window used to stamp an order's estimated
+	// delivery time when a chef accepts it (#92). 0 disables ETAs.
+	ETAMinutes int
 }
 
 // LoadConfig reads configuration from the environment (and a local .env file
@@ -123,7 +127,29 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("COMMISSION_PERCENT must be between 0 and 100")
 	}
 
+	eta, err := envInt("ETA_MINUTES", 45)
+	if err != nil {
+		return nil, err
+	}
+	if eta < 0 {
+		return nil, fmt.Errorf("ETA_MINUTES cannot be negative")
+	}
+	cfg.ETAMinutes = eta
+
 	return cfg, nil
+}
+
+// envInt parses an optional int variable, failing fast on garbage.
+func envInt(key string, fallback int) (int, error) {
+	raw := getEnv(key, "")
+	if raw == "" {
+		return fallback, nil
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
+	}
+	return v, nil
 }
 
 // envFloat parses an optional float variable, failing fast on garbage.
