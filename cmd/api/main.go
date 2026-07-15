@@ -176,6 +176,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 		CommissionRate:   cfg.CommissionPercent,
 	}
 	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, addressRepo, chefHoursRepo, loc, feePolicy, paymentService, orderNotifier)
+	orderService.SetETAWindow(time.Duration(cfg.ETAMinutes) * time.Minute)
 	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
 	reviewService := service.NewReviewService(reviewRepo, orderRepo)
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)

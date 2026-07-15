@@ -65,6 +65,7 @@ services:
       DELIVERY_BASE_FEE: ${DELIVERY_BASE_FEE:-10}
       DELIVERY_FEE_PER_KM: ${DELIVERY_FEE_PER_KM:-2}
       COMMISSION_PERCENT: ${COMMISSION_PERCENT:-10}
+      ETA_MINUTES: ${ETA_MINUTES:-45}
     volumes:
       - uploads_data_staging:/app/uploads
     networks: [staging]

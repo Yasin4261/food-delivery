@@ -68,6 +68,18 @@ async function cancel(order) {
 
 const cancellable = (s) => s === 'pending' || s === 'confirmed'
 
+// ETA line: shown only for in-progress orders that have an estimate.
+function etaLabel(order) {
+  if (!order.estimated_delivery_time) return ''
+  if (order.status === 'delivered' || order.status === 'cancelled') return ''
+  const eta = new Date(order.estimated_delivery_time)
+  const clock = eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  const mins = Math.round((eta - Date.now()) / 60000)
+  return mins > 0
+    ? t('orders.etaIn', { clock, mins })
+    : t('orders.etaSoon', { clock })
+}
+
 // "Order again": repopulate the cart from a past order using CURRENT dish
 // prices/availability, dropping anything no longer orderable.
 const cart = useCartStore()
@@ -143,6 +155,9 @@ onBeforeUnmount(() => clearInterval(poll))
           </span>
         </span>
       </div>
+      <!-- Estimated delivery time, while the order is in progress. -->
+      <p v-if="etaLabel(order)" class="text-sm text-brand-700">🕒 {{ etaLabel(order) }}</p>
+
       <!-- Multi-chef orders: each chef's slice advances on its own. -->
       <div v-if="order.sub_orders?.length > 1" class="flex flex-wrap gap-2 text-sm">
         <span

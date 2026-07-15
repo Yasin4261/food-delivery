@@ -157,6 +157,8 @@ export default {
     rate: '⭐ Değerlendir',
     hideRating: 'Gizle',
     cancel: 'İptal et',
+    etaIn: 'Tahmini teslimat ~{clock} ({mins} dk içinde)',
+    etaSoon: 'Tahmini teslimat ~{clock}',
     orderAgain: 'Tekrar sipariş ver',
     reordering: 'Ekleniyor…',
     reorderNothing: 'Şu anda bu yemeklerin hiçbiri müsait değil.',

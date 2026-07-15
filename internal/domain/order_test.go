@@ -2,9 +2,39 @@ package domain_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 )
+
+func TestOrder_SetEstimatedDelivery(t *testing.T) {
+	o := domain.NewOrder(1, "addr")
+	if o.EstimatedDeliveryTime != nil {
+		t.Fatal("new order should have no ETA")
+	}
+
+	// Disabled window is a no-op.
+	o.SetEstimatedDelivery(0)
+	if o.EstimatedDeliveryTime != nil {
+		t.Error("zero window must not set an ETA")
+	}
+
+	// A window stamps ~now+window.
+	o.SetEstimatedDelivery(45 * time.Minute)
+	if o.EstimatedDeliveryTime == nil {
+		t.Fatal("ETA not set")
+	}
+	first := *o.EstimatedDeliveryTime
+	if d := time.Until(first); d < 44*time.Minute || d > 46*time.Minute {
+		t.Errorf("ETA = %v from now, want ~45m", d)
+	}
+
+	// Idempotent: a second call (another chef confirming) does not move it.
+	o.SetEstimatedDelivery(90 * time.Minute)
+	if !o.EstimatedDeliveryTime.Equal(first) {
+		t.Error("ETA must not drift on later confirms")
+	}
+}
 
 func TestNewOrder_Defaults(t *testing.T) {
 	o := domain.NewOrder(7, "123 St")

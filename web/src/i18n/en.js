@@ -158,6 +158,8 @@ export default {
     rate: '⭐ Rate order',
     hideRating: 'Hide rating',
     cancel: 'Cancel',
+    etaIn: 'Estimated delivery ~{clock} (in {mins} min)',
+    etaSoon: 'Estimated delivery ~{clock}',
     orderAgain: 'Order again',
     reordering: 'Adding…',
     reorderNothing: 'None of those dishes are available right now.',

@@ -170,6 +170,19 @@ func (o *Order) Cancel() error {
 	return nil
 }
 
+// SetEstimatedDelivery stamps an ETA of now+window (once): the first chef to
+// accept sets it; later transitions leave it. A zero/negative window is a
+// no-op. Kept idempotent so a multi-chef order's ETA doesn't drift each time
+// another chef confirms.
+func (o *Order) SetEstimatedDelivery(window time.Duration) {
+	if window <= 0 || o.EstimatedDeliveryTime != nil {
+		return
+	}
+	eta := time.Now().Add(window)
+	o.EstimatedDeliveryTime = &eta
+	o.UpdatedAt = time.Now()
+}
+
 // SubOrderFor returns the chef's sub-order, or nil when the chef has no slice
 // of this order. It is the basis for chef-scoped status transitions.
 func (o *Order) SubOrderFor(chefID int) *SubOrder {
