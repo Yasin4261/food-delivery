@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { api, page } from '@/api/client'
 import { statusClass } from '@/lib/status'
 import { POLL_MS } from '@/stores/notifications'
+import { useCartStore } from '@/stores/cart'
+import { reorderIntoCart } from '@/lib/reorder'
 import OrderReviewPanel from '@/components/OrderReviewPanel.vue'
 
 const route = useRoute()
@@ -65,6 +67,28 @@ async function cancel(order) {
 }
 
 const cancellable = (s) => s === 'pending' || s === 'confirmed'
+
+// "Order again": repopulate the cart from a past order using CURRENT dish
+// prices/availability, dropping anything no longer orderable.
+const cart = useCartStore()
+const reordering = ref(0)
+async function orderAgain(order) {
+  reordering.value = order.id
+  error.value = ''
+  try {
+    const { added, dropped } = await reorderIntoCart(order, cart, api)
+    if (!added) {
+      error.value = t('orders.reorderNothing')
+      return
+    }
+    if (dropped.length) error.value = t('orders.reorderDropped', { items: dropped.join(', ') })
+    router.push({ name: 'cart' })
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    reordering.value = 0
+  }
+}
 
 onMounted(() => {
   const outcome = route.query.payment
@@ -145,6 +169,9 @@ onBeforeUnmount(() => clearInterval(poll))
           {{ reviewing[order.id] ? $t('orders.hideRating') : $t('orders.rate') }}
         </button>
         <button v-if="cancellable(order.status)" class="btn-ghost" @click="cancel(order)">{{ $t('orders.cancel') }}</button>
+        <button class="btn-ghost" :disabled="reordering === order.id" @click="orderAgain(order)">
+          {{ reordering === order.id ? $t('orders.reordering') : $t('orders.orderAgain') }}
+        </button>
       </div>
       <OrderReviewPanel v-if="reviewing[order.id]" :order="order" />
     </div>
