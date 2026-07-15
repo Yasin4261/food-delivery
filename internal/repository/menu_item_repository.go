@@ -212,3 +212,15 @@ func (r *MenuItemRepository) SetImageURL(ctx context.Context, id int, url string
 	}
 	return nil
 }
+
+// SetImages persists the dish gallery (JSON array of URLs, or NULL to clear).
+func (r *MenuItemRepository) SetImages(ctx context.Context, id int, images *string) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE menu_items SET images = $2, updated_at = now() WHERE id = $1`, id, images)
+	if err != nil {
+		return fmt.Errorf("set item images: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrMenuItemNotFound
+	}
+	return nil
+}

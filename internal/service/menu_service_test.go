@@ -249,3 +249,12 @@ func (f *fakeMenuItemRepo) SetImageURL(_ context.Context, id int, url string) er
 	it.ImageURL = &url
 	return nil
 }
+
+func (f *fakeMenuItemRepo) SetImages(_ context.Context, id int, images *string) error {
+	it, ok := f.items[id]
+	if !ok {
+		return domain.ErrMenuItemNotFound
+	}
+	it.Images = images
+	return nil
+}

@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -15,6 +16,9 @@ import (
 // MaxImageBytes caps uploaded photos (handlers enforce it with
 // http.MaxBytesReader; the service re-checks when decoding).
 const MaxImageBytes = 5 << 20 // 5 MiB
+
+// MaxGalleryImages caps how many photos a dish gallery holds (#93).
+const MaxGalleryImages = 5
 
 // jpegQuality for re-encoded uploads.
 const jpegQuality = 85
@@ -75,6 +79,87 @@ func (s *UploadService) UploadKitchenImage(ctx context.Context, userID int, cont
 		return "", err
 	}
 	return url, nil
+}
+
+// ownedDish resolves a dish and confirms the caller owns it.
+func (s *UploadService) ownedDish(ctx context.Context, userID, itemID int) (*domain.MenuItem, error) {
+	chef, err := s.chefs.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	item, err := s.items.FindByID(ctx, itemID)
+	if err != nil {
+		return nil, err
+	}
+	if item.ChefID != chef.ID {
+		return nil, domain.ErrForbidden
+	}
+	return item, nil
+}
+
+// AddDishGalleryImage appends a processed photo to a dish's gallery (owner
+// only) and returns the new URL list. The count is capped at
+// MaxGalleryImages.
+func (s *UploadService) AddDishGalleryImage(ctx context.Context, userID, itemID int, content io.Reader) ([]string, error) {
+	item, err := s.ownedDish(ctx, userID, itemID)
+	if err != nil {
+		return nil, err
+	}
+	urls := parseImages(item.Images)
+	if len(urls) >= MaxGalleryImages {
+		return nil, domain.ErrGalleryFull
+	}
+	url, err := s.process(ctx, content)
+	if err != nil {
+		return nil, err
+	}
+	urls = append(urls, url)
+	if err := s.items.SetImages(ctx, itemID, encodeImages(urls)); err != nil {
+		return nil, err
+	}
+	return urls, nil
+}
+
+// RemoveDishGalleryImage drops one URL from a dish's gallery (owner only) and
+// returns the remaining list.
+func (s *UploadService) RemoveDishGalleryImage(ctx context.Context, userID, itemID int, url string) ([]string, error) {
+	item, err := s.ownedDish(ctx, userID, itemID)
+	if err != nil {
+		return nil, err
+	}
+	kept := make([]string, 0)
+	for _, u := range parseImages(item.Images) {
+		if u != url {
+			kept = append(kept, u)
+		}
+	}
+	if err := s.items.SetImages(ctx, itemID, encodeImages(kept)); err != nil {
+		return nil, err
+	}
+	return kept, nil
+}
+
+// parseImages decodes the JSON-array column into a slice (nil/invalid -> empty).
+func parseImages(raw *string) []string {
+	if raw == nil || *raw == "" {
+		return []string{}
+	}
+	var urls []string
+	if err := json.Unmarshal([]byte(*raw), &urls); err != nil {
+		return []string{}
+	}
+	return urls
+}
+
+// encodeImages serialises the slice back to the column (empty -> nil, so the
+// column clears rather than storing "[]").
+func encodeImages(urls []string) *string {
+	if len(urls) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(urls)
+	s := string(b)
+	return &s
 }
 
 // process decodes the upload (rejecting anything that isn't a real JPEG/PNG),

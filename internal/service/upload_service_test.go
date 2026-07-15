@@ -167,3 +167,70 @@ func TestUploadService_KitchenImage(t *testing.T) {
 		t.Errorf("kitchen image_url not persisted: %+v", chef.ImageURL)
 	}
 }
+
+func TestUploadService_DishGallery(t *testing.T) {
+	svc, store, items, _ := uploadFixture(t)
+	ctx := context.Background()
+
+	// Append two photos.
+	urls, err := svc.AddDishGalleryImage(ctx, 1, 1, tinyJPEG(t))
+	if err != nil || len(urls) != 1 {
+		t.Fatalf("add 1 = %v (%v), want 1 url", urls, err)
+	}
+	urls, err = svc.AddDishGalleryImage(ctx, 1, 1, tinyPNG(t))
+	if err != nil || len(urls) != 2 {
+		t.Fatalf("add 2 = %v (%v), want 2 urls", urls, err)
+	}
+	// Persisted as a JSON array on the dish.
+	item, _ := items.FindByID(ctx, 1)
+	if item.Images == nil || !strings.HasPrefix(*item.Images, "[") {
+		t.Errorf("images not persisted as JSON array: %v", item.Images)
+	}
+	if store.n != 2 {
+		t.Errorf("store saves = %d, want 2", store.n)
+	}
+
+	// Remove the first.
+	remaining, err := svc.RemoveDishGalleryImage(ctx, 1, 1, urls[0])
+	if err != nil || len(remaining) != 1 || remaining[0] != urls[1] {
+		t.Fatalf("remove = %v (%v), want just the second url", remaining, err)
+	}
+
+	// Removing the last clears the column (nil, not "[]").
+	empty, err := svc.RemoveDishGalleryImage(ctx, 1, 1, remaining[0])
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("remove last = %v (%v), want empty", empty, err)
+	}
+	item, _ = items.FindByID(ctx, 1)
+	if item.Images != nil {
+		t.Errorf("empty gallery should clear the column, got %v", *item.Images)
+	}
+}
+
+func TestUploadService_DishGalleryCapAndAuth(t *testing.T) {
+	svc, store, _, _ := uploadFixture(t)
+	ctx := context.Background()
+
+	// Fill to the cap.
+	for i := 0; i < service.MaxGalleryImages; i++ {
+		if _, err := svc.AddDishGalleryImage(ctx, 1, 1, tinyJPEG(t)); err != nil {
+			t.Fatalf("add %d: %v", i, err)
+		}
+	}
+	// One more is rejected; nothing stored.
+	before := store.n
+	if _, err := svc.AddDishGalleryImage(ctx, 1, 1, tinyJPEG(t)); !errors.Is(err, domain.ErrGalleryFull) {
+		t.Errorf("over cap = %v, want ErrGalleryFull", err)
+	}
+	if store.n != before {
+		t.Error("rejected gallery upload still hit the store")
+	}
+
+	// Another chef can't touch dish 1's gallery.
+	if _, err := svc.AddDishGalleryImage(ctx, 2, 1, tinyJPEG(t)); !errors.Is(err, domain.ErrForbidden) {
+		t.Errorf("foreign gallery add = %v, want ErrForbidden", err)
+	}
+	if _, err := svc.RemoveDishGalleryImage(ctx, 2, 1, "x"); !errors.Is(err, domain.ErrForbidden) {
+		t.Errorf("foreign gallery remove = %v, want ErrForbidden", err)
+	}
+}

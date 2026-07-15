@@ -70,6 +70,63 @@ func (h *UploadHandler) DishImage(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"image_url": url})
 }
 
+// DishGalleryAdd handles POST /api/v2/menu-items/{id}/images (chef role) —
+// append a photo to the dish gallery; returns the URL list.
+func (h *UploadHandler) DishGalleryAdd(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	itemID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid menu item id")
+		return
+	}
+	if r = h.imageFromRequest(w, r); r == nil {
+		return
+	}
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "missing image field")
+		return
+	}
+	defer file.Close()
+
+	urls, err := h.uploads.AddDishGalleryImage(r.Context(), claims.UserID, itemID, file)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string][]string{"images": urls})
+}
+
+// DishGalleryRemove handles DELETE /api/v2/menu-items/{id}/images?url=… (chef
+// role) — drop one photo; returns the remaining URL list.
+func (h *UploadHandler) DishGalleryRemove(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	itemID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid menu item id")
+		return
+	}
+	url := r.URL.Query().Get("url")
+	if url == "" {
+		respondError(w, http.StatusBadRequest, "url query param is required")
+		return
+	}
+	urls, err := h.uploads.RemoveDishGalleryImage(r.Context(), claims.UserID, itemID, url)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string][]string{"images": urls})
+}
+
 // KitchenImage handles POST /api/v2/chefs/me/image (chef role).
 func (h *UploadHandler) KitchenImage(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.ClaimsFromContext(r.Context())

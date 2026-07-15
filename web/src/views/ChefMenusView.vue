@@ -127,6 +127,41 @@ async function deleteItem(entry, item) {
   }
 }
 
+// Gallery helpers (#93): item.images is a JSON array string.
+function gallery(item) {
+  if (!item.images) return []
+  try {
+    return JSON.parse(item.images)
+  } catch {
+    return []
+  }
+}
+const uploadingGallery = ref(0)
+async function addGalleryPhoto(item, event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  uploadingGallery.value = item.id
+  error.value = ''
+  try {
+    const out = await api.upload(`/menu-items/${item.id}/images`, file)
+    item.images = JSON.stringify(out.images)
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    uploadingGallery.value = 0
+  }
+}
+async function removeGalleryPhoto(item, url) {
+  error.value = ''
+  try {
+    const out = await api.del(`/menu-items/${item.id}/images?url=${encodeURIComponent(url)}`)
+    item.images = JSON.stringify(out.images)
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
 // Dish photo upload (JPEG/PNG, max 5 MB — the API validates and re-encodes).
 const uploadingItem = ref(0)
 async function uploadPhoto(item, event) {
@@ -184,24 +219,42 @@ onMounted(load)
         </div>
 
         <p v-if="!entry.items.length" class="text-sm text-gray-500">{{ $t('menus.noDishesYet') }}</p>
-        <div v-for="item in entry.items" :key="item.id" class="flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-sm">
-          <div class="flex min-w-0 items-center gap-2">
-            <img v-if="item.image_url" :src="item.image_url" :alt="item.name" class="h-9 w-9 shrink-0 rounded-lg object-cover" />
-            <div class="min-w-0">
-              <span class="font-medium">{{ item.name }}</span>
-              <span class="ml-2 text-gray-500">${{ item.price?.toFixed(2) }}</span>
-              <span class="ml-2 text-gray-400">
-                {{ item.is_unlimited ? $t('menus.unlimited') : $t('menus.stockN', { n: item.available_quantity ?? 0 }) }}
-              </span>
-              <DietaryBadges :item="item" class="ml-1 inline-flex" />
+        <div v-for="item in entry.items" :key="item.id" class="space-y-2 border-t border-gray-100 pt-2 text-sm">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex min-w-0 items-center gap-2">
+              <img v-if="item.image_url" :src="item.image_url" :alt="item.name" class="h-9 w-9 shrink-0 rounded-lg object-cover" />
+              <div class="min-w-0">
+                <span class="font-medium">{{ item.name }}</span>
+                <span class="ml-2 text-gray-500">${{ item.price?.toFixed(2) }}</span>
+                <span class="ml-2 text-gray-400">
+                  {{ item.is_unlimited ? $t('menus.unlimited') : $t('menus.stockN', { n: item.available_quantity ?? 0 }) }}
+                </span>
+                <DietaryBadges :item="item" class="ml-1 inline-flex" />
+              </div>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <label class="cursor-pointer text-brand-600 hover:underline">
+                {{ uploadingItem === item.id ? $t('menus.uploading') : item.image_url ? $t('menus.changePhoto') : $t('menus.addPhoto') }}
+                <input type="file" accept="image/jpeg,image/png" class="hidden" :disabled="uploadingItem === item.id" @change="uploadPhoto(item, $event)" />
+              </label>
+              <button class="text-red-600 hover:underline" @click="deleteItem(entry, item)">{{ $t('menus.remove') }}</button>
             </div>
           </div>
-          <div class="flex shrink-0 items-center gap-2">
-            <label class="cursor-pointer text-brand-600 hover:underline">
-              {{ uploadingItem === item.id ? $t('menus.uploading') : item.image_url ? $t('menus.changePhoto') : $t('menus.addPhoto') }}
-              <input type="file" accept="image/jpeg,image/png" class="hidden" :disabled="uploadingItem === item.id" @change="uploadPhoto(item, $event)" />
+          <!-- Gallery: extra photos beyond the cover (#93). -->
+          <div class="flex flex-wrap items-center gap-2 pl-11">
+            <div v-for="url in gallery(item)" :key="url" class="group relative">
+              <img :src="url" class="h-12 w-12 rounded-lg object-cover" alt="" />
+              <button
+                class="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs text-white group-hover:flex"
+                :title="$t('menus.removePhoto')"
+                @click="removeGalleryPhoto(item, url)"
+              >×</button>
+            </div>
+            <label v-if="gallery(item).length < 5" class="flex h-12 w-12 cursor-pointer items-center justify-center rounded-lg border border-dashed border-gray-300 text-lg text-gray-400 hover:border-brand-300">
+              <span v-if="uploadingGallery === item.id" class="text-xs">…</span>
+              <span v-else>＋</span>
+              <input type="file" accept="image/jpeg,image/png" class="hidden" :disabled="uploadingGallery === item.id" @change="addGalleryPhoto(item, $event)" />
             </label>
-            <button class="text-red-600 hover:underline" @click="deleteItem(entry, item)">{{ $t('menus.remove') }}</button>
           </div>
         </div>
 

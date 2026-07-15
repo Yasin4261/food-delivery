@@ -157,3 +157,31 @@ func TestMenuItemRepository_SetImageURL(t *testing.T) {
 		t.Errorf("unknown item = %v, want ErrMenuItemNotFound", err)
 	}
 }
+
+func TestMenuItemRepository_SetImages(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewMenuItemRepository(testDB)
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+	menu := seedMenu(t, chef.ID)
+	item := seedItem(t, menu.ID, chef.ID, 5, 10)
+
+	arr := `["/uploads/a.jpg","/uploads/b.png"]`
+	if err := repo.SetImages(ctx(), item.ID, &arr); err != nil {
+		t.Fatalf("set images: %v", err)
+	}
+	got, _ := repo.FindByID(ctx(), item.ID)
+	if got.Images == nil || *got.Images != arr {
+		t.Errorf("images = %v, want %s", got.Images, arr)
+	}
+	// Clearing to nil stores NULL.
+	if err := repo.SetImages(ctx(), item.ID, nil); err != nil {
+		t.Fatalf("clear images: %v", err)
+	}
+	got, _ = repo.FindByID(ctx(), item.ID)
+	if got.Images != nil {
+		t.Errorf("images not cleared: %v", *got.Images)
+	}
+	if err := repo.SetImages(ctx(), 9999, &arr); err != domain.ErrMenuItemNotFound {
+		t.Errorf("unknown item = %v, want ErrMenuItemNotFound", err)
+	}
+}

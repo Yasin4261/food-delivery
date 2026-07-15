@@ -201,6 +201,7 @@ export default {
     back: '← Panel',
     addPhoto: 'Fotoğraf ekle',
     changePhoto: 'Fotoğrafı değiştir',
+    removePhoto: 'Fotoğrafı kaldır',
     uploading: 'Yükleniyor…',
     newMenu: 'Yeni menü adı',
     newMenuPlaceholder: 'Akşam menüsü',
