@@ -38,6 +38,7 @@ Thumbs.db
 .env
 .env.local
 .env.prod
+.env.staging
 # Keep these in git:
 # .env.example
 # .env.dev (development defaults)
