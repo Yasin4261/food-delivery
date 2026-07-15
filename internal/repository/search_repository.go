@@ -66,21 +66,28 @@ func (r *SearchRepository) SearchChefs(ctx context.Context, q string, f domain.S
 // SearchMenuItems finds active & available dishes, narrowed by rating, price
 // range and cuisine, ordered by the whitelisted sort.
 func (r *SearchRepository) SearchMenuItems(ctx context.Context, q string, f domain.SearchFilters, limit, offset int) ([]*domain.MenuItem, int, error) {
+	// Each dietary flag is a bound bool: when true it requires the attribute;
+	// when false it adds no constraint. Cheap and index-friendly.
 	where := ` WHERE is_active = true AND is_available = true
 		  AND (name ILIKE $1 OR description ILIKE $1 OR category ILIKE $1 OR cuisine ILIKE $1)
 		  AND rating >= $2
 		  AND price >= $3
 		  AND ($4 = 0 OR price <= $4)
-		  AND ($5 = '' OR cuisine ILIKE $5)`
+		  AND ($5 = '' OR cuisine ILIKE $5)
+		  AND (NOT $6 OR is_vegetarian)
+		  AND (NOT $7 OR is_vegan)
+		  AND (NOT $8 OR is_gluten_free)
+		  AND (NOT $9 OR is_halal)`
 	cuisineArg := ""
 	if f.Cuisine != "" {
 		cuisineArg = like(f.Cuisine)
 	}
-	args := []any{like(q), f.MinRating, f.MinPrice, f.MaxPrice, cuisineArg}
+	args := []any{like(q), f.MinRating, f.MinPrice, f.MaxPrice, cuisineArg,
+		f.Vegetarian, f.Vegan, f.GlutenFree, f.Halal}
 
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT`+menuItemColumns+` FROM menu_items`+where+`
-		ORDER BY `+dishOrder[f.Sort]+` LIMIT $6 OFFSET $7`,
+		ORDER BY `+dishOrder[f.Sort]+` LIMIT $10 OFFSET $11`,
 		append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("search menu items: %w", err)

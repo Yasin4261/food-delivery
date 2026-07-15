@@ -68,7 +68,9 @@ src/
 - Search: `/search` with chef ↔ dish tabs over `GET /api/v2/search`; add to
   cart straight from dish results. Filter by minimum rating and (for dishes)
   price range; sort by rating, popularity or price. Browse gets the same
-  sort + rating filter.
+  sort + rating filter. Dishes also carry dietary tags (vegetarian, vegan,
+  gluten-free, halal) — set in the menu editor, shown as badges, filterable
+  on the search dish tab.
 - Password reset: "Forgot password?" on login → emailed link opens
   `/reset-password?token=…` (in dev the link is printed by the API's logging
   mailer — `docker logs food_delivery_api`).

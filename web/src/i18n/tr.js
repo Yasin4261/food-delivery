@@ -246,6 +246,12 @@ export default {
     closed: 'kapalı',
     closedBadge: 'şu an kapalı',
   },
+  dietary: {
+    vegetarian: 'Vejetaryen',
+    vegan: 'Vegan',
+    glutenFree: 'Glutensiz',
+    halal: 'Helal',
+  },
   filters: {
     sortDefault: 'Sıralama: öne çıkan',
     sortRating: 'Sıralama: en yüksek puan',

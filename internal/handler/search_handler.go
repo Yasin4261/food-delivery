@@ -39,11 +39,15 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filters := domain.SearchFilters{
-		MinRating: minRating,
-		MinPrice:  minPrice,
-		MaxPrice:  maxPrice,
-		Cuisine:   r.URL.Query().Get("cuisine"),
-		Sort:      r.URL.Query().Get("sort"),
+		MinRating:  minRating,
+		MinPrice:   minPrice,
+		MaxPrice:   maxPrice,
+		Cuisine:    r.URL.Query().Get("cuisine"),
+		Sort:       r.URL.Query().Get("sort"),
+		Vegetarian: queryBool(r, "vegetarian"),
+		Vegan:      queryBool(r, "vegan"),
+		GlutenFree: queryBool(r, "gluten_free"),
+		Halal:      queryBool(r, "halal"),
 	}
 
 	switch r.URL.Query().Get("type") {

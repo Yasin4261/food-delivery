@@ -15,13 +15,18 @@ const (
 )
 
 // SearchFilters narrows catalogue search/listing results. Zero values mean
-// "no constraint". Price and cuisine apply to dishes only.
+// "no constraint". Price, cuisine and the dietary flags apply to dishes only;
+// a true dietary flag requires that attribute on the dish.
 type SearchFilters struct {
-	MinRating float64
-	MinPrice  float64
-	MaxPrice  float64
-	Cuisine   string
-	Sort      string
+	MinRating  float64
+	MinPrice   float64
+	MaxPrice   float64
+	Cuisine    string
+	Sort       string
+	Vegetarian bool
+	Vegan      bool
+	GlutenFree bool
+	Halal      bool
 }
 
 // SearchRepository is the port for text search across the catalogue. Queries
