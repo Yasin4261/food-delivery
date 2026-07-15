@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Yasin4261/food-delivery/internal/metrics"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
@@ -12,11 +13,12 @@ import (
 // checkout and receiving the gateway's browser callback.
 type PaymentHandler struct {
 	payments *service.PaymentService
+	metrics  *metrics.Metrics // payment outcome counter; nil-safe
 }
 
-// NewPaymentHandler builds a PaymentHandler.
-func NewPaymentHandler(payments *service.PaymentService) *PaymentHandler {
-	return &PaymentHandler{payments: payments}
+// NewPaymentHandler builds a PaymentHandler. m may be nil (metrics disabled).
+func NewPaymentHandler(payments *service.PaymentService, m *metrics.Metrics) *PaymentHandler {
+	return &PaymentHandler{payments: payments, metrics: m}
 }
 
 // Pay handles POST /api/v2/orders/{id}/pay (auth, owner). It returns the
@@ -61,5 +63,6 @@ func (h *PaymentHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, h.payments.ErrorRedirectURL(), http.StatusSeeOther)
 		return
 	}
+	h.metrics.PaymentCompleted(paid)
 	http.Redirect(w, r, h.payments.ResultRedirectURL(orderID, paid), http.StatusSeeOther)
 }

@@ -7,18 +7,20 @@ import (
 	"strconv"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
+	"github.com/Yasin4261/food-delivery/internal/metrics"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
 
 // OrderHandler exposes customer ordering and chef order-management endpoints.
 type OrderHandler struct {
-	orders *service.OrderService
+	orders  *service.OrderService
+	metrics *metrics.Metrics // business counters; nil-safe
 }
 
-// NewOrderHandler builds an OrderHandler.
-func NewOrderHandler(orders *service.OrderService) *OrderHandler {
-	return &OrderHandler{orders: orders}
+// NewOrderHandler builds an OrderHandler. m may be nil (metrics disabled).
+func NewOrderHandler(orders *service.OrderService, m *metrics.Metrics) *OrderHandler {
+	return &OrderHandler{orders: orders, metrics: m}
 }
 
 type orderLineRequest struct {
@@ -80,6 +82,7 @@ func (h *OrderHandler) Place(w http.ResponseWriter, r *http.Request) {
 		respondOrderError(w, err)
 		return
 	}
+	h.metrics.OrderPlaced()
 	respondJSON(w, http.StatusCreated, order)
 }
 
@@ -201,6 +204,9 @@ func (h *OrderHandler) ChefAdvance(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondOrderError(w, err)
 		return
+	}
+	if order.Status == domain.OrderStatusDelivered {
+		h.metrics.OrderDelivered()
 	}
 	respondJSON(w, http.StatusOK, order)
 }

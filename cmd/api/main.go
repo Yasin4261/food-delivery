@@ -19,6 +19,7 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/handler"
 	"github.com/Yasin4261/food-delivery/internal/mailer"
+	"github.com/Yasin4261/food-delivery/internal/metrics"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/payment"
 	"github.com/Yasin4261/food-delivery/internal/redisstore"
@@ -57,15 +58,30 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
+	// Prometheus instrumentation (#73): the middleware records HTTP metrics for
+	// the app; DB-pool stats come from the connection handle.
+	m := metrics.New()
+	m.RegisterDB(db.DB)
+
 	// Global middleware (outermost first): CORS, then structured per-request
-	// logging, then the app.
+	// logging, then metric recording, then the app.
 	app := middleware.CORS(cfg.AllowedOrigins)(
-		middleware.RequestLogger(logger)(initializeApp(db, cfg, version)),
+		middleware.RequestLogger(logger)(
+			m.Middleware(initializeApp(db, cfg, version, m)),
+		),
 	)
+
+	// /metrics is served from a top mux OUTSIDE the logging + metrics
+	// middleware, so scrapes neither inflate the counters nor spam the logs.
+	// Caddy never proxies /metrics, so it is unreachable from the public
+	// origin — only Prometheus on the internal network scrapes it.
+	root := http.NewServeMux()
+	root.Handle("/metrics", m.Handler())
+	root.Handle("/", app)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           app,
+		Handler:           root,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -97,7 +113,7 @@ func main() {
 // initializeApp is the composition root: it constructs the concrete adapters
 // and wires them into the core. As features are added, new repositories,
 // services and handlers are assembled here.
-func initializeApp(db *database.DB, cfg *config.Config, version string) http.Handler {
+func initializeApp(db *database.DB, cfg *config.Config, version string, m *metrics.Metrics) http.Handler {
 	// Repositories (driven adapters).
 	userRepo := repository.NewUserRepository(db.DB)
 	chefRepo := repository.NewChefRepository(db.DB)
@@ -194,7 +210,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	authHandler := handler.NewAuthHandler(authService, revoker)
 	chefHandler := handler.NewChefHandler(chefService)
 	menuHandler := handler.NewMenuHandler(menuService)
-	orderHandler := handler.NewOrderHandler(orderService)
+	orderHandler := handler.NewOrderHandler(orderService, m)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	addressHandler := handler.NewAddressHandler(addressService)
 	uploadHandler := handler.NewUploadHandler(uploadService, cfg.UploadDir)
@@ -203,7 +219,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string) http.Han
 	searchHandler := handler.NewSearchHandler(searchService)
 	chatHandler := handler.NewChatHandler(chatService)
 	versionHandler := handler.NewVersionHandler(version)
-	paymentHandler := handler.NewPaymentHandler(paymentService)
+	paymentHandler := handler.NewPaymentHandler(paymentService, m)
 
 	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
 	return r.Setup()

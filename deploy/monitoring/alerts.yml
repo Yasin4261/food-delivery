@@ -1,0 +1,46 @@
+# Alert rules for the food-delivery API (#73).
+groups:
+  - name: food-delivery-api
+    rules:
+      # The API stopped answering scrapes.
+      - alert: APIDown
+        expr: up{job="food-delivery-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API is down"
+          description: "Prometheus cannot scrape the API for over a minute."
+
+      # More than 5% of requests are 5xx over the last 5 minutes.
+      - alert: HighServerErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate"
+          description: "Over 5% of requests have failed with a server error for 5 minutes."
+
+      # p95 request latency above 1s for 10 minutes.
+      - alert: HighLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 latency"
+          description: "95th-percentile request latency has exceeded 1s for 10 minutes."
+
+      # The DB connection pool is saturated (requests waiting for a connection).
+      - alert: DBPoolExhausted
+        expr: rate(go_sql_wait_count_total{db_name="food_delivery"}[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool contention"
+          description: "Requests are waiting for DB connections — consider raising the pool size."

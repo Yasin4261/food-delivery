@@ -122,12 +122,54 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  # Observability (#73). Opt-in: `--profile monitoring`. Prometheus scrapes the
+  # API's internal /metrics; Grafana renders the starter dashboard. Both bind
+  # only to localhost — reach them via an SSH tunnel, not the public internet.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: food_delivery_prometheus
+    profiles: [monitoring]
+    restart: unless-stopped
+    volumes:
+      - ./deploy/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks: [prod]
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: food_delivery_grafana
+    profiles: [monitoring]
+    restart: unless-stopped
+    depends_on: [prometheus]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env.prod}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./deploy/monitoring/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - ./deploy/monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./deploy/monitoring/grafana/food-delivery.json:/etc/grafana/provisioning/dashboards/food-delivery.json:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [prod]
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   postgres_data_prod:
     driver: local
   caddy_data:
     driver: local
   uploads_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
     driver: local
   caddy_config:
     driver: local
