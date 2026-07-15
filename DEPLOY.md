@@ -113,6 +113,21 @@ secrets are set (same shape as the production `DEPLOY_*` table above), deploys
 them to the staging host. Tags still go to production via `release.yml`; `main`
 lands on staging.
 
+## Creating the first admin
+
+The `admin` role is **not self-assignable** via the API. Register a normal
+account, then promote it directly in the database:
+
+```bash
+make seed-admin EMAIL=you@example.com COMPOSE=docker-compose.prod.yml SERVICE=db
+# equivalently:
+docker exec food_delivery_db_prod psql -U postgres -d food_delivery \
+  -c "UPDATE users SET role='admin' WHERE email='you@example.com';"
+```
+
+Log out and back in so the new role is in the token; the SPA then shows the
+**Admin** area (`/admin`): platform stats, user/chef activation, order overview.
+
 ## Monitoring (optional)
 
 The API exposes Prometheus metrics at `/metrics` on its **internal** port —

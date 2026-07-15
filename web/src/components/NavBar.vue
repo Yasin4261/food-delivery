@@ -64,6 +64,10 @@ async function logout() {
             {{ $t('nav.myMenus') }}
           </RouterLink>
         </template>
+
+        <RouterLink v-if="auth.isAdmin" to="/admin" class="nav-link" exact-active-class="router-link-active bg-brand-50">
+          {{ $t('nav.admin') }}
+        </RouterLink>
         <RouterLink
           v-if="auth.isAuthenticated && !auth.isChef"
           to="/orders"

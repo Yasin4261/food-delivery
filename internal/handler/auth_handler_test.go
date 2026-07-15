@@ -153,9 +153,47 @@ func (m *recordingMailer) last() (domain.Email, bool) {
 	return m.sent[len(m.sent)-1], true
 }
 
+// testDeps bundles the wired handler with the fakes tests may need to reach
+// into (mailer for reset links, repos for admin-role promotion, etc.).
+type testDeps struct {
+	handler http.Handler
+	mail    *recordingMailer
+	users   *fakeUserRepo
+	chefs   *fakeChefRepo
+	orders  *fakeOrderRepo
+}
+
 // newTestServerWithMailer is like newTestServer but exposes the mailer so reset
 // tests can read the emitted reset link.
 func newTestServerWithMailer() (http.Handler, *recordingMailer) {
+	d := buildTestServer()
+	return d.handler, d.mail
+}
+
+// newTestServerWithRepos exposes the chef + user fakes for tests that need to
+// promote a user to admin or inspect chef state.
+func newTestServerWithRepos() (http.Handler, *fakeChefRepo, *fakeUserRepo) {
+	d := buildTestServer()
+	return d.handler, d.chefs, d.users
+}
+
+// loginToken logs in an existing account (password secret123) and returns its
+// bearer token — used after mutating a user's role directly in a fake.
+func loginToken(t *testing.T, srv http.Handler, email string) string {
+	t.Helper()
+	rec := do(t, srv, http.MethodPost, "/api/v2/auth/login", "",
+		`{"email":"`+email+`","password":"secret123"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("login %s = %d (%s)", email, rec.Code, rec.Body)
+	}
+	var res struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &res)
+	return res.Token
+}
+
+func buildTestServer() testDeps {
 	chefRepo := newFakeChefRepo()
 	itemRepo := newFakeMenuItemRepo()
 	userRepo := newFakeUserRepo()
@@ -183,6 +221,8 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	orderHandler := handler.NewOrderHandler(orderService, nil)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	addressHandler := handler.NewAddressHandler(addressService)
+	adminService := service.NewAdminService(newFakeAdminRepo(userRepo, chefRepo, orderRepo))
+	adminHandler := handler.NewAdminHandler(adminService)
 	uploadDir := os.TempDir() + "/food-delivery-test-uploads"
 	fileStore, _ := storage.NewLocal(uploadDir)
 	uploadService := service.NewUploadService(fileStore, chefRepo, itemRepo)
@@ -195,7 +235,8 @@ func newTestServerWithMailer() (http.Handler, *recordingMailer) {
 	paymentHandler := handler.NewPaymentHandler(paymentService, nil)
 	// A generous budget so no test trips the per-IP throttle accidentally.
 	authLimiter := middleware.NewRateLimiter(1000, time.Minute)
-	return router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup(), mail
+	h := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, adminHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup()
+	return testDeps{handler: h, mail: mail, users: userRepo, chefs: chefRepo, orders: orderRepo}
 }
 
 // registerAndToken registers a user through the API and returns its bearer token.
