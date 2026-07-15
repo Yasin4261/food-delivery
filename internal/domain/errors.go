@@ -35,6 +35,8 @@ var (
 
 	// ErrUnsupportedImage marks an upload that is not a decodable JPEG or PNG.
 	ErrUnsupportedImage = errors.New("image must be a valid JPEG or PNG")
+	// ErrGalleryFull rejects a gallery upload past the per-dish cap.
+	ErrGalleryFull = errors.New("this dish already has the maximum number of photos")
 
 	ErrInvalidWeekday     = errors.New("weekday must be between 0 (Sunday) and 6 (Saturday)")
 	ErrInvalidHoursWindow = errors.New("opening hours must be within the day and not empty")

@@ -48,6 +48,16 @@ const justAdded = ref(0) // menu item id flashed after add
 const stars = (n) => '★'.repeat(n) + '☆'.repeat(5 - n)
 const when = (iso) => new Date(iso).toLocaleDateString()
 
+// Gallery photos beyond the cover (#93); item.images is a JSON array string.
+function gallery(item) {
+  if (!item.images) return []
+  try {
+    return JSON.parse(item.images)
+  } catch {
+    return []
+  }
+}
+
 function addToCart(item) {
   if (!auth.isAuthenticated) {
     router.push({ name: 'login', query: { redirect: `/chefs/${props.id}` } })
@@ -131,6 +141,11 @@ onMounted(async () => {
                 </span>
                 <DietaryBadges :item="item" />
               </p>
+              <div v-if="gallery(item).length" class="mt-2 flex flex-wrap gap-1.5">
+                <a v-for="url in gallery(item)" :key="url" :href="url" target="_blank" rel="noopener">
+                  <img :src="url" class="h-14 w-14 rounded-lg object-cover transition hover:opacity-80" alt="" />
+                </a>
+              </div>
             </div>
             <button
               class="btn-primary shrink-0"

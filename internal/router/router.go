@@ -114,6 +114,8 @@ func (r *Router) Setup() http.Handler {
 	r.handleRole("PUT /api/v2/chefs/me/hours", r.chefHandler.SetHours)
 	r.mux.HandleFunc("GET /api/v2/chefs/{id}/hours", r.chefHandler.Hours)
 	r.handleRole("POST /api/v2/menu-items/{id}/image", r.uploadHandler.DishImage)
+	r.handleRole("POST /api/v2/menu-items/{id}/images", r.uploadHandler.DishGalleryAdd)
+	r.handleRole("DELETE /api/v2/menu-items/{id}/images", r.uploadHandler.DishGalleryRemove)
 	r.mux.HandleFunc("GET /uploads/{file}", r.uploadHandler.Serve)
 	r.handleRole("GET /api/v2/chefs/me/earnings", r.earningsHandler.Get)
 

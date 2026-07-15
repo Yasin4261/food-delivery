@@ -31,6 +31,9 @@ type MenuItemRepository interface {
 	// no-op error (ErrItemOutOfStock) for unlimited items, which the caller
 	// should skip.
 	DecrementStock(ctx context.Context, id, qty int) error
-	// SetImageURL updates the dish photo URL.
+	// SetImageURL updates the dish photo URL (the cover image).
 	SetImageURL(ctx context.Context, id int, url string) error
+	// SetImages persists the dish gallery (a JSON array of URLs, or nil to
+	// clear it).
+	SetImages(ctx context.Context, id int, images *string) error
 }

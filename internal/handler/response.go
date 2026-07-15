@@ -67,6 +67,7 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrInvalidResetToken),
 		errors.Is(err, domain.ErrEmptyMessage),
 		errors.Is(err, domain.ErrUnsupportedImage),
+		errors.Is(err, domain.ErrGalleryFull),
 		errors.Is(err, domain.ErrInvalidWeekday),
 		errors.Is(err, domain.ErrInvalidHoursWindow),
 		errors.Is(err, domain.ErrAddressLabelRequired),

@@ -126,3 +126,52 @@ func TestUploadHTTP_KitchenImage(t *testing.T) {
 		t.Errorf("chef image_url = %v, want %v", chef["image_url"], out["image_url"])
 	}
 }
+
+func TestUploadHTTP_DishGallery(t *testing.T) {
+	srv := newTestServer()
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	path := "/api/v2/menu-items/" + itoa(itemID) + "/images"
+
+	// Auth: anon 401, customer 403.
+	body, ct := multipartImage(t, realJPEG(t))
+	if rec := doUpload(t, srv, path, "", body, ct); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anon gallery add = %d, want 401", rec.Code)
+	}
+	cust := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	body, ct = multipartImage(t, realJPEG(t))
+	if rec := doUpload(t, srv, path, cust, body, ct); rec.Code != http.StatusForbidden {
+		t.Errorf("customer gallery add = %d, want 403", rec.Code)
+	}
+
+	// Owner appends two, list grows.
+	for want := 1; want <= 2; want++ {
+		body, ct = multipartImage(t, realJPEG(t))
+		rec := doUpload(t, srv, path, chefToken, body, ct)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("gallery add = %d (%s)", rec.Code, rec.Body)
+		}
+		var out struct {
+			Images []string `json:"images"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &out)
+		if len(out.Images) != want {
+			t.Fatalf("gallery size = %d, want %d", len(out.Images), want)
+		}
+		if want == 2 {
+			// Remove the first; one remains.
+			rec = do(t, srv, http.MethodDelete, path+"?url="+out.Images[0], chefToken, "")
+			var after struct {
+				Images []string `json:"images"`
+			}
+			_ = json.Unmarshal(rec.Body.Bytes(), &after)
+			if rec.Code != http.StatusOK || len(after.Images) != 1 {
+				t.Errorf("gallery remove = %d/%d, want 200/1", rec.Code, len(after.Images))
+			}
+		}
+	}
+
+	// Missing url on delete -> 400.
+	if rec := do(t, srv, http.MethodDelete, path, chefToken, ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("delete without url = %d, want 400", rec.Code)
+	}
+}

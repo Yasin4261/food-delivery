@@ -202,6 +202,7 @@ export default {
     back: '← Dashboard',
     addPhoto: 'Add photo',
     changePhoto: 'Change photo',
+    removePhoto: 'Remove photo',
     uploading: 'Uploading…',
     newMenu: 'New menu name',
     newMenuPlaceholder: 'Dinner menu',
