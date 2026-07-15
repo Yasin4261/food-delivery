@@ -20,6 +20,7 @@ type Router struct {
 	favoriteHandler *handler.FavoriteHandler
 	addressHandler  *handler.AddressHandler
 	uploadHandler   *handler.UploadHandler
+	adminHandler    *handler.AdminHandler
 	reviewHandler   *handler.ReviewHandler
 	earningsHandler *handler.EarningsHandler
 	searchHandler   *handler.SearchHandler
@@ -40,6 +41,7 @@ func NewRouter(
 	favoriteHandler *handler.FavoriteHandler,
 	addressHandler *handler.AddressHandler,
 	uploadHandler *handler.UploadHandler,
+	adminHandler *handler.AdminHandler,
 	reviewHandler *handler.ReviewHandler,
 	earningsHandler *handler.EarningsHandler,
 	searchHandler *handler.SearchHandler,
@@ -59,6 +61,7 @@ func NewRouter(
 		favoriteHandler: favoriteHandler,
 		addressHandler:  addressHandler,
 		uploadHandler:   uploadHandler,
+		adminHandler:    adminHandler,
 		reviewHandler:   reviewHandler,
 		earningsHandler: earningsHandler,
 		searchHandler:   searchHandler,
@@ -167,6 +170,15 @@ func (r *Router) Setup() http.Handler {
 	// Search: dishes/chefs for any authenticated user; users for admins only.
 	r.handleAuth("GET /api/v2/search", r.searchHandler.Search)
 
+	// Admin: platform moderation + stats (admin role only). The service layer
+	// carries no per-user ownership here — the role guard is the boundary.
+	r.handleAdmin("GET /api/v2/admin/stats", r.adminHandler.Stats)
+	r.handleAdmin("GET /api/v2/admin/users", r.adminHandler.ListUsers)
+	r.handleAdmin("PATCH /api/v2/admin/users/{id}/active", r.adminHandler.SetUserActive)
+	r.handleAdmin("GET /api/v2/admin/orders", r.adminHandler.ListOrders)
+	r.handleAdmin("GET /api/v2/admin/chefs", r.adminHandler.ListChefs)
+	r.handleAdmin("PATCH /api/v2/admin/chefs/{id}/active", r.adminHandler.SetChefActive)
+
 	// Notification badge counts, polled by the SPA.
 	r.handleAuth("GET /api/v2/notifications/summary", r.orderHandler.Summary)
 
@@ -190,4 +202,9 @@ func (r *Router) handleAuth(pattern string, h http.HandlerFunc) {
 // is chef before reaching the handler.
 func (r *Router) handleRole(pattern string, h http.HandlerFunc) {
 	r.mux.Handle(pattern, r.auth.RequireRole(domain.RoleChef)(http.HandlerFunc(h)))
+}
+
+// handleAdmin registers an admin-only route (RequireRole(admin) → 403 otherwise).
+func (r *Router) handleAdmin(pattern string, h http.HandlerFunc) {
+	r.mux.Handle(pattern, r.auth.RequireRole(domain.RoleAdmin)(http.HandlerFunc(h)))
 }

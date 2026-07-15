@@ -36,6 +36,16 @@ staging-down: ## Stop staging (add ARGS=-v to wipe its data)
 staging-logs: ## View staging logs
 	docker compose -f docker-compose.staging.yml --env-file .env.staging logs -f api web
 
+# Admin seeding: promote an existing account to the admin role (admin is not
+# self-assignable via the API). EMAIL and the target compose file are required.
+#   make seed-admin EMAIL=you@example.com                 # dev stack
+#   make seed-admin EMAIL=you@example.com COMPOSE=docker-compose.prod.yml SERVICE=db
+seed-admin: ## Promote a user to admin: make seed-admin EMAIL=you@example.com
+	@test -n "$(EMAIL)" || (echo "EMAIL=... is required" && exit 1)
+	docker compose -f $(or $(COMPOSE),docker-compose.yml) exec -T $(or $(SERVICE),db) \
+		psql -U postgres -d food_delivery -c \
+		"UPDATE users SET role='admin' WHERE email='$(EMAIL)';"
+
 # Local development (without Docker)
 run: ## Run locally without Docker
 	go run ./cmd/api

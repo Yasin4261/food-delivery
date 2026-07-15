@@ -163,6 +163,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	paymentService := service.NewPaymentService(paymentSessionRepo, orderRepo, userRepo, gateway, cfg.AppBaseURL)
 	addressRepo := repository.NewAddressRepository(db.DB)
 	addressService := service.NewAddressService(addressRepo)
+	adminService := service.NewAdminService(repository.NewAdminRepository(db.DB))
 	fileStore, err := storage.NewLocal(cfg.UploadDir)
 	if err != nil {
 		log.Fatalf("upload storage: %v", err)
@@ -213,6 +214,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	orderHandler := handler.NewOrderHandler(orderService, m)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	addressHandler := handler.NewAddressHandler(addressService)
+	adminHandler := handler.NewAdminHandler(adminService)
 	uploadHandler := handler.NewUploadHandler(uploadService, cfg.UploadDir)
 	reviewHandler := handler.NewReviewHandler(reviewService)
 	earningsHandler := handler.NewEarningsHandler(earningsService)
@@ -221,6 +223,6 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	versionHandler := handler.NewVersionHandler(version)
 	paymentHandler := handler.NewPaymentHandler(paymentService, m)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, adminHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
 	return r.Setup()
 }

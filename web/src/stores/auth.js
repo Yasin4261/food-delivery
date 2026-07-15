@@ -12,6 +12,7 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (s) => !!s.token,
     role: (s) => s.user?.role || null,
     isChef: (s) => s.user?.role === 'chef',
+    isAdmin: (s) => s.user?.role === 'admin',
   },
   actions: {
     persist() {

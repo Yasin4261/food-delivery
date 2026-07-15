@@ -161,6 +161,9 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 			}
 		}
 
+		// FindByID filters to active chefs, so a chef deactivated by an admin
+		// (#69) — whose dishes are already hidden from browse/search — makes a
+		// stale-cart order fail here with ErrChefNotFound.
 		chef, err := s.chefs.FindByID(ctx, sub.ChefID)
 		if err != nil {
 			return nil, err
