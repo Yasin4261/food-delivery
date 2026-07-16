@@ -95,6 +95,46 @@ func TestChefRepository_SetOnlineAndFilter(t *testing.T) {
 	}
 }
 
+func TestChefRepository_SetAcceptingOrdersHidesFromList(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewChefRepository(testDB)
+
+	c := domain.NewChef(seedUser(t, "away@example.com").ID, "Kitchen", "addr")
+	if err := repo.Create(ctx(), c); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Accepting by default → present in the browse listing.
+	if _, total, _ := repo.List(ctx(), domain.ChefListFilters{}, 20, 0); total != 1 {
+		t.Fatalf("list before away = %d, want 1", total)
+	}
+
+	// Go away → hidden from browse.
+	if err := repo.SetAcceptingOrders(ctx(), c.ID, false); err != nil {
+		t.Fatalf("set away: %v", err)
+	}
+	got, _ := repo.FindByID(ctx(), c.ID)
+	if got.IsAcceptingOrders {
+		t.Error("is_accepting_orders not persisted")
+	}
+	if _, total, _ := repo.List(ctx(), domain.ChefListFilters{}, 20, 0); total != 0 {
+		t.Errorf("list while away = %d, want 0", total)
+	}
+
+	// FindByID still resolves an away chef (so the detail page can show a badge).
+	if got, err := repo.FindByID(ctx(), c.ID); err != nil || got == nil {
+		t.Errorf("FindByID while away = %v, want the chef", err)
+	}
+
+	// Come back → visible again.
+	if err := repo.SetAcceptingOrders(ctx(), c.ID, true); err != nil {
+		t.Fatalf("set back: %v", err)
+	}
+	if _, total, _ := repo.List(ctx(), domain.ChefListFilters{}, 20, 0); total != 1 {
+		t.Errorf("list after return = %d, want 1", total)
+	}
+}
+
 func TestChefRepository_List(t *testing.T) {
 	resetDB(t)
 	repo := repository.NewChefRepository(testDB)

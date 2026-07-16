@@ -175,6 +175,32 @@ func (h *ChefHandler) SetStatus(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, chef)
 }
 
+type setAvailabilityRequest struct {
+	AcceptingOrders bool `json:"accepting_orders"`
+}
+
+// SetAvailability handles PATCH /api/v2/chefs/me/availability (chef) — toggle
+// away / vacation mode. When off the chef is hidden from browse/search and
+// cannot receive new orders.
+func (h *ChefHandler) SetAvailability(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req setAvailabilityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	chef, err := h.chefs.SetAcceptingOrders(r.Context(), claims.UserID, req.AcceptingOrders)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, chef)
+}
+
 // queryInt reads an integer query parameter, falling back to def.
 func queryInt(r *http.Request, key string, def int) int {
 	if v, err := strconv.Atoi(r.URL.Query().Get(key)); err == nil {

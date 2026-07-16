@@ -54,6 +54,22 @@ async function toggleOnline() {
   }
 }
 
+// Away / vacation mode (#104): hides the kitchen from browse/search and blocks
+// new orders until the chef returns — distinct from the online presence toggle.
+async function toggleAvailability() {
+  toggling.value = true
+  error.value = ''
+  try {
+    profile.value = await api.patch('/chefs/me/availability', {
+      accepting_orders: !profile.value.is_accepting_orders,
+    })
+  } catch (e) {
+    error.value = e.message
+  } finally {
+    toggling.value = false
+  }
+}
+
 async function advance(order, action) {
   try {
     await api.post(`/chef/orders/${order.id}/status`, { action })
@@ -93,11 +109,20 @@ onBeforeUnmount(() => clearInterval(poll))
         <p class="text-sm text-gray-500">{{ $t('dashboard.subtitle') }}</p>
       </div>
       <div class="flex items-center gap-2">
+        <span
+          v-if="profile && !profile.is_accepting_orders"
+          class="badge bg-amber-100 text-amber-700"
+        >
+          {{ $t('dashboard.away') }}
+        </span>
         <span class="badge" :class="profile?.is_online ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'">
           {{ profile?.is_online ? $t('dashboard.online') : $t('dashboard.offline') }}
         </span>
         <button class="btn-ghost" :disabled="toggling" @click="toggleOnline">
           {{ profile?.is_online ? $t('dashboard.goOffline') : $t('dashboard.goOnline') }}
+        </button>
+        <button class="btn-ghost" :disabled="toggling" @click="toggleAvailability">
+          {{ profile?.is_accepting_orders ? $t('dashboard.goAway') : $t('dashboard.comeBack') }}
         </button>
         <RouterLink to="/chef/menus" class="btn-primary">{{ $t('nav.myMenus') }}</RouterLink>
         <button class="btn-ghost" @click="load">{{ $t('dashboard.refresh') }}</button>

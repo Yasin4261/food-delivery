@@ -113,6 +113,7 @@ func (r *Router) Setup() http.Handler {
 	r.handleRole("GET /api/v2/chefs/me", r.chefHandler.Me)
 	r.handleRole("PUT /api/v2/chefs/me", r.chefHandler.UpdateMe)
 	r.handleRole("PATCH /api/v2/chefs/me/status", r.chefHandler.SetStatus)
+	r.handleRole("PATCH /api/v2/chefs/me/availability", r.chefHandler.SetAvailability)
 	// Photos: chef-only uploads (ownership in the service); public serving is
 	// gated on the store's generated-name pattern (no traversal).
 	r.handleRole("POST /api/v2/chefs/me/image", r.uploadHandler.KitchenImage)

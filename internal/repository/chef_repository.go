@@ -94,7 +94,7 @@ func (r *ChefRepository) FindByUserID(ctx context.Context, userID int) (*domain.
 // selects a fixed ORDER BY from the chefOrder whitelist (see
 // search_repository.go) — it is never interpolated from input.
 func (r *ChefRepository) List(ctx context.Context, f domain.ChefListFilters, limit, offset int) ([]*domain.Chef, int, error) {
-	const where = ` WHERE is_active = true AND ($1 = false OR is_online = true) AND rating >= $2`
+	const where = ` WHERE is_active = true AND is_accepting_orders = true AND ($1 = false OR is_online = true) AND rating >= $2`
 	query := `SELECT` + chefColumns + `
 		FROM chefs` + where + `
 		ORDER BY ` + chefOrder[f.Sort] + `
@@ -126,6 +126,7 @@ func (r *ChefRepository) FindNearby(ctx context.Context, lat, lng float64, limit
 		SELECT` + chefColumns + `
 		FROM chefs
 		WHERE is_active = true
+		  AND is_accepting_orders = true
 		  AND ($4 = false OR is_online = true)
 		  AND kitchen_latitude IS NOT NULL
 		  AND kitchen_longitude IS NOT NULL
@@ -155,6 +156,18 @@ func (r *ChefRepository) SetOnline(ctx context.Context, chefID int, online bool)
 	res, err := r.db.ExecContext(ctx, `UPDATE chefs SET is_online = $2, updated_at = now() WHERE id = $1`, chefID, online)
 	if err != nil {
 		return fmt.Errorf("set chef online: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrChefNotFound
+	}
+	return nil
+}
+
+// SetAcceptingOrders updates the chef's availability (away / vacation mode).
+func (r *ChefRepository) SetAcceptingOrders(ctx context.Context, chefID int, accepting bool) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE chefs SET is_accepting_orders = $2, updated_at = now() WHERE id = $1`, chefID, accepting)
+	if err != nil {
+		return fmt.Errorf("set chef accepting orders: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return domain.ErrChefNotFound

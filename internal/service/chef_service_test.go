@@ -22,6 +22,9 @@ func newFakeChefRepo() *fakeChefRepo {
 func (f *fakeChefRepo) Create(_ context.Context, c *domain.Chef) error {
 	c.ID = f.nextID
 	f.nextID++
+	if !c.IsAcceptingOrders {
+		c.IsAcceptingOrders = true // chefs are open for business by default (see NewChef)
+	}
 	cp := *c
 	f.chefs[c.ID] = &cp
 	return nil
@@ -67,6 +70,14 @@ func (f *fakeChefRepo) List(_ context.Context, fl domain.ChefListFilters, limit,
 func (f *fakeChefRepo) SetOnline(_ context.Context, chefID int, online bool) error {
 	if c, ok := f.chefs[chefID]; ok {
 		c.IsOnline = online
+		return nil
+	}
+	return domain.ErrChefNotFound
+}
+
+func (f *fakeChefRepo) SetAcceptingOrders(_ context.Context, chefID int, accepting bool) error {
+	if c, ok := f.chefs[chefID]; ok {
+		c.IsAcceptingOrders = accepting
 		return nil
 	}
 	return domain.ErrChefNotFound
@@ -206,4 +217,38 @@ func (f *fakeChefRepo) SetImageURL(_ context.Context, chefID int, url string) er
 	}
 	c.ImageURL = &url
 	return nil
+}
+
+func TestChefService_SetAcceptingOrders(t *testing.T) {
+	repo := newFakeChefRepo()
+	svc := service.NewChefService(repo, nil, nil)
+	ctx := context.Background()
+	if _, err := svc.CreateProfile(ctx, 42, validProfile()); err != nil {
+		t.Fatalf("create profile: %v", err)
+	}
+
+	// Go away (vacation mode).
+	chef, err := svc.SetAcceptingOrders(ctx, 42, false)
+	if err != nil {
+		t.Fatalf("set away: %v", err)
+	}
+	if chef.IsAcceptingOrders {
+		t.Error("chef should be marked not accepting orders")
+	}
+
+	// Come back.
+	chef, err = svc.SetAcceptingOrders(ctx, 42, true)
+	if err != nil {
+		t.Fatalf("set back: %v", err)
+	}
+	if !chef.IsAcceptingOrders {
+		t.Error("chef should be accepting orders again")
+	}
+}
+
+func TestChefService_SetAcceptingOrders_NoProfile(t *testing.T) {
+	svc := service.NewChefService(newFakeChefRepo(), nil, nil)
+	if _, err := svc.SetAcceptingOrders(context.Background(), 999, false); !errors.Is(err, domain.ErrChefNotFound) {
+		t.Errorf("err = %v, want ErrChefNotFound", err)
+	}
 }

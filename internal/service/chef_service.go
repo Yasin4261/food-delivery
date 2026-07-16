@@ -184,6 +184,21 @@ func (s *ChefService) SetOnline(ctx context.Context, userID int, online bool) (*
 	return chef, nil
 }
 
+// SetAcceptingOrders toggles the caller's availability (away / vacation mode)
+// and returns the updated profile. When off, the chef is hidden from
+// browse/search and PlaceOrder rejects new orders for them.
+func (s *ChefService) SetAcceptingOrders(ctx context.Context, userID int, accepting bool) (*domain.Chef, error) {
+	chef, err := s.chefs.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.chefs.SetAcceptingOrders(ctx, chef.ID, accepting); err != nil {
+		return nil, err
+	}
+	chef.SetAcceptingOrders(accepting)
+	return chef, nil
+}
+
 // optional turns a trimmed string into a pointer, or nil when empty.
 func optional(s string) *string {
 	s = strings.TrimSpace(s)

@@ -81,6 +81,7 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		respondError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrEmptyOrder),
 		errors.Is(err, domain.ErrChefClosed),
+		errors.Is(err, domain.ErrChefUnavailable),
 		errors.Is(err, domain.ErrPromoNotRedeemable),
 		errors.Is(err, domain.ErrPromoExpired),
 		errors.Is(err, domain.ErrPromoUsedUp),

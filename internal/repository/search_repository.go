@@ -42,7 +42,7 @@ var dishOrder = map[string]string{
 // SearchChefs finds active chefs by business name, specialty or city,
 // narrowed by min rating and ordered by the whitelisted sort.
 func (r *SearchRepository) SearchChefs(ctx context.Context, q string, f domain.SearchFilters, limit, offset int) ([]*domain.Chef, int, error) {
-	where := ` WHERE is_active = true
+	where := ` WHERE is_active = true AND is_accepting_orders = true
 		  AND (business_name ILIKE $1 OR specialty ILIKE $1 OR kitchen_city ILIKE $1)
 		  AND rating >= $2`
 	args := []any{like(q), f.MinRating}

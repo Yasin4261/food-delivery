@@ -209,6 +209,30 @@ func TestOrderService_PlaceOrder_Errors(t *testing.T) {
 	})
 }
 
+func TestOrderService_PlaceOrder_ChefAway(t *testing.T) {
+	svc, items, chefs := orderFixture(t, 1) // user1 -> chef1
+	item := seedItem(t, items, 1, 5, 10)
+	ctx := context.Background()
+
+	// Chef goes into away / vacation mode after the cart was built.
+	if err := chefs.SetAcceptingOrders(ctx, 1, false); err != nil {
+		t.Fatalf("set away: %v", err)
+	}
+
+	_, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
+		DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCash,
+		Lines: []service.OrderLineInput{{MenuItemID: item.ID, Quantity: 1}},
+	})
+	if !errors.Is(err, domain.ErrChefUnavailable) {
+		t.Errorf("err = %v, want ErrChefUnavailable", err)
+	}
+
+	// Stock must not have been decremented on the rejected order.
+	if got, _ := items.FindByID(ctx, item.ID); *got.AvailableQuantity != 10 {
+		t.Errorf("stock = %d, want 10 (order rejected)", *got.AvailableQuantity)
+	}
+}
+
 func TestOrderService_CustomerOwnership(t *testing.T) {
 	svc, items, _ := orderFixture(t, 1)
 	item := seedItem(t, items, 1, 5, 10)
