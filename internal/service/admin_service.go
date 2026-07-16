@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 )
@@ -10,12 +11,56 @@ import (
 // the admin role at the router; this layer clears secrets and normalises
 // paging.
 type AdminService struct {
-	admin domain.AdminRepository
+	admin  domain.AdminRepository
+	promos domain.PromoRepository
 }
 
-// NewAdminService builds an AdminService.
-func NewAdminService(admin domain.AdminRepository) *AdminService {
-	return &AdminService{admin: admin}
+// NewAdminService builds an AdminService. promos powers promo-code management.
+func NewAdminService(admin domain.AdminRepository, promos domain.PromoRepository) *AdminService {
+	return &AdminService{admin: admin, promos: promos}
+}
+
+// PromoInput is the data needed to create a promo code.
+type PromoInput struct {
+	Code          string
+	DiscountType  string
+	DiscountValue float64
+	MinOrder      float64
+	ValidFrom     *time.Time
+	ValidUntil    *time.Time
+	UsageLimit    int
+}
+
+// CreatePromo validates and persists a new promo code.
+func (s *AdminService) CreatePromo(ctx context.Context, in PromoInput) (*domain.PromoCode, error) {
+	p := &domain.PromoCode{
+		Code:          in.Code,
+		DiscountType:  in.DiscountType,
+		DiscountValue: in.DiscountValue,
+		MinOrder:      in.MinOrder,
+		ValidFrom:     in.ValidFrom,
+		ValidUntil:    in.ValidUntil,
+		UsageLimit:    in.UsageLimit,
+		IsActive:      true,
+	}
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+	if err := s.promos.Create(ctx, p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// ListPromos returns a page of all promo codes and the total.
+func (s *AdminService) ListPromos(ctx context.Context, limit, offset int) ([]*domain.PromoCode, int, error) {
+	limit, offset = normalisePaging(limit, offset)
+	return s.promos.List(ctx, limit, offset)
+}
+
+// SetPromoActive activates or deactivates a promo code.
+func (s *AdminService) SetPromoActive(ctx context.Context, id int, active bool) error {
+	return s.promos.SetActive(ctx, id, active)
 }
 
 // ListUsers returns a page of all users (password hashes cleared) and the total.

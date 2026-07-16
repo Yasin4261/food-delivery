@@ -29,6 +29,9 @@ type Order struct {
 	PaymentMethod *string `json:"payment_method,omitempty"`
 	PaymentStatus string  `json:"payment_status"`
 
+	// PromoCode is the applied discount code, snapshotted at placement (#94).
+	PromoCode *string `json:"promo_code,omitempty"`
+
 	// Delivery
 	DeliveryAddress       string     `json:"delivery_address"`
 	DeliveryCity          *string    `json:"delivery_city,omitempty"`

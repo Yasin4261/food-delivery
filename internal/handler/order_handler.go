@@ -33,6 +33,7 @@ type placeOrderRequest struct {
 	// AddressID selects a saved address-book entry (mutually exclusive with
 	// DeliveryAddress).
 	AddressID         *int               `json:"address_id"`
+	PromoCode         string             `json:"promo_code"`
 	DeliveryAddress   string             `json:"delivery_address"`
 	DeliveryCity      string             `json:"delivery_city"`
 	DeliveryLatitude  *float64           `json:"delivery_latitude"`
@@ -53,6 +54,7 @@ func (req placeOrderRequest) toInput() service.PlaceOrderInput {
 	}
 	return service.PlaceOrderInput{
 		AddressID:         req.AddressID,
+		PromoCode:         req.PromoCode,
 		DeliveryAddress:   req.DeliveryAddress,
 		DeliveryCity:      req.DeliveryCity,
 		DeliveryLatitude:  req.DeliveryLatitude,

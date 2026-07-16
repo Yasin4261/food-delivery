@@ -205,3 +205,65 @@ func TestAdminHTTP_DeactivateChefHidesAndBlocks(t *testing.T) {
 		t.Errorf("order to deactivated chef = %d, want 404 (%s)", rec.Code, rec.Body)
 	}
 }
+
+func TestAdminHTTP_PromoCodesAndCheckout(t *testing.T) {
+	srv, _, users := newTestServerWithRepos()
+	admin := registerCustomerToken(t, srv, "boss", "boss@example.com")
+	promoteAdmin(t, users, "boss@example.com")
+	admin = loginToken(t, srv, "boss@example.com")
+
+	// Non-admin can't manage promos.
+	cust := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	if rec := do(t, srv, http.MethodGet, "/api/v2/admin/promos", cust, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("customer list promos = %d, want 403", rec.Code)
+	}
+
+	// Create a 20% code.
+	rec := do(t, srv, http.MethodPost, "/api/v2/admin/promos", admin,
+		`{"code":"welcome20","discount_type":"percent","discount_value":20}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create promo = %d (%s)", rec.Code, rec.Body)
+	}
+	var promo map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &promo)
+	if promo["code"] != "WELCOME20" {
+		t.Errorf("code not normalised: %v", promo["code"])
+	}
+
+	// Invalid definition -> 400.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/admin/promos", admin,
+		`{"code":"bad","discount_type":"half","discount_value":10}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad promo type = %d, want 400", rec.Code)
+	}
+	// Duplicate -> 409.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/admin/promos", admin,
+		`{"code":"welcome20","discount_type":"fixed","discount_value":5}`); rec.Code != http.StatusConflict {
+		t.Errorf("duplicate promo = %d, want 409", rec.Code)
+	}
+
+	// A customer applies it at checkout.
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	_ = chefToken
+	body := `{"delivery_address":"x","payment_method":"cash","promo_code":"welcome20","items":[{"menu_item_id":` + itoa(itemID) + `,"quantity":2}]}`
+	rec = do(t, srv, http.MethodPost, "/api/v2/orders", cust, body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("order with promo = %d (%s)", rec.Code, rec.Body)
+	}
+	var order map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &order)
+	if order["discount"] != float64(2) { // seedChefWithItem price 5 * 2 = 10, 20% = 2
+		t.Errorf("discount = %v, want 2", order["discount"])
+	}
+	if order["promo_code"] != "WELCOME20" {
+		t.Errorf("promo not snapshotted on order: %v", order["promo_code"])
+	}
+
+	// Deactivate it -> a new order can't use it (422).
+	id := int(promo["id"].(float64))
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/promos/"+itoa(id)+"/active", admin, `{"active":false}`); rec.Code != http.StatusOK {
+		t.Fatalf("deactivate promo = %d", rec.Code)
+	}
+	if rec := do(t, srv, http.MethodPost, "/api/v2/orders", cust, body); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("order with deactivated promo = %d, want 422", rec.Code)
+	}
+}

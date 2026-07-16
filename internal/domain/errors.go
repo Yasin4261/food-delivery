@@ -43,6 +43,15 @@ var (
 	// ErrChefClosed rejects orders placed outside a chef's working hours.
 	ErrChefClosed = errors.New("the chef is currently closed")
 
+	ErrPromoNotFound      = errors.New("promo code not found")
+	ErrPromoCodeRequired  = errors.New("promo code is required")
+	ErrPromoInvalid       = errors.New("invalid promo code definition")
+	ErrPromoExists        = errors.New("a promo code with that name already exists")
+	ErrPromoNotRedeemable = errors.New("this promo code is not valid")
+	ErrPromoExpired       = errors.New("this promo code has expired")
+	ErrPromoUsedUp        = errors.New("this promo code has reached its usage limit")
+	ErrPromoMinOrder      = errors.New("your order is below the minimum for this promo code")
+
 	ErrAddressNotFound       = errors.New("address not found")
 	ErrAddressLabelRequired  = errors.New("address label is required")
 	ErrAddressLabelTooLong   = errors.New("address label must be at most 50 characters")

@@ -205,7 +205,9 @@ func buildTestServer() testDeps {
 	orderRepo := newFakeOrderRepo()
 	addressRepo := newFakeAddressRepo()
 	paymentService := service.NewPaymentService(newFakePaymentSessionRepo(), orderRepo, userRepo, payment.NewMock("http://app.test"), "http://app.test")
+	promoRepo := newFakePromoRepo()
 	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo, addressRepo, hoursRepo, nil, domain.FeePolicy{}, paymentService, nil)
+	orderService.SetPromoRepository(promoRepo)
 	addressService := service.NewAddressService(addressRepo)
 	favoriteService := service.NewFavoriteService(newFakeFavoriteRepo(chefRepo), chefRepo)
 	reviewService := service.NewReviewService(newFakeReviewRepo(), orderRepo)
@@ -221,7 +223,7 @@ func buildTestServer() testDeps {
 	orderHandler := handler.NewOrderHandler(orderService, nil)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	addressHandler := handler.NewAddressHandler(addressService)
-	adminService := service.NewAdminService(newFakeAdminRepo(userRepo, chefRepo, orderRepo))
+	adminService := service.NewAdminService(newFakeAdminRepo(userRepo, chefRepo, orderRepo), promoRepo)
 	adminHandler := handler.NewAdminHandler(adminService)
 	uploadDir := os.TempDir() + "/food-delivery-test-uploads"
 	fileStore, _ := storage.NewLocal(uploadDir)

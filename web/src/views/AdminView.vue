@@ -1,15 +1,17 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { api, page } from '@/api/client'
 import { statusClass } from '@/lib/status'
 
 const tab = ref('overview')
-const tabs = ['overview', 'users', 'chefs', 'orders']
+const tabs = ['overview', 'users', 'chefs', 'orders', 'promos']
 
 const stats = ref(null)
 const users = ref([])
 const chefs = ref([])
 const orders = ref([])
+const promos = ref([])
+const newPromo = reactive({ code: '', discount_type: 'percent', discount_value: '', min_order: '', usage_limit: '' })
 const error = ref('')
 
 async function loadStats() {
@@ -41,12 +43,47 @@ async function loadOrders() {
   }
 }
 
+async function loadPromos() {
+  try {
+    promos.value = page(await api.get('/admin/promos?limit=100')).items
+  } catch (e) {
+    error.value = e.message
+  }
+}
+async function createPromo() {
+  error.value = ''
+  try {
+    const p = {
+      code: newPromo.code,
+      discount_type: newPromo.discount_type,
+      discount_value: Number(newPromo.discount_value),
+      min_order: Number(newPromo.min_order) || 0,
+      usage_limit: Number(newPromo.usage_limit) || 0,
+    }
+    await api.post('/admin/promos', p)
+    newPromo.code = newPromo.discount_value = newPromo.min_order = newPromo.usage_limit = ''
+    await loadPromos()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+async function togglePromo(p) {
+  error.value = ''
+  try {
+    const r = await api.patch(`/admin/promos/${p.id}/active`, { active: !p.is_active })
+    p.is_active = r.active
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
 function select(t) {
   tab.value = t
   error.value = ''
   if (t === 'users' && !users.value.length) loadUsers()
   if (t === 'chefs' && !chefs.value.length) loadChefs()
   if (t === 'orders' && !orders.value.length) loadOrders()
+  if (t === 'promos' && !promos.value.length) loadPromos()
 }
 
 async function toggleUser(u) {
@@ -155,6 +192,35 @@ onMounted(loadStats)
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Promo codes -->
+    <div v-else-if="tab === 'promos'" class="space-y-4">
+      <form class="card grid gap-2 sm:grid-cols-6" @submit.prevent="createPromo">
+        <input v-model="newPromo.code" class="input uppercase sm:col-span-2" :placeholder="$t('admin.promoCode')" required />
+        <select v-model="newPromo.discount_type" class="input">
+          <option value="percent">%</option>
+          <option value="fixed">$</option>
+        </select>
+        <input v-model="newPromo.discount_value" type="number" min="0" step="0.5" class="input" :placeholder="$t('admin.promoValue')" required />
+        <input v-model="newPromo.min_order" type="number" min="0" class="input" :placeholder="$t('admin.promoMin')" />
+        <input v-model="newPromo.usage_limit" type="number" min="0" class="input" :placeholder="$t('admin.promoLimit')" />
+        <button class="btn-primary sm:col-span-6">{{ $t('admin.promoCreate') }}</button>
+      </form>
+      <div class="card overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-left text-gray-500"><tr><th class="py-1">{{ $t('admin.promoCode') }}</th><th>{{ $t('admin.promoDiscount') }}</th><th>{{ $t('admin.promoUsage') }}</th><th>{{ $t('admin.status') }}</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="p in promos" :key="p.id" class="border-t border-gray-100">
+              <td class="py-1.5 font-mono font-medium">{{ p.code }}</td>
+              <td>{{ p.discount_type === 'percent' ? `${p.discount_value}%` : `$${p.discount_value.toFixed(2)}` }}<span v-if="p.min_order > 0" class="text-gray-400"> · min ${{ p.min_order.toFixed(2) }}</span></td>
+              <td>{{ p.used_count }}<span v-if="p.usage_limit > 0"> / {{ p.usage_limit }}</span></td>
+              <td><span class="badge" :class="p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ p.is_active ? $t('admin.active') : $t('admin.inactive') }}</span></td>
+              <td class="text-right"><button class="text-sm hover:underline" :class="p.is_active ? 'text-red-600' : 'text-green-600'" @click="togglePromo(p)">{{ p.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>

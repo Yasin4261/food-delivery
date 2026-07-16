@@ -58,7 +58,8 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrOrderNotFound),
 		errors.Is(err, domain.ErrConversationNotFound),
 		errors.Is(err, domain.ErrPaymentSessionNotFound),
-		errors.Is(err, domain.ErrAddressNotFound):
+		errors.Is(err, domain.ErrAddressNotFound),
+		errors.Is(err, domain.ErrPromoNotFound):
 		respondError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, domain.ErrForbidden):
 		respondError(w, http.StatusForbidden, err.Error())
@@ -70,6 +71,8 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrGalleryFull),
 		errors.Is(err, domain.ErrInvalidWeekday),
 		errors.Is(err, domain.ErrInvalidHoursWindow),
+		errors.Is(err, domain.ErrPromoCodeRequired),
+		errors.Is(err, domain.ErrPromoInvalid),
 		errors.Is(err, domain.ErrAddressLabelRequired),
 		errors.Is(err, domain.ErrAddressLabelTooLong),
 		errors.Is(err, domain.ErrAddressRequired),
@@ -77,6 +80,10 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		respondError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, domain.ErrEmptyOrder),
 		errors.Is(err, domain.ErrChefClosed),
+		errors.Is(err, domain.ErrPromoNotRedeemable),
+		errors.Is(err, domain.ErrPromoExpired),
+		errors.Is(err, domain.ErrPromoUsedUp),
+		errors.Is(err, domain.ErrPromoMinOrder),
 		errors.Is(err, domain.ErrItemNotOrderable),
 		errors.Is(err, domain.ErrItemOutOfStock),
 		errors.Is(err, domain.ErrInvalidStatusTransition),
@@ -88,7 +95,8 @@ func respondDomainError(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrEmailAlreadyExists),
 		errors.Is(err, domain.ErrUsernameAlreadyExists),
 		errors.Is(err, domain.ErrChefProfileExists),
-		errors.Is(err, domain.ErrReviewExists):
+		errors.Is(err, domain.ErrReviewExists),
+		errors.Is(err, domain.ErrPromoExists):
 		respondError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrInvalidCredentials),
 		errors.Is(err, domain.ErrAccountInactive):

@@ -10,6 +10,7 @@ const router = useRouter()
 const deliveryAddress = ref('')
 const paymentMethod = ref('cash')
 const notes = ref('')
+const promoCode = ref('')
 const error = ref('')
 const placing = ref(false)
 
@@ -40,6 +41,7 @@ async function placeOrder() {
     }
     if (usingSaved.value) payload.address_id = selectedAddressId.value
     else payload.delivery_address = deliveryAddress.value
+    if (promoCode.value.trim()) payload.promo_code = promoCode.value.trim()
     const order = await api.post('/orders', payload)
     cart.clear()
     router.push({ name: 'orders', query: { placed: order.id } })
@@ -113,6 +115,10 @@ async function placeOrder() {
         <div>
           <label class="label">{{ $t('cart.notes') }}</label>
           <input v-model="notes" class="input" />
+        </div>
+        <div>
+          <label class="label">{{ $t('cart.promo') }}</label>
+          <input v-model="promoCode" class="input uppercase" :placeholder="$t('cart.promoPlaceholder')" />
         </div>
         <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
         <button class="btn-primary w-full" :disabled="placing">

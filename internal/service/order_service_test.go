@@ -608,3 +608,101 @@ func TestOrderService_ETAOnConfirm(t *testing.T) {
 		t.Error("ETA drifted when the second chef confirmed")
 	}
 }
+
+// fakefakePromoRepo is a tiny in-memory promo repo for the order-service test.
+type svcPromoRepo struct {
+	promo    *domain.PromoCode
+	redeemed int
+}
+
+func (f *svcPromoRepo) Create(context.Context, *domain.PromoCode) error { return nil }
+func (f *svcPromoRepo) FindByCode(_ context.Context, code string) (*domain.PromoCode, error) {
+	if f.promo != nil && f.promo.Code == domain.NormaliseCode(code) {
+		cp := *f.promo
+		return &cp, nil
+	}
+	return nil, domain.ErrPromoNotFound
+}
+func (f *svcPromoRepo) Redeem(_ context.Context, id int) error { f.redeemed++; return nil }
+func (f *svcPromoRepo) List(context.Context, int, int) ([]*domain.PromoCode, int, error) {
+	return nil, 0, nil
+}
+func (f *svcPromoRepo) SetActive(context.Context, int, bool) error { return nil }
+
+func TestOrderService_PromoDiscount(t *testing.T) {
+	ctx := context.Background()
+	chefRepo := newFakeChefRepo()
+	if err := chefRepo.Create(ctx, &domain.Chef{UserID: 1, IsActive: true}); err != nil {
+		t.Fatalf("seed chef: %v", err)
+	}
+	items := newFakeMenuItemRepo()
+	svc := service.NewOrderService(newFakeOrderRepo(), items, chefRepo, nil, nil, nil, domain.FeePolicy{}, nil, nil)
+	promos := &svcPromoRepo{promo: &domain.PromoCode{
+		ID: 1, Code: "SAVE10", DiscountType: domain.PromoPercent, DiscountValue: 10, IsActive: true,
+	}}
+	svc.SetPromoRepository(promos)
+
+	a := seedItem(t, items, 1, 100, 10)
+	order, err := svc.PlaceOrder(ctx, 3, service.PlaceOrderInput{
+		DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCash, PromoCode: "save10",
+		Lines: []service.OrderLineInput{{MenuItemID: a.ID, Quantity: 1}},
+	})
+	if err != nil {
+		t.Fatalf("place with promo: %v", err)
+	}
+	if order.Discount != 10 { // 10% of 100
+		t.Errorf("discount = %v, want 10", order.Discount)
+	}
+	if order.TotalPrice != 90 {
+		t.Errorf("total = %v, want 90 (100 - 10)", order.TotalPrice)
+	}
+	if order.PromoCode == nil || *order.PromoCode != "SAVE10" {
+		t.Errorf("promo not snapshotted: %v", order.PromoCode)
+	}
+	if promos.redeemed != 1 {
+		t.Errorf("redeemed = %d, want 1", promos.redeemed)
+	}
+	// The chef's slice subtotal is undiscounted (earnings unaffected).
+	if order.SubOrders[0].Subtotal != 100 {
+		t.Errorf("sub-order subtotal = %v, want 100 (undiscounted)", order.SubOrders[0].Subtotal)
+	}
+}
+
+func TestOrderService_PromoRejections(t *testing.T) {
+	ctx := context.Background()
+	newSvc := func(promo *domain.PromoCode) (*service.OrderService, *fakeMenuItemRepo) {
+		chefRepo := newFakeChefRepo()
+		_ = chefRepo.Create(ctx, &domain.Chef{UserID: 1, IsActive: true})
+		items := newFakeMenuItemRepo()
+		svc := service.NewOrderService(newFakeOrderRepo(), items, chefRepo, nil, nil, nil, domain.FeePolicy{}, nil, nil)
+		svc.SetPromoRepository(&svcPromoRepo{promo: promo})
+		return svc, items
+	}
+	place := func(svc *service.OrderService, items *fakeMenuItemRepo, code string) error {
+		item := seedItem(t, items, 1, 30, 10)
+		_, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
+			DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCash, PromoCode: code,
+			Lines: []service.OrderLineInput{{MenuItemID: item.ID, Quantity: 1}},
+		})
+		return err
+	}
+
+	t.Run("unknown code", func(t *testing.T) {
+		svc, items := newSvc(nil)
+		if err := place(svc, items, "NOPE"); !errors.Is(err, domain.ErrPromoNotFound) {
+			t.Errorf("err = %v, want ErrPromoNotFound", err)
+		}
+	})
+	t.Run("below minimum", func(t *testing.T) {
+		svc, items := newSvc(&domain.PromoCode{Code: "BIG", DiscountType: domain.PromoFixed, DiscountValue: 5, MinOrder: 100, IsActive: true})
+		if err := place(svc, items, "BIG"); !errors.Is(err, domain.ErrPromoMinOrder) {
+			t.Errorf("err = %v, want ErrPromoMinOrder", err)
+		}
+	})
+	t.Run("inactive", func(t *testing.T) {
+		svc, items := newSvc(&domain.PromoCode{Code: "OFF", DiscountType: domain.PromoPercent, DiscountValue: 10, IsActive: false})
+		if err := place(svc, items, "OFF"); !errors.Is(err, domain.ErrPromoNotRedeemable) {
+			t.Errorf("err = %v, want ErrPromoNotRedeemable", err)
+		}
+	})
+}

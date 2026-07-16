@@ -163,7 +163,8 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	paymentService := service.NewPaymentService(paymentSessionRepo, orderRepo, userRepo, gateway, cfg.AppBaseURL)
 	addressRepo := repository.NewAddressRepository(db.DB)
 	addressService := service.NewAddressService(addressRepo)
-	adminService := service.NewAdminService(repository.NewAdminRepository(db.DB))
+	promoRepo := repository.NewPromoRepository(db.DB)
+	adminService := service.NewAdminService(repository.NewAdminRepository(db.DB), promoRepo)
 	fileStore, err := storage.NewLocal(cfg.UploadDir)
 	if err != nil {
 		log.Fatalf("upload storage: %v", err)
@@ -177,6 +178,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	}
 	orderService := service.NewOrderService(orderRepo, menuItemRepo, chefRepo, addressRepo, chefHoursRepo, loc, feePolicy, paymentService, orderNotifier)
 	orderService.SetETAWindow(time.Duration(cfg.ETAMinutes) * time.Minute)
+	orderService.SetPromoRepository(promoRepo)
 	favoriteService := service.NewFavoriteService(favoriteRepo, chefRepo)
 	reviewService := service.NewReviewService(reviewRepo, orderRepo)
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
