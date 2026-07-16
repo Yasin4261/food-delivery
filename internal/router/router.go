@@ -180,6 +180,9 @@ func (r *Router) Setup() http.Handler {
 	r.handleAdmin("GET /api/v2/admin/orders", r.adminHandler.ListOrders)
 	r.handleAdmin("GET /api/v2/admin/chefs", r.adminHandler.ListChefs)
 	r.handleAdmin("PATCH /api/v2/admin/chefs/{id}/active", r.adminHandler.SetChefActive)
+	r.handleAdmin("GET /api/v2/admin/promos", r.adminHandler.ListPromos)
+	r.handleAdmin("POST /api/v2/admin/promos", r.adminHandler.CreatePromo)
+	r.handleAdmin("PATCH /api/v2/admin/promos/{id}/active", r.adminHandler.SetPromoActive)
 
 	// Notification badge counts, polled by the SPA.
 	r.handleAuth("GET /api/v2/notifications/summary", r.orderHandler.Summary)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/service"
@@ -109,4 +110,67 @@ func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, stats)
+}
+
+type createPromoRequest struct {
+	Code          string     `json:"code"`
+	DiscountType  string     `json:"discount_type"`
+	DiscountValue float64    `json:"discount_value"`
+	MinOrder      float64    `json:"min_order"`
+	ValidFrom     *time.Time `json:"valid_from"`
+	ValidUntil    *time.Time `json:"valid_until"`
+	UsageLimit    int        `json:"usage_limit"`
+}
+
+// ListPromos handles GET /api/v2/admin/promos (admin).
+func (h *AdminHandler) ListPromos(w http.ResponseWriter, r *http.Request) {
+	limit, offset := queryInt(r, "limit", 50), queryInt(r, "offset", 0)
+	promos, total, err := h.admin.ListPromos(r.Context(), limit, offset)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondPage(w, promos, limit, offset, total)
+}
+
+// CreatePromo handles POST /api/v2/admin/promos (admin).
+func (h *AdminHandler) CreatePromo(w http.ResponseWriter, r *http.Request) {
+	var req createPromoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	promo, err := h.admin.CreatePromo(r.Context(), service.PromoInput{
+		Code:          req.Code,
+		DiscountType:  req.DiscountType,
+		DiscountValue: req.DiscountValue,
+		MinOrder:      req.MinOrder,
+		ValidFrom:     req.ValidFrom,
+		ValidUntil:    req.ValidUntil,
+		UsageLimit:    req.UsageLimit,
+	})
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusCreated, promo)
+}
+
+// SetPromoActive handles PATCH /api/v2/admin/promos/{id}/active (admin).
+func (h *AdminHandler) SetPromoActive(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid promo id")
+		return
+	}
+	var req activeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.admin.SetPromoActive(r.Context(), id, req.Active); err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]bool{"active": req.Active})
 }

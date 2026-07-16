@@ -25,11 +25,15 @@ type OrderService struct {
 	loc       *time.Location             // platform TZ for the working-hours check
 	policy    domain.FeePolicy           // delivery fees + commission (#65); zero value = free
 	etaWindow time.Duration              // ETA stamped when a chef accepts (#92); 0 disables
+	promos    domain.PromoRepository     // promo-code discounts (#94); nil disables
 }
 
 // SetETAWindow configures the prep+delivery window used to stamp an order's
 // estimated delivery time when a chef accepts it. Zero disables ETAs.
 func (s *OrderService) SetETAWindow(d time.Duration) { s.etaWindow = d }
+
+// SetPromoRepository enables promo-code discounts at checkout (nil disables).
+func (s *OrderService) SetPromoRepository(p domain.PromoRepository) { s.promos = p }
 
 // NewOrderService builds an OrderService. addresses resolves a saved
 // address_id at placement (nil rejects address_id orders); hours enforces
@@ -56,6 +60,7 @@ type OrderLineInput struct {
 // order history.
 type PlaceOrderInput struct {
 	AddressID         *int
+	PromoCode         string
 	DeliveryAddress   string
 	DeliveryCity      string
 	DeliveryLatitude  *float64
@@ -182,6 +187,25 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 		order.DeliveryFee += sub.DeliveryFee
 	}
 	order.DeliveryFee = domain.RoundMoney(order.DeliveryFee)
+
+	// Promo code (#94): platform-funded discount off the food subtotal. It's
+	// validated + atomically redeemed (usage cap is race-free) and snapshotted
+	// onto the order; the chef's earnings come from the undiscounted
+	// sub-order subtotals, so they're unaffected.
+	if code := strings.TrimSpace(in.PromoCode); code != "" && s.promos != nil {
+		promo, err := s.promos.FindByCode(ctx, code)
+		if err != nil {
+			return nil, err
+		}
+		if err := promo.Redeemable(subtotal, time.Now()); err != nil {
+			return nil, err
+		}
+		if err := s.promos.Redeem(ctx, promo.ID); err != nil {
+			return nil, err // ErrPromoUsedUp if the cap was hit concurrently
+		}
+		order.Discount = promo.DiscountFor(subtotal)
+		order.PromoCode = &promo.Code
+	}
 
 	order.TotalPrice = domain.RoundMoney(subtotal + order.DeliveryFee + order.ServiceFee + order.Tax - order.Discount)
 

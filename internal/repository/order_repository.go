@@ -23,7 +23,7 @@ func NewOrderRepository(db *sql.DB) *OrderRepository {
 const orderColumns = `
 	id, order_code, user_id,
 	subtotal, delivery_fee, service_fee, tax, discount, total_price,
-	status, payment_method, payment_status,
+	status, payment_method, payment_status, promo_code,
 	delivery_address, delivery_city, delivery_latitude, delivery_longitude,
 	estimated_delivery_time, actual_delivery_time,
 	customer_notes, chef_notes, delivery_notes,
@@ -34,7 +34,7 @@ func scanOrder(s interface{ Scan(...any) error }) (*domain.Order, error) {
 	err := s.Scan(
 		&o.ID, &o.OrderCode, &o.UserID,
 		&o.Subtotal, &o.DeliveryFee, &o.ServiceFee, &o.Tax, &o.Discount, &o.TotalPrice,
-		&o.Status, &o.PaymentMethod, &o.PaymentStatus,
+		&o.Status, &o.PaymentMethod, &o.PaymentStatus, &o.PromoCode,
 		&o.DeliveryAddress, &o.DeliveryCity, &o.DeliveryLatitude, &o.DeliveryLongitude,
 		&o.EstimatedDeliveryTime, &o.ActualDeliveryTime,
 		&o.CustomerNotes, &o.ChefNotes, &o.DeliveryNotes,
@@ -81,11 +81,11 @@ func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
 		INSERT INTO orders (
 			order_code, user_id,
 			subtotal, delivery_fee, service_fee, tax, discount, total_price,
-			status, payment_method, payment_status,
+			status, payment_method, payment_status, promo_code,
 			delivery_address, delivery_city, delivery_latitude, delivery_longitude,
 			customer_notes
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 		)
 		RETURNING id, created_at, updated_at`
 
@@ -93,7 +93,7 @@ func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
 		ctx, orderQuery,
 		o.OrderCode, o.UserID,
 		o.Subtotal, o.DeliveryFee, o.ServiceFee, o.Tax, o.Discount, o.TotalPrice,
-		o.Status, o.PaymentMethod, o.PaymentStatus,
+		o.Status, o.PaymentMethod, o.PaymentStatus, o.PromoCode,
 		o.DeliveryAddress, o.DeliveryCity, o.DeliveryLatitude, o.DeliveryLongitude,
 		o.CustomerNotes,
 	).Scan(&o.ID, &o.CreatedAt, &o.UpdatedAt)
