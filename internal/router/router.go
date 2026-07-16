@@ -190,6 +190,7 @@ func (r *Router) Setup() http.Handler {
 	r.handleAuth("GET /api/v2/chat/conversations", r.chatHandler.ListConversations)
 	r.handleAuth("POST /api/v2/chat/conversations/{id}/messages", r.chatHandler.PostMessage)
 	r.handleAuth("GET /api/v2/chat/conversations/{id}/messages", r.chatHandler.ListMessages)
+	r.handleAuth("POST /api/v2/chat/conversations/{id}/read", r.chatHandler.MarkRead)
 	r.handleAuth("GET /api/v2/chat/conversations/{id}/ws", r.chatHandler.WebSocket)
 
 	return r.mux

@@ -21,4 +21,7 @@ type ChatRepository interface {
 	// ListMessages returns a page of a conversation's messages (oldest first)
 	// and the total message count.
 	ListMessages(ctx context.Context, conversationID, limit, offset int) ([]*Message, int, error)
+	// MarkRead stamps read_at on the conversation's messages NOT sent by
+	// readerUserID that are still unread.
+	MarkRead(ctx context.Context, conversationID, readerUserID int) error
 }

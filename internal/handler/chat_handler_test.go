@@ -249,3 +249,46 @@ func TestChat_WebSocketLiveDelivery(t *testing.T) {
 		t.Errorf("stranger dial should be 403, got err=%v resp=%v", err, resp)
 	}
 }
+
+func (f *fakeChatRepo) MarkRead(_ context.Context, conversationID, readerUserID int) error {
+	now := time.Now()
+	for _, m := range f.msgs {
+		if m.ConversationID == conversationID && m.SenderID != readerUserID && m.ReadAt == nil {
+			m.ReadAt = &now
+		}
+	}
+	return nil
+}
+
+func TestChat_MarkRead(t *testing.T) {
+	srv := newTestServer()
+	chefToken, _ := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	convID := startConversation(t, srv, customer)
+	path := "/api/v2/chat/conversations/" + itoa(convID)
+
+	// Customer sends a message; the chef reads the thread.
+	if rec := do(t, srv, http.MethodPost, path+"/messages", customer, `{"body":"hi chef"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("post message = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// A non-participant cannot mark it read.
+	stranger := registerCustomerToken(t, srv, "stranger", "stranger@example.com")
+	if rec := do(t, srv, http.MethodPost, path+"/read", stranger, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("stranger mark read = %d, want 403", rec.Code)
+	}
+	// Anonymous -> 401.
+	if rec := do(t, srv, http.MethodPost, path+"/read", "", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anon mark read = %d, want 401", rec.Code)
+	}
+
+	// The chef marks it read -> 204; the customer's message now has read_at.
+	if rec := do(t, srv, http.MethodPost, path+"/read", chefToken, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("chef mark read = %d (%s)", rec.Code, rec.Body)
+	}
+	rec := do(t, srv, http.MethodGet, path+"/messages", chefToken, "")
+	msgs := decodePage[domain.Message](t, rec.Body.Bytes())
+	if len(msgs.Data) != 1 || msgs.Data[0].ReadAt == nil {
+		t.Errorf("message read_at not set after mark read: %+v", msgs.Data)
+	}
+}

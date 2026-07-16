@@ -187,3 +187,13 @@ func TestChatService_EmptyMessageRejected(t *testing.T) {
 		t.Errorf("empty message = %v, want ErrEmptyMessage", err)
 	}
 }
+
+func (f *fakeChatRepo) MarkRead(_ context.Context, conversationID, readerUserID int) error {
+	now := time.Now()
+	for _, m := range f.msgs {
+		if m.ConversationID == conversationID && m.SenderID != readerUserID && m.ReadAt == nil {
+			m.ReadAt = &now
+		}
+	}
+	return nil
+}

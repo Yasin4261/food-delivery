@@ -66,18 +66,30 @@ func (r *ChatRepository) CreateConversation(ctx context.Context, c *domain.Conve
 	return nil
 }
 
-// ListConversationsByUser returns a customer's threads, most recently active first.
+// In a conversation only the customer (c.user_id) and the chef send messages,
+// so a side's unread count is expressible purely from c.user_id — no need to
+// know the requester's user id.
+const unreadForCustomer = `(SELECT count(*) FROM chat_messages m
+	WHERE m.conversation_id = c.id AND m.sender_id <> c.user_id AND m.read_at IS NULL)`
+const unreadForChef = `(SELECT count(*) FROM chat_messages m
+	WHERE m.conversation_id = c.id AND m.sender_id = c.user_id AND m.read_at IS NULL)`
+
+// ListConversationsByUser returns a customer's threads, most recently active
+// first, each with the customer's unread count.
 func (r *ChatRepository) ListConversationsByUser(ctx context.Context, userID int) ([]*domain.Conversation, error) {
-	return r.listConversations(ctx, `SELECT `+conversationColumns+`
-		FROM chat_conversations WHERE user_id = $1
-		ORDER BY last_message_at DESC NULLS LAST, created_at DESC`, userID)
+	return r.listConversations(ctx, `
+		SELECT `+conversationColumns+`, `+unreadForCustomer+` AS unread
+		FROM chat_conversations c WHERE c.user_id = $1
+		ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC`, userID)
 }
 
-// ListConversationsByChef returns a chef's threads, most recently active first.
+// ListConversationsByChef returns a chef's threads, most recently active
+// first, each with the chef's unread count.
 func (r *ChatRepository) ListConversationsByChef(ctx context.Context, chefID int) ([]*domain.Conversation, error) {
-	return r.listConversations(ctx, `SELECT `+conversationColumns+`
-		FROM chat_conversations WHERE chef_id = $1
-		ORDER BY last_message_at DESC NULLS LAST, created_at DESC`, chefID)
+	return r.listConversations(ctx, `
+		SELECT `+conversationColumns+`, `+unreadForChef+` AS unread
+		FROM chat_conversations c WHERE c.chef_id = $1
+		ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC`, chefID)
 }
 
 func (r *ChatRepository) listConversations(ctx context.Context, query string, arg int) ([]*domain.Conversation, error) {
@@ -89,13 +101,25 @@ func (r *ChatRepository) listConversations(ctx context.Context, query string, ar
 
 	out := make([]*domain.Conversation, 0)
 	for rows.Next() {
-		c, err := scanConversation(rows)
-		if err != nil {
+		c := &domain.Conversation{}
+		if err := rows.Scan(&c.ID, &c.UserID, &c.ChefID, &c.OrderID, &c.LastMessageAt, &c.CreatedAt, &c.UnreadCount); err != nil {
 			return nil, fmt.Errorf("scan conversation: %w", err)
 		}
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// MarkRead stamps read_at on messages in the conversation not sent by the
+// reader that are still unread.
+func (r *ChatRepository) MarkRead(ctx context.Context, conversationID, readerUserID int) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE chat_messages SET read_at = now()
+		WHERE conversation_id = $1 AND sender_id <> $2 AND read_at IS NULL`, conversationID, readerUserID)
+	if err != nil {
+		return fmt.Errorf("mark read: %w", err)
+	}
+	return nil
 }
 
 // CreateMessage inserts a message and bumps the conversation's last_message_at
