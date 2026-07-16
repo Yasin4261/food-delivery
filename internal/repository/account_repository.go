@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
@@ -26,6 +28,16 @@ func NewAccountRepository(db *sql.DB) *AccountRepository {
 // The scrubbed email/username are made unique by the user id so the account's
 // UNIQUE constraints still hold and a fresh sign-up can reuse the real address.
 func (r *AccountRepository) Anonymise(ctx context.Context, userID int) error {
+	// A random suffix makes the scrubbed email/username collision-proof: a
+	// deterministic 'deleted-<id>' could be pre-registered by an attacker to
+	// trip the UNIQUE constraint and permanently block the deletion (#113).
+	suffix, err := randomSuffix()
+	if err != nil {
+		return err
+	}
+	email := fmt.Sprintf("deleted-%d-%s@removed.invalid", userID, suffix)
+	username := fmt.Sprintf("deleted-%d-%s", userID, suffix)
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("anonymise: begin: %w", err)
@@ -36,8 +48,8 @@ func (r *AccountRepository) Anonymise(ctx context.Context, userID int) error {
 	// blocked by is_active, this removes the credential too) and deactivate.
 	res, err := tx.ExecContext(ctx, `
 		UPDATE users SET
-			email = 'deleted-' || id || '@removed.invalid',
-			username = 'deleted-' || id,
+			email = $2,
+			username = $3,
 			phone_number = NULL,
 			address = NULL, city = NULL, state = NULL, zip_code = NULL,
 			latitude = NULL, longitude = NULL,
@@ -45,7 +57,7 @@ func (r *AccountRepository) Anonymise(ctx context.Context, userID int) error {
 			is_active = false,
 			email_notifications = false,
 			updated_at = now()
-		WHERE id = $1`, userID)
+		WHERE id = $1`, userID, email, username)
 	if err != nil {
 		return fmt.Errorf("anonymise user: %w", err)
 	}
@@ -92,4 +104,14 @@ func (r *AccountRepository) Anonymise(ctx context.Context, userID int) error {
 		return fmt.Errorf("anonymise: commit: %w", err)
 	}
 	return nil
+}
+
+// randomSuffix returns 8 random bytes, hex-encoded, for collision-proof
+// anonymised identifiers.
+func randomSuffix() (string, error) {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", fmt.Errorf("anonymise: random suffix: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
 }

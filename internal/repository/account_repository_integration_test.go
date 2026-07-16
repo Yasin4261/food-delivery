@@ -3,6 +3,7 @@
 package repository_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
@@ -100,6 +101,38 @@ func TestAccountRepository_Anonymise(t *testing.T) {
 	}
 	if len(msgs) != 1 || msgs[0].Body != "[deleted]" {
 		t.Errorf("message body not tombstoned: %+v", msgs)
+	}
+}
+
+// TestAccountRepository_AnonymiseSurvivesSentinelCollision guards #113: a
+// pre-registered 'deleted-<id>@removed.invalid' must not block deletion.
+func TestAccountRepository_AnonymiseSurvivesSentinelCollision(t *testing.T) {
+	resetDB(t)
+	accountRepo := repository.NewAccountRepository(testDB)
+	userRepo := repository.NewUserRepository(testDB)
+
+	victim := seedUser(t, "target@example.com")
+
+	// An attacker squats the deterministic sentinel for the victim's id.
+	squatter := domain.NewUser(
+		fmt.Sprintf("deleted-%d", victim.ID),
+		fmt.Sprintf("deleted-%d@removed.invalid", victim.ID),
+		"hash",
+	)
+	if err := userRepo.Create(ctx(), squatter); err != nil {
+		t.Fatalf("seed squatter: %v", err)
+	}
+
+	// Deletion must still succeed (random suffix avoids the collision).
+	if err := accountRepo.Anonymise(ctx(), victim.ID); err != nil {
+		t.Fatalf("anonymise should survive a sentinel collision: %v", err)
+	}
+	got, _ := userRepo.FindByID(ctx(), victim.ID)
+	if got.IsActive || got.Email == "target@example.com" {
+		t.Errorf("victim not anonymised: %+v", got)
+	}
+	if got.Email == fmt.Sprintf("deleted-%d@removed.invalid", victim.ID) {
+		t.Errorf("anonymised email must not be the collidable sentinel: %q", got.Email)
 	}
 }
 
