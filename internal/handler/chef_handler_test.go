@@ -22,6 +22,9 @@ func newFakeChefRepo() *fakeChefRepo {
 func (f *fakeChefRepo) Create(_ context.Context, c *domain.Chef) error {
 	c.ID = f.nextID
 	f.nextID++
+	if !c.IsAcceptingOrders {
+		c.IsAcceptingOrders = true // chefs are open for business by default (see NewChef)
+	}
 	cp := *c
 	f.chefs[c.ID] = &cp
 	return nil
@@ -45,7 +48,7 @@ func (f *fakeChefRepo) FindByUserID(_ context.Context, userID int) (*domain.Chef
 func (f *fakeChefRepo) List(_ context.Context, fl domain.ChefListFilters, limit, offset int) ([]*domain.Chef, int, error) {
 	out := make([]*domain.Chef, 0)
 	for _, c := range f.chefs {
-		if c.IsActive && (!fl.OnlineOnly || c.IsOnline) && c.Rating >= fl.MinRating {
+		if c.IsActive && c.IsAcceptingOrders && (!fl.OnlineOnly || c.IsOnline) && c.Rating >= fl.MinRating {
 			cp := *c
 			out = append(out, &cp)
 		}
@@ -55,6 +58,13 @@ func (f *fakeChefRepo) List(_ context.Context, fl domain.ChefListFilters, limit,
 func (f *fakeChefRepo) SetOnline(_ context.Context, chefID int, online bool) error {
 	if c, ok := f.chefs[chefID]; ok {
 		c.IsOnline = online
+		return nil
+	}
+	return domain.ErrChefNotFound
+}
+func (f *fakeChefRepo) SetAcceptingOrders(_ context.Context, chefID int, accepting bool) error {
+	if c, ok := f.chefs[chefID]; ok {
+		c.IsAcceptingOrders = accepting
 		return nil
 	}
 	return domain.ErrChefNotFound
@@ -141,6 +151,44 @@ func TestChef_OnlineStatusToggleAndFilter(t *testing.T) {
 	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
 	if rec := do(t, srv, http.MethodPatch, "/api/v2/chefs/me/status", customer, `{"is_online":true}`); rec.Code != http.StatusForbidden {
 		t.Errorf("customer set status = %d, want 403", rec.Code)
+	}
+}
+
+func TestChef_AvailabilityToggleHidesAndBlocks(t *testing.T) {
+	srv := newTestServer()
+	token := registerAndToken(t, srv, "yasin", "yasin@example.com")
+	if rec := do(t, srv, http.MethodPost, "/api/v2/chefs", token,
+		`{"business_name":"K","kitchen_address":"addr"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("create chef = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// A new chef is accepting orders → visible in the default browse list.
+	rec := do(t, srv, http.MethodGet, "/api/v2/chefs", "", "")
+	if p := decodePage[domain.Chef](t, rec.Body.Bytes()); p.Total != 1 {
+		t.Fatalf("browse before away = %d chefs, want 1", p.Total)
+	}
+
+	// Go away.
+	rec = do(t, srv, http.MethodPatch, "/api/v2/chefs/me/availability", token, `{"accepting_orders":false}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set availability = %d, want 200 (%s)", rec.Code, rec.Body)
+	}
+	var chef domain.Chef
+	_ = json.Unmarshal(rec.Body.Bytes(), &chef)
+	if chef.IsAcceptingOrders {
+		t.Error("chef should not be accepting orders after going away")
+	}
+
+	// Now hidden from the default browse list.
+	rec = do(t, srv, http.MethodGet, "/api/v2/chefs", "", "")
+	if p := decodePage[domain.Chef](t, rec.Body.Bytes()); p.Total != 0 {
+		t.Errorf("browse while away = %d chefs, want 0", p.Total)
+	}
+
+	// A non-chef cannot toggle availability.
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/chefs/me/availability", customer, `{"accepting_orders":false}`); rec.Code != http.StatusForbidden {
+		t.Errorf("customer set availability = %d, want 403", rec.Code)
 	}
 }
 

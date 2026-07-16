@@ -178,6 +178,12 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 		if err != nil {
 			return nil, err
 		}
+		// Away / vacation mode (#104): the chef has paused new orders. Their
+		// dishes are already hidden from browse/search, but a stale cart could
+		// still reach here — reject it.
+		if !chef.IsAcceptingOrders {
+			return nil, domain.ErrChefUnavailable
+		}
 		distance := -1.0 // unknown: base fee only
 		if chef.HasLocation() && in.DeliveryLatitude != nil && in.DeliveryLongitude != nil {
 			distance = domain.CalculateDistance(*chef.KitchenLatitude, *chef.KitchenLongitude, *in.DeliveryLatitude, *in.DeliveryLongitude)

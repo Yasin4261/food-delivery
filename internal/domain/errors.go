@@ -26,6 +26,9 @@ var (
 
 	ErrChefNotFound      = errors.New("chef not found")
 	ErrChefProfileExists = errors.New("chef profile already exists for this user")
+	// ErrChefUnavailable rejects orders for a chef who has paused new orders
+	// (away / vacation mode). Distinct from ErrChefClosed (outside working hours).
+	ErrChefUnavailable = errors.New("the chef is not currently accepting orders")
 
 	ErrMenuNotFound     = errors.New("menu not found")
 	ErrMenuItemNotFound = errors.New("menu item not found")

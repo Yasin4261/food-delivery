@@ -25,6 +25,9 @@ type ChefRepository interface {
 	FindNearby(ctx context.Context, lat, lng float64, limit int, onlineOnly bool) ([]*Chef, error)
 	// SetOnline updates a chef's live presence flag.
 	SetOnline(ctx context.Context, chefID int, online bool) error
+	// SetAcceptingOrders updates the chef's availability (away / vacation mode).
+	// When false the chef is hidden from browse/search and cannot take orders.
+	SetAcceptingOrders(ctx context.Context, chefID int, accepting bool) error
 	// SetImageURL updates the chef's kitchen photo URL.
 	SetImageURL(ctx context.Context, chefID int, url string) error
 	// Update persists the chef's editable profile fields (business name, bio,
