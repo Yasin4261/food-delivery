@@ -293,6 +293,7 @@ Tag history:
 | `v4.17.0` | live chat "seen" receipts over WebSocket — tagged message/read frame envelope; fixes the metrics-middleware Hijack bug that had 500'd `/ws` since #73 (#106, PR #110) |
 | `v4.18.0` | tips for chefs at checkout — order-level gratuity split per sub-order by subtotal, uncommissioned, into earnings + refunds (#105, PR #111) |
 | `v4.19.0` | account deletion + data export (GDPR) — caller-scoped JSON export; password-confirmed delete that anonymises (retaining counterparty orders/reviews) and revokes the token (#107, PR #112) |
+| `v4.19.1` | security fix: anonymised delete identity now carries a random suffix so a pre-registered `deleted-<id>` sentinel can't block a user's deletion (#113, PR #114) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
