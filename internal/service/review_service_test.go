@@ -178,6 +178,17 @@ func (f *fakeReviewRepo) ListByUserOrder(_ context.Context, userID, orderID int)
 	return out, nil
 }
 
+func (f *fakeReviewRepo) ListByUser(_ context.Context, userID int) ([]*domain.Review, error) {
+	out := make([]*domain.Review, 0)
+	for _, rv := range f.reviews {
+		if rv.UserID == userID {
+			cp := *rv
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
 // The sub-order is the reviewability gate: in a multi-chef order a chef who
 // delivered is reviewable immediately (order-level status still pending), a
 // chef who declined never is — and neither are the declined chef's dishes.

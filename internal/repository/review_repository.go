@@ -154,3 +154,11 @@ func (r *ReviewRepository) ListByUserOrder(ctx context.Context, userID, orderID 
 		FROM reviews WHERE user_id = $1 AND order_id = $2
 		ORDER BY id`, userID, orderID)
 }
+
+// ListByUser returns every review the user has written (newest first), for the
+// data export (#107).
+func (r *ReviewRepository) ListByUser(ctx context.Context, userID int) ([]*domain.Review, error) {
+	return r.list(ctx, `SELECT`+reviewColumns+`
+		FROM reviews WHERE user_id = $1
+		ORDER BY created_at DESC`, userID)
+}

@@ -149,6 +149,44 @@ async function changePassword() {
   }
 }
 
+// --- data rights (#107): export + account deletion ---
+const exporting = ref(false)
+const dataErr = ref('')
+async function exportData() {
+  exporting.value = true
+  dataErr.value = ''
+  try {
+    const dump = await api.get('/users/me/export')
+    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'my-data.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    dataErr.value = e.message
+  } finally {
+    exporting.value = false
+  }
+}
+
+const deletePassword = ref('')
+const deleting = ref(false)
+async function deleteAccount() {
+  if (!window.confirm(i18n.global.t('profile.deleteConfirm'))) return
+  deleting.value = true
+  dataErr.value = ''
+  try {
+    await api.del('/users/me', { password: deletePassword.value })
+    await auth.logout() // clears the (now revoked) local session
+    window.location.assign('/login')
+  } catch (e) {
+    dataErr.value = e.message
+    deleting.value = false
+  }
+}
+
 // --- working hours (one window per day in the editor) ---
 const chefId = ref(0)
 const days = Array.from({ length: 7 }, (_, d) => d)
@@ -407,5 +445,37 @@ onMounted(() => {
       <p v-if="hoursMsg" class="text-sm text-green-700">{{ $t('profile.saved') }}</p>
       <button class="btn-primary" :disabled="savingHours">{{ $t('profile.save') }}</button>
     </form>
+
+    <!-- Data & privacy (#107): export + account deletion -->
+    <div class="card space-y-4">
+      <h2 class="font-semibold">{{ $t('profile.dataTitle') }}</h2>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="text-sm text-gray-500">{{ $t('profile.exportHint') }}</p>
+        <button class="btn-ghost shrink-0" :disabled="exporting" @click="exportData">
+          {{ exporting ? $t('profile.exporting') : $t('profile.exportData') }}
+        </button>
+      </div>
+      <div class="rounded-lg border border-red-200 bg-red-50 p-3">
+        <p class="text-sm font-medium text-red-700">{{ $t('profile.deleteTitle') }}</p>
+        <p class="mt-1 text-xs text-red-600">{{ $t('profile.deleteHint') }}</p>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <input
+            v-model="deletePassword"
+            type="password"
+            class="input w-56"
+            autocomplete="current-password"
+            :placeholder="$t('profile.deletePassword')"
+          />
+          <button
+            class="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            :disabled="deleting || !deletePassword"
+            @click="deleteAccount"
+          >
+            {{ deleting ? $t('profile.deleting') : $t('profile.deleteAccount') }}
+          </button>
+        </div>
+      </div>
+      <p v-if="dataErr" class="text-sm text-red-600">{{ dataErr }}</p>
+    </div>
   </div>
 </template>

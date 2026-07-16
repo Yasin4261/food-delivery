@@ -160,6 +160,17 @@ func (f *fakeReviewRepo) ListByUserOrder(_ context.Context, userID, orderID int)
 	return out, nil
 }
 
+func (f *fakeReviewRepo) ListByUser(_ context.Context, userID int) ([]*domain.Review, error) {
+	out := make([]*domain.Review, 0)
+	for _, rv := range f.reviews {
+		if rv.UserID == userID {
+			cp := *rv
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
 // The rating history endpoint: the caller sees their own reviews for an
 // order; other users get an empty list, anonymous callers a 401.
 func TestReview_HistoryForOrder(t *testing.T) {
