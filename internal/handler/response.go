@@ -66,6 +66,7 @@ func respondDomainError(w http.ResponseWriter, err error) {
 	case errors.Is(err, domain.ErrInvalidRating),
 		errors.Is(err, domain.ErrInvalidReviewTarget),
 		errors.Is(err, domain.ErrInvalidResetToken),
+		errors.Is(err, domain.ErrInvalidVerificationToken),
 		errors.Is(err, domain.ErrEmptyMessage),
 		errors.Is(err, domain.ErrUnsupportedImage),
 		errors.Is(err, domain.ErrGalleryFull),
@@ -96,7 +97,8 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrUsernameAlreadyExists),
 		errors.Is(err, domain.ErrChefProfileExists),
 		errors.Is(err, domain.ErrReviewExists),
-		errors.Is(err, domain.ErrPromoExists):
+		errors.Is(err, domain.ErrPromoExists),
+		errors.Is(err, domain.ErrAlreadyVerified):
 		respondError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrInvalidCredentials),
 		errors.Is(err, domain.ErrAccountInactive):

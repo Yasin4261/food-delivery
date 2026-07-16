@@ -125,6 +125,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	earningsRepo := repository.NewEarningsRepository(db.DB)
 	searchRepo := repository.NewSearchRepository(db.DB)
 	passwordResetRepo := repository.NewPasswordResetRepository(db.DB)
+	emailVerificationRepo := repository.NewEmailVerificationRepository(db.DB)
 	chatRepo := repository.NewChatRepository(db.DB)
 	paymentSessionRepo := repository.NewPaymentSessionRepository(db.DB)
 
@@ -157,6 +158,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 
 	// Services (use cases).
 	authService := service.NewAuthService(userRepo, passwordResetRepo, mail, cfg.JWTSecret, cfg.JWTExpiration, cfg.AppBaseURL)
+	authService.SetEmailVerification(emailVerificationRepo)
 	chefHoursRepo := repository.NewChefHoursRepository(db.DB)
 	chefService := service.NewChefService(chefRepo, chefHoursRepo, loc)
 	menuService := service.NewMenuService(chefRepo, menuRepo, menuItemRepo)

@@ -12,6 +12,8 @@ type UserRepository interface {
 	FindByUsername(ctx context.Context, username string) (*User, error)
 	// UpdatePassword sets a user's password hash.
 	UpdatePassword(ctx context.Context, userID int, passwordHash string) error
+	// MarkVerified flips is_verified to true, confirming email ownership.
+	MarkVerified(ctx context.Context, userID int) error
 	// UpdateProfile persists the user's editable contact/location fields
 	// (phone, address, city, state, zip, lat/lng) and the email-notification
 	// preference — never email, username, role or password.

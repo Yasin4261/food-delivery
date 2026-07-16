@@ -32,6 +32,13 @@ export const useAuthStore = defineStore('auth', {
     async register(input) {
       this.apply(await api.post('/auth/register', input))
     },
+    // refresh re-reads the current account (e.g. after email verification flips
+    // is_verified) and updates the cached user without touching the token.
+    async refresh() {
+      if (!this.token) return
+      this.user = await api.get('/auth/me')
+      this.persist()
+    },
     async logout() {
       try {
         if (this.token) await api.post('/auth/logout')

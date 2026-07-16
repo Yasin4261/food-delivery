@@ -84,6 +84,18 @@ export default {
     requestNew: 'Request a new one',
     passwordsMismatch: 'passwords do not match',
   },
+  verify: {
+    banner: 'Please verify your email address to secure your account.',
+    resend: 'Resend link',
+    resent: 'Verification link sent — check your inbox.',
+    verifying: 'Verifying your email…',
+    success: 'Your email is verified 🎉',
+    successText: 'Thanks for confirming. You can keep ordering as usual.',
+    failed: 'This verification link is invalid or has expired.',
+    failedHint: 'Log in and request a fresh link from the banner at the top.',
+    missing: 'No verification token found in this link.',
+    continue: 'Continue',
+  },
   browse: {
     title: 'Discover home chefs 🧑‍🍳',
     subtitle: 'Homemade food, cooked nearby and delivered to you.',

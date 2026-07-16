@@ -26,6 +26,13 @@ const routes = [
     component: () => import('@/views/ResetPasswordView.vue'),
     meta: { guestOnly: true },
   },
+  {
+    // Reachable from the emailed link whether or not this browser is logged in,
+    // so it carries neither requiresAuth nor guestOnly.
+    path: '/verify-email',
+    name: 'verify-email',
+    component: () => import('@/views/VerifyEmailView.vue'),
+  },
   { path: '/cart', name: 'cart', component: () => import('@/views/CartView.vue'), meta: { requiresAuth: true } },
   { path: '/orders', name: 'orders', component: () => import('@/views/OrdersView.vue'), meta: { requiresAuth: true } },
   {

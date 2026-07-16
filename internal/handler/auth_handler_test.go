@@ -70,6 +70,14 @@ func (f *fakeUserRepo) UpdatePassword(_ context.Context, userID int, passwordHas
 	return domain.ErrUserNotFound
 }
 
+func (f *fakeUserRepo) MarkVerified(_ context.Context, userID int) error {
+	if u, ok := f.users[userID]; ok {
+		u.IsVerified = true
+		return nil
+	}
+	return domain.ErrUserNotFound
+}
+
 func (f *fakeUserRepo) UpdateProfile(_ context.Context, u *domain.User) error {
 	stored, ok := f.users[u.ID]
 	if !ok {
@@ -199,6 +207,7 @@ func buildTestServer() testDeps {
 	userRepo := newFakeUserRepo()
 	mail := &recordingMailer{}
 	authService := service.NewAuthService(userRepo, newFakeResetRepo(), mail, "test-secret", time.Hour, "http://app.test")
+	authService.SetEmailVerification(newFakeVerificationRepo())
 	hoursRepo := newFakeChefHoursRepo()
 	chefService := service.NewChefService(chefRepo, hoursRepo, nil)
 	menuService := service.NewMenuService(chefRepo, newFakeMenuRepo(), itemRepo)

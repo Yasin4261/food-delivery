@@ -49,6 +49,27 @@ describe('auth store', () => {
     expect(favorites.loaded).toBe(false)
   })
 
+  it('refresh re-reads the account (e.g. after email verification) keeping the token', async () => {
+    api.post.mockResolvedValueOnce({ token: 'jwt-1', user: { id: 7, role: 'customer', is_verified: false } })
+    const auth = useAuthStore()
+    await auth.login('a@b.c', 'secret')
+    expect(auth.user.is_verified).toBe(false)
+
+    api.get.mockResolvedValueOnce({ id: 7, role: 'customer', is_verified: true })
+    await auth.refresh()
+
+    expect(api.get).toHaveBeenCalledWith('/auth/me')
+    expect(auth.token).toBe('jwt-1')
+    expect(auth.user.is_verified).toBe(true)
+    expect(JSON.parse(localStorage.getItem('user')).is_verified).toBe(true)
+  })
+
+  it('refresh is a no-op without a token', async () => {
+    const auth = useAuthStore()
+    await auth.refresh()
+    expect(api.get).not.toHaveBeenCalled()
+  })
+
   it('rehydrates from localStorage on store creation (page reload)', () => {
     localStorage.setItem('token', 'jwt-2')
     localStorage.setItem('user', JSON.stringify({ id: 3, role: 'customer' }))
