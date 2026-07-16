@@ -40,6 +40,7 @@ type placeOrderRequest struct {
 	DeliveryLongitude *float64           `json:"delivery_longitude"`
 	PaymentMethod     string             `json:"payment_method"`
 	CustomerNotes     string             `json:"customer_notes"`
+	Tip               float64            `json:"tip"`
 	Items             []orderLineRequest `json:"items"`
 }
 
@@ -61,6 +62,7 @@ func (req placeOrderRequest) toInput() service.PlaceOrderInput {
 		DeliveryLongitude: req.DeliveryLongitude,
 		PaymentMethod:     req.PaymentMethod,
 		CustomerNotes:     req.CustomerNotes,
+		Tip:               req.Tip,
 		Lines:             lines,
 	}
 }

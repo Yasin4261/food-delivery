@@ -50,6 +50,7 @@ func (r *EarningsRepository) ChefEarnings(ctx context.Context, chefID int, since
 	const feeQuery = `
 		SELECT
 			COALESCE(SUM(s.delivery_fee), 0),
+			COALESCE(SUM(s.tip), 0),
 			COALESCE(SUM(s.commission), 0)
 		FROM sub_orders s
 		JOIN orders o ON o.id = s.order_id
@@ -59,9 +60,9 @@ func (r *EarningsRepository) ChefEarnings(ctx context.Context, chefID int, since
 		  AND ($2::timestamp IS NULL OR o.created_at >= $2)`
 
 	if err := r.db.QueryRowContext(ctx, feeQuery, chefID, since).
-		Scan(&e.DeliveryFees, &e.Commission); err != nil {
+		Scan(&e.DeliveryFees, &e.Tips, &e.Commission); err != nil {
 		return nil, fmt.Errorf("chef earnings fees: %w", err)
 	}
-	e.NetEarnings = e.TotalEarnings + e.DeliveryFees - e.Commission
+	e.NetEarnings = e.TotalEarnings + e.DeliveryFees + e.Tips - e.Commission
 	return e, nil
 }

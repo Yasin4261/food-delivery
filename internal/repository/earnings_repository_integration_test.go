@@ -150,6 +150,7 @@ func TestEarningsRepository_FeesAndCommission(t *testing.T) {
 		domain.NewOrderItem(item.ID, chef.ID, item.Name, 2, item.Price)) // food 100
 	order.SubOrders[0].DeliveryFee = 25
 	order.SubOrders[0].Commission = 10
+	order.SubOrders[0].Tip = 8
 	if err := orderRepo.Create(ctx(), order); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -160,16 +161,18 @@ func TestEarningsRepository_FeesAndCommission(t *testing.T) {
 		domain.NewOrderItem(item.ID, chef.ID, item.Name, 1, item.Price))
 	pending.SubOrders[0].DeliveryFee = 99
 	pending.SubOrders[0].Commission = 99
+	pending.SubOrders[0].Tip = 99
 	_ = orderRepo.Create(ctx(), pending)
 
 	got, err := earnRepo.ChefEarnings(ctx(), chef.ID, nil)
 	if err != nil {
 		t.Fatalf("earnings: %v", err)
 	}
-	if got.TotalEarnings != 100 || got.DeliveryFees != 25 || got.Commission != 10 {
-		t.Errorf("gross/fees/commission = %v/%v/%v, want 100/25/10", got.TotalEarnings, got.DeliveryFees, got.Commission)
+	if got.TotalEarnings != 100 || got.DeliveryFees != 25 || got.Commission != 10 || got.Tips != 8 {
+		t.Errorf("gross/fees/commission/tips = %v/%v/%v/%v, want 100/25/10/8",
+			got.TotalEarnings, got.DeliveryFees, got.Commission, got.Tips)
 	}
-	if got.NetEarnings != 115 { // 100 + 25 - 10
-		t.Errorf("net = %v, want 115", got.NetEarnings)
+	if got.NetEarnings != 123 { // 100 + 25 + 8 - 10
+		t.Errorf("net = %v, want 123", got.NetEarnings)
 	}
 }

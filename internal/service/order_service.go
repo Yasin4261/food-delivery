@@ -67,6 +67,7 @@ type PlaceOrderInput struct {
 	DeliveryLongitude *float64
 	PaymentMethod     string
 	CustomerNotes     string
+	Tip               float64
 	Lines             []OrderLineInput
 }
 
@@ -110,6 +111,9 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 	}
 	if len(in.Lines) == 0 {
 		return nil, domain.ErrEmptyOrder
+	}
+	if in.Tip < 0 {
+		return nil, ValidationError{Msg: "tip cannot be negative"}
 	}
 
 	order := domain.NewOrder(userID, in.DeliveryAddress)
@@ -194,6 +198,12 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 	}
 	order.DeliveryFee = domain.RoundMoney(order.DeliveryFee)
 
+	// Tip (#105): the customer's gratuity, added to the total and split across
+	// the chef slices by food subtotal — each chef keeps their share
+	// uncommissioned (snapshotted on the sub-orders).
+	order.Tip = domain.RoundMoney(in.Tip)
+	domain.DistributeTip(order.SubOrders, order.Tip)
+
 	// Promo code (#94): platform-funded discount off the food subtotal. It's
 	// validated + atomically redeemed (usage cap is race-free) and snapshotted
 	// onto the order; the chef's earnings come from the undiscounted
@@ -213,7 +223,7 @@ func (s *OrderService) PlaceOrder(ctx context.Context, userID int, in PlaceOrder
 		order.PromoCode = &promo.Code
 	}
 
-	order.TotalPrice = domain.RoundMoney(subtotal + order.DeliveryFee + order.ServiceFee + order.Tax - order.Discount)
+	order.TotalPrice = domain.RoundMoney(subtotal + order.DeliveryFee + order.ServiceFee + order.Tax + order.Tip - order.Discount)
 
 	if err := s.orders.Create(ctx, order); err != nil {
 		return nil, err
@@ -371,7 +381,7 @@ func (s *OrderService) AdvanceForChef(ctx context.Context, userID, orderID int, 
 	// before anything persists. If the partial refund fails, the decline
 	// aborts.
 	if action == OrderActionDecline && order.IsCardPaid() && s.refunder != nil {
-		if err := s.refunder.RefundSubOrderPayment(ctx, order, sub.Subtotal+sub.DeliveryFee); err != nil {
+		if err := s.refunder.RefundSubOrderPayment(ctx, order, sub.Subtotal+sub.DeliveryFee+sub.Tip); err != nil {
 			return nil, err
 		}
 	}

@@ -42,6 +42,8 @@ func TestOrderRepository_CreateTransactionAndFind(t *testing.T) {
 
 	order := buildOrder(customer.ID, "ORD-TEST-1",
 		domain.NewOrderItem(item.ID, chef.ID, item.Name, 2, item.Price))
+	order.Tip = 3
+	order.SubOrders[0].Tip = 3 // single chef -> whole tip
 	if err := repo.Create(ctx(), order); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -65,6 +67,9 @@ func TestOrderRepository_CreateTransactionAndFind(t *testing.T) {
 	if len(got.SubOrders) != 1 || got.SubOrders[0].Status != domain.OrderStatusPending ||
 		got.SubOrders[0].Subtotal != 10 || got.SubOrders[0].ChefName == "" {
 		t.Errorf("unexpected sub-orders: %+v", got.SubOrders)
+	}
+	if got.Tip != 3 || got.SubOrders[0].Tip != 3 {
+		t.Errorf("tip not persisted: order=%v sub=%v, want 3/3", got.Tip, got.SubOrders[0].Tip)
 	}
 }
 
