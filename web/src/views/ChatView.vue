@@ -83,6 +83,12 @@ async function open(conv) {
     messages.value = page(await api.get(`/chat/conversations/${conv.id}/messages?limit=100`)).items
     scrollDown()
     connect(conv)
+    // Opening the thread marks the other party's messages read; clear the
+    // badge optimistically.
+    if (conv.unread_count > 0) {
+      conv.unread_count = 0
+      api.post(`/chat/conversations/${conv.id}/read`).catch(() => {})
+    }
   } catch (e) {
     error.value = e.message
   }
@@ -151,11 +157,15 @@ onBeforeUnmount(disconnect)
         <button
           v-for="c in conversations"
           :key="c.id"
-          class="w-full rounded-lg px-3 py-2 text-left text-sm transition"
+          class="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition"
           :class="active?.id === c.id ? 'bg-brand-50 font-semibold text-brand-700' : 'hover:bg-gray-50'"
           @click="open(c)"
         >
-          {{ c._label }}
+          <span class="min-w-0 truncate">{{ c._label }}</span>
+          <span
+            v-if="c.unread_count > 0"
+            class="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white"
+          >{{ c.unread_count }}</span>
         </button>
       </div>
 

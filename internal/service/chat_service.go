@@ -107,6 +107,15 @@ func (s *ChatService) Authorize(ctx context.Context, requesterUserID, conversati
 	return s.authorize(ctx, requesterUserID, conversationID)
 }
 
+// MarkRead marks the other party's messages in a conversation as read for the
+// requester (participant-only).
+func (s *ChatService) MarkRead(ctx context.Context, requesterUserID, conversationID int) error {
+	if _, err := s.authorize(ctx, requesterUserID, conversationID); err != nil {
+		return err
+	}
+	return s.chats.MarkRead(ctx, conversationID, requesterUserID)
+}
+
 func (s *ChatService) authorize(ctx context.Context, requesterUserID, conversationID int) (*domain.Conversation, error) {
 	conv, err := s.chats.FindConversationByID(ctx, conversationID)
 	if err != nil {

@@ -11,6 +11,11 @@ type Conversation struct {
 	OrderID       *int       `json:"order_id,omitempty"`
 	LastMessageAt *time.Time `json:"last_message_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
+
+	// UnreadCount is the requester's unread messages in this thread (messages
+	// from the other party with read_at NULL). Derived at list time, not a
+	// column.
+	UnreadCount int `json:"unread_count"`
 }
 
 // IsParticipant reports whether the requester may access the conversation. The

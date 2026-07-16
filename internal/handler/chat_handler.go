@@ -122,6 +122,26 @@ func (h *ChatHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 	respondPage(w, msgs, limit, offset, total)
 }
 
+// MarkRead handles POST /api/v2/chat/conversations/{id}/read (auth) — marks
+// the other party's messages as read for the caller.
+func (h *ChatHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+	if err := h.chat.MarkRead(r.Context(), claims.UserID, id); err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // WebSocket handles GET /api/v2/chat/conversations/{id}/ws (auth). It authorises
 // the participant, upgrades the connection, and relays messages live: frames
 // received from the socket are persisted and broadcast to the room.

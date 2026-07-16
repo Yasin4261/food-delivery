@@ -61,3 +61,50 @@ func TestChatRepository_ConversationAndMessages(t *testing.T) {
 		t.Errorf("missing conversation = %v, want ErrConversationNotFound", err)
 	}
 }
+
+func TestChatRepository_UnreadAndMarkRead(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewChatRepository(testDB)
+	customer := seedUser(t, "cust@example.com")
+	chefUser := seedUser(t, "chef@example.com")
+	chef := seedChef(t, chefUser.ID)
+
+	conv := &domain.Conversation{UserID: customer.ID, ChefID: chef.ID}
+	if err := repo.CreateConversation(ctx(), conv); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	// Customer sends 2, chef sends 1.
+	for _, m := range []*domain.Message{
+		{ConversationID: conv.ID, SenderID: customer.ID, Body: "c1"},
+		{ConversationID: conv.ID, SenderID: customer.ID, Body: "c2"},
+		{ConversationID: conv.ID, SenderID: chefUser.ID, Body: "reply"},
+	} {
+		if err := repo.CreateMessage(ctx(), m); err != nil {
+			t.Fatalf("create message: %v", err)
+		}
+	}
+
+	// Chef's unread = the 2 customer messages; customer's unread = the 1 reply.
+	chefList, _ := repo.ListConversationsByChef(ctx(), chef.ID)
+	if len(chefList) != 1 || chefList[0].UnreadCount != 2 {
+		t.Errorf("chef unread = %d, want 2", chefList[0].UnreadCount)
+	}
+	custList, _ := repo.ListConversationsByUser(ctx(), customer.ID)
+	if custList[0].UnreadCount != 1 {
+		t.Errorf("customer unread = %d, want 1", custList[0].UnreadCount)
+	}
+
+	// Chef marks read -> the customer's messages are read; the chef's unread
+	// drops to 0, but the customer's unread (the chef's reply) is unchanged.
+	if err := repo.MarkRead(ctx(), conv.ID, chefUser.ID); err != nil {
+		t.Fatalf("mark read: %v", err)
+	}
+	chefList, _ = repo.ListConversationsByChef(ctx(), chef.ID)
+	if chefList[0].UnreadCount != 0 {
+		t.Errorf("chef unread after read = %d, want 0", chefList[0].UnreadCount)
+	}
+	custList, _ = repo.ListConversationsByUser(ctx(), customer.ID)
+	if custList[0].UnreadCount != 1 {
+		t.Errorf("customer unread after chef read = %d, want 1 (unaffected)", custList[0].UnreadCount)
+	}
+}
