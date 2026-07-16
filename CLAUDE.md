@@ -288,6 +288,7 @@ Tag history:
 | `v4.14.0` | discount/promo codes: percent/fixed, platform-funded, atomic usage cap, admin management (#94, PR #102) |
 | `v4.15.0` | email verification on registration — `email_verification_tokens`, verify/resend endpoints, `is_verified` surfaced (not enforced) with an SPA resend banner (#103, PR #108) |
 | `v4.16.0` | chef away / vacation mode — one-tap availability toggle giving `is_accepting_orders` teeth (hidden from browse/search + orders blocked), no migration (#104, PR #109) |
+| `v4.17.0` | live chat "seen" receipts over WebSocket — tagged message/read frame envelope; fixes the metrics-middleware Hijack bug that had 500'd `/ws` since #73 (#106, PR #110) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
