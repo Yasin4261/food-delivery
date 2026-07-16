@@ -81,6 +81,16 @@ func (f *fakeUserRepo) UpdatePassword(_ context.Context, userID int, passwordHas
 	return domain.ErrUserNotFound
 }
 
+func (f *fakeUserRepo) MarkVerified(_ context.Context, userID int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if u, ok := f.users[userID]; ok {
+		u.IsVerified = true
+		return nil
+	}
+	return domain.ErrUserNotFound
+}
+
 func (f *fakeUserRepo) UpdateProfile(_ context.Context, u *domain.User) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

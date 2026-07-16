@@ -142,6 +142,44 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"message": "password updated; you can now log in"})
 }
 
+type verifyEmailRequest struct {
+	Token string `json:"token"`
+}
+
+// VerifyEmail handles POST /api/v2/auth/verify-email (public). It redeems a
+// verification token and marks the account's email confirmed.
+func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var req verifyEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if err := h.auth.VerifyEmail(r.Context(), req.Token); err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"message": "email verified"})
+}
+
+// ResendVerification handles POST /api/v2/auth/resend-verification (auth). It
+// emails the caller a fresh verification link; already-verified accounts get a
+// 409 so a confirmed address can't be spammed.
+func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if err := h.auth.ResendVerification(r.Context(), claims.UserID); err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusAccepted, map[string]string{
+		"message": "a verification link has been sent to your email",
+	})
+}
+
 // Me handles GET /api/v2/auth/me. Requires authentication.
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.ClaimsFromContext(r.Context())

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -18,16 +19,29 @@ import (
 // passwordResetTTL is how long a reset token stays valid.
 const passwordResetTTL = time.Hour
 
+// emailVerificationTTL is how long an email-verification token stays valid.
+// Longer than a reset token: the user may not check their inbox immediately.
+const emailVerificationTTL = 24 * time.Hour
+
 // AuthService implements the authentication use cases: register, login, token
 // issuing/validation and password reset. It depends only on domain ports, so
 // it can be unit-tested with fakes.
 type AuthService struct {
-	users      domain.UserRepository
-	resets     domain.PasswordResetRepository
-	mailer     domain.Mailer
-	jwtSecret  []byte
-	jwtExpiry  time.Duration
-	appBaseURL string // base URL for links in emails (e.g. the reset link)
+	users         domain.UserRepository
+	resets        domain.PasswordResetRepository
+	verifications domain.EmailVerificationRepository
+	mailer        domain.Mailer
+	jwtSecret     []byte
+	jwtExpiry     time.Duration
+	appBaseURL    string // base URL for links in emails (e.g. the reset link)
+}
+
+// SetEmailVerification enables the email-verification flow (nil disables it, in
+// which case registration issues no verification token). Wired from the
+// composition root; kept a setter so existing constructor call sites (and their
+// tests) are unaffected.
+func (s *AuthService) SetEmailVerification(repo domain.EmailVerificationRepository) {
+	s.verifications = repo
 }
 
 // NewAuthService builds an AuthService. appBaseURL is the public base URL used
@@ -112,7 +126,84 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (*AuthResu
 		return nil, err
 	}
 
+	// Email a verification link. A delivery failure must not abort registration
+	// — the account exists and the user can request a fresh link later — so we
+	// only log it.
+	if err := s.sendVerification(ctx, user); err != nil {
+		slog.Error("send verification email", "user_id", user.ID, "error", err)
+	}
+
 	return s.issue(user)
+}
+
+// sendVerification issues a single-use verification token for the user and
+// emails the link. It is a no-op when the verification repository is not wired.
+func (s *AuthService) sendVerification(ctx context.Context, user *domain.User) error {
+	if s.verifications == nil {
+		return nil
+	}
+	raw, err := randomToken()
+	if err != nil {
+		return err
+	}
+	token := &domain.EmailVerificationToken{
+		UserID:    user.ID,
+		TokenHash: hashToken(raw),
+		ExpiresAt: time.Now().Add(emailVerificationTTL),
+	}
+	if err := s.verifications.Create(ctx, token); err != nil {
+		return err
+	}
+	return s.mailer.Send(ctx, domain.Email{
+		To:      user.Email,
+		Subject: "Verify your email address",
+		Body:    s.verifyEmailBody(user.Username, raw),
+	})
+}
+
+// verifyEmailBody renders the plain-text email-verification message.
+func (s *AuthService) verifyEmailBody(username, rawToken string) string {
+	link := fmt.Sprintf("%s/verify-email?token=%s", s.appBaseURL, rawToken)
+	return fmt.Sprintf(
+		"Hi %s,\n\nWelcome! Please confirm your email address by opening the "+
+			"link below within %s:\n\n%s\n\n"+
+			"If you didn't create an account, you can safely ignore this email.\n",
+		username, emailVerificationTTL, link)
+}
+
+// VerifyEmail redeems a verification token and marks the account verified. The
+// token must be unknown-free, unexpired and unused; it is consumed on success.
+func (s *AuthService) VerifyEmail(ctx context.Context, rawToken string) error {
+	if s.verifications == nil {
+		return domain.ErrInvalidVerificationToken
+	}
+	token, err := s.verifications.FindByHash(ctx, hashToken(rawToken))
+	if err == domain.ErrVerificationTokenNotFound {
+		return domain.ErrInvalidVerificationToken
+	} else if err != nil {
+		return err
+	}
+	if !token.Usable(time.Now()) {
+		return domain.ErrInvalidVerificationToken
+	}
+	if err := s.users.MarkVerified(ctx, token.UserID); err != nil {
+		return err
+	}
+	return s.verifications.MarkUsed(ctx, token.ID)
+}
+
+// ResendVerification issues a fresh verification link for a logged-in user. It
+// is a no-op (nil) once the account is already verified so it can't be used to
+// spam a confirmed address.
+func (s *AuthService) ResendVerification(ctx context.Context, userID int) error {
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user.IsVerified {
+		return domain.ErrAlreadyVerified
+	}
+	return s.sendVerification(ctx, user)
 }
 
 // Login verifies credentials and issues a token.

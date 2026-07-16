@@ -1,10 +1,12 @@
 <script setup>
 import NavBar from '@/components/NavBar.vue'
+import VerifyBanner from '@/components/VerifyBanner.vue'
 </script>
 
 <template>
   <div class="flex min-h-screen flex-col">
     <NavBar />
+    <VerifyBanner />
     <main class="mx-auto w-full max-w-5xl grow px-4 py-8">
       <RouterView />
     </main>

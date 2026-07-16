@@ -83,6 +83,18 @@ export default {
     requestNew: 'Yenisini isteyin',
     passwordsMismatch: 'şifreler eşleşmiyor',
   },
+  verify: {
+    banner: 'Hesabınızı güvence altına almak için lütfen e-posta adresinizi doğrulayın.',
+    resend: 'Bağlantıyı tekrar gönder',
+    resent: 'Doğrulama bağlantısı gönderildi — gelen kutunuzu kontrol edin.',
+    verifying: 'E-postanız doğrulanıyor…',
+    success: 'E-postanız doğrulandı 🎉',
+    successText: 'Onayladığınız için teşekkürler. Sipariş vermeye devam edebilirsiniz.',
+    failed: 'Bu doğrulama bağlantısı geçersiz veya süresi dolmuş.',
+    failedHint: 'Giriş yapın ve üstteki bandan yeni bir bağlantı isteyin.',
+    missing: 'Bu bağlantıda doğrulama anahtarı bulunamadı.',
+    continue: 'Devam et',
+  },
   browse: {
     title: 'Ev şeflerini keşfedin 🧑‍🍳',
     subtitle: 'Yakınınızda pişen ev yemekleri, kapınıza gelsin.',

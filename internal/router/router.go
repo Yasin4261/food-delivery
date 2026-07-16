@@ -87,8 +87,14 @@ func (r *Router) Setup() http.Handler {
 	limited("POST /api/v2/auth/login", r.authHandler.Login)
 	limited("POST /api/v2/auth/forgot-password", r.authHandler.ForgotPassword)
 	limited("POST /api/v2/auth/reset-password", r.authHandler.ResetPassword)
+	// Email verification: redeeming a token is public (the link is opened before
+	// login); it is rate limited like the rest of the account surface.
+	limited("POST /api/v2/auth/verify-email", r.authHandler.VerifyEmail)
 	// Logout requires a valid token so it can revoke that exact token.
 	r.handleAuth("POST /api/v2/auth/logout", r.authHandler.Logout)
+	// Resending a link requires a session and is throttled per IP.
+	r.mux.Handle("POST /api/v2/auth/resend-verification",
+		throttle(r.auth.Require(http.HandlerFunc(r.authHandler.ResendVerification))))
 
 	// Protected: requires a valid bearer token.
 	r.mux.Handle("GET /api/v2/auth/me", r.auth.Require(http.HandlerFunc(r.authHandler.Me)))

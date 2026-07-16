@@ -14,6 +14,10 @@ var (
 	ErrResetTokenNotFound = errors.New("reset token not found")
 	ErrInvalidResetToken  = errors.New("invalid, expired or already-used reset token")
 
+	ErrVerificationTokenNotFound = errors.New("verification token not found")
+	ErrInvalidVerificationToken  = errors.New("invalid, expired or already-used verification token")
+	ErrAlreadyVerified           = errors.New("this email is already verified")
+
 	ErrConversationNotFound = errors.New("conversation not found")
 	ErrEmptyMessage         = errors.New("message body cannot be empty")
 

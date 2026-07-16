@@ -76,6 +76,19 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID int, passwor
 	return nil
 }
 
+// MarkVerified flips is_verified to true, confirming email ownership.
+func (r *UserRepository) MarkVerified(ctx context.Context, userID int) error {
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE users SET is_verified = true, updated_at = now() WHERE id = $1`, userID)
+	if err != nil {
+		return fmt.Errorf("mark verified: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
 // UpdateProfile persists the editable contact/location fields.
 func (r *UserRepository) UpdateProfile(ctx context.Context, u *domain.User) error {
 	query := `
