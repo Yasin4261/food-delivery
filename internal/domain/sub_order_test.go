@@ -142,3 +142,49 @@ func TestSubOrderFor(t *testing.T) {
 		t.Fatalf("SubOrderFor(99) = %+v, want nil", got)
 	}
 }
+
+func TestDistributeTip(t *testing.T) {
+	t.Run("single chef gets the whole tip", func(t *testing.T) {
+		subs := []*SubOrder{{Subtotal: 40}}
+		DistributeTip(subs, 6)
+		if subs[0].Tip != 6 {
+			t.Errorf("tip = %v, want 6", subs[0].Tip)
+		}
+	})
+
+	t.Run("split proportionally by subtotal", func(t *testing.T) {
+		subs := []*SubOrder{{Subtotal: 30}, {Subtotal: 10}}
+		DistributeTip(subs, 8) // 3:1 -> 6 and 2
+		if subs[0].Tip != 6 || subs[1].Tip != 2 {
+			t.Errorf("tips = %v/%v, want 6/2", subs[0].Tip, subs[1].Tip)
+		}
+	})
+
+	t.Run("rounding remainder lands on the largest slice and sum is exact", func(t *testing.T) {
+		subs := []*SubOrder{{Subtotal: 10}, {Subtotal: 10}, {Subtotal: 10}}
+		DistributeTip(subs, 10) // 3.33 each -> 3.33/3.33/3.34
+		var sum float64
+		for _, s := range subs {
+			sum += s.Tip
+		}
+		if RoundMoney(sum) != 10 {
+			t.Errorf("tip shares sum = %v, want 10 exactly", sum)
+		}
+	})
+
+	t.Run("zero tip clears shares", func(t *testing.T) {
+		subs := []*SubOrder{{Subtotal: 30, Tip: 5}, {Subtotal: 10, Tip: 2}}
+		DistributeTip(subs, 0)
+		if subs[0].Tip != 0 || subs[1].Tip != 0 {
+			t.Errorf("tips = %v/%v, want 0/0", subs[0].Tip, subs[1].Tip)
+		}
+	})
+
+	t.Run("zero subtotals put the whole tip on the first", func(t *testing.T) {
+		subs := []*SubOrder{{Subtotal: 0}, {Subtotal: 0}}
+		DistributeTip(subs, 5)
+		if subs[0].Tip != 5 || subs[1].Tip != 0 {
+			t.Errorf("tips = %v/%v, want 5/0", subs[0].Tip, subs[1].Tip)
+		}
+	})
+}

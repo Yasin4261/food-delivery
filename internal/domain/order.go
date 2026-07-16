@@ -22,7 +22,10 @@ type Order struct {
 	ServiceFee  float64 `json:"service_fee"`
 	Tax         float64 `json:"tax"`
 	Discount    float64 `json:"discount"`
-	TotalPrice  float64 `json:"total_price"`
+	// Tip is the customer's optional gratuity (#105), added to the total and
+	// paid to the chef(s) uncommissioned; split per slice on the sub-orders.
+	Tip        float64 `json:"tip"`
+	TotalPrice float64 `json:"total_price"`
 
 	// Status and payment
 	Status        string  `json:"status"`

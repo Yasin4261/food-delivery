@@ -209,6 +209,69 @@ func TestOrderService_PlaceOrder_Errors(t *testing.T) {
 	})
 }
 
+func TestOrderService_PlaceOrder_Tip(t *testing.T) {
+	t.Run("single chef: whole tip on the total and the slice", func(t *testing.T) {
+		svc, items, _ := orderFixture(t, 1)
+		item := seedItem(t, items, 1, 5, 10)
+		order, err := svc.PlaceOrder(context.Background(), 100, service.PlaceOrderInput{
+			DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCash, Tip: 3,
+			Lines: []service.OrderLineInput{{MenuItemID: item.ID, Quantity: 2}}, // subtotal 10
+		})
+		if err != nil {
+			t.Fatalf("place: %v", err)
+		}
+		if order.Tip != 3 || order.TotalPrice != 13 {
+			t.Errorf("tip/total = %v/%v, want 3/13", order.Tip, order.TotalPrice)
+		}
+		if len(order.SubOrders) != 1 || order.SubOrders[0].Tip != 3 {
+			t.Errorf("sub-order tip = %v, want 3", order.SubOrders[0].Tip)
+		}
+	})
+
+	t.Run("multi chef: tip split by subtotal", func(t *testing.T) {
+		svc, items, _ := orderFixture(t, 1, 2)
+		a := seedItem(t, items, 1, 5, 10) // price 5
+		b := seedItem(t, items, 2, 15, 10)
+		order, err := svc.PlaceOrder(context.Background(), 100, service.PlaceOrderInput{
+			DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCard, Tip: 8,
+			Lines: []service.OrderLineInput{
+				{MenuItemID: a.ID, Quantity: 1}, // chef1 subtotal 5
+				{MenuItemID: b.ID, Quantity: 1}, // chef2 subtotal 15
+			},
+		})
+		if err != nil {
+			t.Fatalf("place: %v", err)
+		}
+		// 5:15 of 8 -> 2 and 6.
+		tipFor := func(chef int) float64 {
+			for _, s := range order.SubOrders {
+				if s.ChefID == chef {
+					return s.Tip
+				}
+			}
+			return -1
+		}
+		if tipFor(1) != 2 || tipFor(2) != 6 {
+			t.Errorf("split tips = %v/%v, want 2/6", tipFor(1), tipFor(2))
+		}
+		if order.Tip != 8 {
+			t.Errorf("order tip = %v, want 8", order.Tip)
+		}
+	})
+
+	t.Run("negative tip is rejected", func(t *testing.T) {
+		svc, items, _ := orderFixture(t, 1)
+		item := seedItem(t, items, 1, 5, 10)
+		_, err := svc.PlaceOrder(context.Background(), 100, service.PlaceOrderInput{
+			DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCash, Tip: -1,
+			Lines: []service.OrderLineInput{{MenuItemID: item.ID, Quantity: 1}},
+		})
+		if !isValidation(err) {
+			t.Errorf("err = %v, want ValidationError", err)
+		}
+	})
+}
+
 func TestOrderService_PlaceOrder_ChefAway(t *testing.T) {
 	svc, items, chefs := orderFixture(t, 1) // user1 -> chef1
 	item := seedItem(t, items, 1, 5, 10)
@@ -467,6 +530,45 @@ func TestOrderService_DeclinePartialRefund(t *testing.T) {
 	}
 	if final.Status != domain.OrderStatusCancelled || final.PaymentStatus != domain.PaymentStatusRefunded {
 		t.Errorf("order = %q/%q, want cancelled/refunded", final.Status, final.PaymentStatus)
+	}
+}
+
+// Declining a card-paid slice refunds the chef's tip share too (#105).
+func TestOrderService_DeclineRefundsTipShare(t *testing.T) {
+	ctx := context.Background()
+	chefRepo := newFakeChefRepo()
+	for _, uid := range []int{1, 2} {
+		if err := chefRepo.Create(ctx, &domain.Chef{UserID: uid, IsActive: true}); err != nil {
+			t.Fatalf("seed chef: %v", err)
+		}
+	}
+	items := newFakeMenuItemRepo()
+	a := seedItem(t, items, 1, 5, 10) // chef1 subtotal 5
+	b := seedItem(t, items, 2, 6, 10) // chef2 subtotal 6
+	orders := newFakeOrderRepo()
+	refunder := &recordingRefunder{}
+	svc := service.NewOrderService(orders, items, chefRepo, nil, nil, nil, domain.FeePolicy{}, refunder, nil)
+
+	order, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
+		DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCard, Tip: 22, // 5:6 of 22 -> 10 and 12
+		Lines: []service.OrderLineInput{
+			{MenuItemID: a.ID, Quantity: 1},
+			{MenuItemID: b.ID, Quantity: 1},
+		},
+	})
+	if err != nil {
+		t.Fatalf("place: %v", err)
+	}
+	stored, _ := orders.FindByID(ctx, order.ID)
+	_ = stored.MarkPaid()
+	_ = orders.UpdateStatus(ctx, stored)
+
+	if _, err := svc.AdvanceForChef(ctx, 1, order.ID, service.OrderActionDecline); err != nil {
+		t.Fatalf("decline: %v", err)
+	}
+	// chef1: subtotal 5 + delivery 0 + tip 10 = 15.
+	if refunder.partialCalls != 1 || refunder.partialAmounts[0] != 15 {
+		t.Errorf("refund = %d %v, want one of 15 (subtotal 5 + tip 10)", refunder.partialCalls, refunder.partialAmounts)
 	}
 }
 

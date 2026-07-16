@@ -133,6 +133,27 @@ func seedChefWithItem(t *testing.T, srv http.Handler, username, email string) (t
 	return token, item.ID
 }
 
+func TestOrder_TipOnTotal(t *testing.T) {
+	srv := newTestServer()
+	_, itemID := seedChefWithItem(t, srv, "cheft", "cheft@example.com")
+	customer := registerCustomerToken(t, srv, "custt", "custt@example.com")
+
+	body := `{"delivery_address":"1 St","payment_method":"cash","tip":4,"items":[{"menu_item_id":` +
+		itoa(itemID) + `,"quantity":2}]}` // subtotal 10 + tip 4
+	rec := do(t, srv, http.MethodPost, "/api/v2/orders", customer, body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("place order = %d, want 201 (%s)", rec.Code, rec.Body)
+	}
+	var order domain.Order
+	_ = json.Unmarshal(rec.Body.Bytes(), &order)
+	if order.Tip != 4 || order.TotalPrice != 14 {
+		t.Errorf("tip/total = %v/%v, want 4/14", order.Tip, order.TotalPrice)
+	}
+	if len(order.SubOrders) != 1 || order.SubOrders[0].Tip != 4 {
+		t.Errorf("sub-order tip = %v, want 4", order.SubOrders)
+	}
+}
+
 func TestOrder_FullLifecycle(t *testing.T) {
 	srv := newTestServer()
 	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")

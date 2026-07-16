@@ -140,6 +140,9 @@ onBeforeUnmount(() => clearInterval(poll))
             commission: `$${earnings.commission?.toFixed(2)}`,
           }) }}
         </p>
+        <p v-if="earnings.tips > 0" class="text-xs text-gray-400">
+          {{ $t('dashboard.earningsTips', { tips: `$${earnings.tips?.toFixed(2)}` }) }}
+        </p>
       </div>
       <div class="card">
         <p class="text-sm text-gray-500">{{ $t('dashboard.deliveredOrders') }}</p>

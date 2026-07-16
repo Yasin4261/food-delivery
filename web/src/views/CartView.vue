@@ -14,6 +14,15 @@ const promoCode = ref('')
 const error = ref('')
 const placing = ref(false)
 
+// Tip (#105): the customer's optional gratuity to the chef(s). Presets are a
+// percentage of the food subtotal; a custom amount can also be typed.
+const tip = ref(0)
+const tipPresets = [0, 10, 15, 20]
+function setTipPct(pct) {
+  tip.value = Math.round(cart.total * pct) / 100
+}
+const grandTotal = computed(() => cart.total + Number(tip.value || 0))
+
 // Saved address book: preselect the default; "other" reveals the free-text
 // input. selectedAddressId === 0 means "type a one-off address".
 const savedAddresses = ref([])
@@ -42,6 +51,7 @@ async function placeOrder() {
     if (usingSaved.value) payload.address_id = selectedAddressId.value
     else payload.delivery_address = deliveryAddress.value
     if (promoCode.value.trim()) payload.promo_code = promoCode.value.trim()
+    if (Number(tip.value) > 0) payload.tip = Number(tip.value)
     const order = await api.post('/orders', payload)
     cart.clear()
     router.push({ name: 'orders', query: { placed: order.id } })
@@ -120,9 +130,30 @@ async function placeOrder() {
           <label class="label">{{ $t('cart.promo') }}</label>
           <input v-model="promoCode" class="input uppercase" :placeholder="$t('cart.promoPlaceholder')" />
         </div>
+        <div>
+          <label class="label">{{ $t('cart.tip') }}</label>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              v-for="p in tipPresets"
+              :key="p"
+              type="button"
+              class="rounded-full border px-3 py-1 text-sm"
+              :class="tip === Math.round(cart.total * p) / 100 ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-gray-200 text-gray-600'"
+              @click="setTipPct(p)"
+            >
+              {{ p === 0 ? $t('cart.tipNone') : p + '%' }}
+            </button>
+            <input v-model.number="tip" type="number" min="0" step="0.5" class="input w-24" />
+          </div>
+          <p class="mt-1 text-xs text-gray-400">{{ $t('cart.tipHint') }}</p>
+        </div>
+        <div class="flex justify-between border-t border-gray-100 pt-3 text-lg font-semibold">
+          <span>{{ $t('cart.grandTotal') }}</span>
+          <span>${{ grandTotal.toFixed(2) }}</span>
+        </div>
         <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
         <button class="btn-primary w-full" :disabled="placing">
-          {{ placing ? $t('cart.placing') : $t('cart.placeOrder', { total: `$${cart.total.toFixed(2)}` }) }}
+          {{ placing ? $t('cart.placing') : $t('cart.placeOrder', { total: `$${grandTotal.toFixed(2)}` }) }}
         </button>
       </form>
     </template>

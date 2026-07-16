@@ -23,6 +23,9 @@ type SubOrder struct {
 	// the day — rate changes never rewrite history.
 	DeliveryFee float64 `json:"delivery_fee"`
 	Commission  float64 `json:"commission"`
+	// Tip is this chef's share of the order-level gratuity (#105), split by
+	// food subtotal at placement; the chef keeps it in full (uncommissioned).
+	Tip float64 `json:"tip"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -88,6 +91,44 @@ func (s *SubOrder) transition(from, to string) error {
 	s.Status = to
 	s.UpdatedAt = time.Now()
 	return nil
+}
+
+// DistributeTip splits an order-level tip across its sub-orders proportionally
+// to each slice's food subtotal and snapshots the share onto SubOrder.Tip
+// (#105). The shares are rounded to cents and always sum back to tip exactly —
+// any rounding remainder lands on the largest slice. A single-chef order gives
+// the whole tip to that chef; a zero tip clears every share.
+func DistributeTip(subs []*SubOrder, tip float64) {
+	tip = RoundMoney(tip)
+	for _, s := range subs {
+		s.Tip = 0
+	}
+	if len(subs) == 0 || tip <= 0 {
+		return
+	}
+	var total float64
+	for _, s := range subs {
+		total += s.Subtotal
+	}
+	// Degenerate case (all subtotals zero): put the whole tip on the first.
+	if total <= 0 {
+		subs[0].Tip = tip
+		return
+	}
+
+	var allocated float64
+	largest := 0
+	for i, s := range subs {
+		s.Tip = RoundMoney(tip * s.Subtotal / total)
+		allocated += s.Tip
+		if s.Subtotal > subs[largest].Subtotal {
+			largest = i
+		}
+	}
+	// Push the rounding remainder (positive or negative) onto the largest slice.
+	if remainder := RoundMoney(tip - allocated); remainder != 0 {
+		subs[largest].Tip = RoundMoney(subs[largest].Tip + remainder)
+	}
 }
 
 // statusRank orders the lifecycle for deriving the parent status: the parent

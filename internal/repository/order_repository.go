@@ -22,7 +22,7 @@ func NewOrderRepository(db *sql.DB) *OrderRepository {
 
 const orderColumns = `
 	id, order_code, user_id,
-	subtotal, delivery_fee, service_fee, tax, discount, total_price,
+	subtotal, delivery_fee, service_fee, tax, discount, tip, total_price,
 	status, payment_method, payment_status, promo_code,
 	delivery_address, delivery_city, delivery_latitude, delivery_longitude,
 	estimated_delivery_time, actual_delivery_time,
@@ -33,7 +33,7 @@ func scanOrder(s interface{ Scan(...any) error }) (*domain.Order, error) {
 	o := &domain.Order{}
 	err := s.Scan(
 		&o.ID, &o.OrderCode, &o.UserID,
-		&o.Subtotal, &o.DeliveryFee, &o.ServiceFee, &o.Tax, &o.Discount, &o.TotalPrice,
+		&o.Subtotal, &o.DeliveryFee, &o.ServiceFee, &o.Tax, &o.Discount, &o.Tip, &o.TotalPrice,
 		&o.Status, &o.PaymentMethod, &o.PaymentStatus, &o.PromoCode,
 		&o.DeliveryAddress, &o.DeliveryCity, &o.DeliveryLatitude, &o.DeliveryLongitude,
 		&o.EstimatedDeliveryTime, &o.ActualDeliveryTime,
@@ -48,13 +48,13 @@ const orderItemColumns = `
 	special_instructions, created_at`
 
 const subOrderColumns = `
-	s.id, s.order_id, s.chef_id, s.status, s.subtotal, s.delivery_fee, s.commission,
+	s.id, s.order_id, s.chef_id, s.status, s.subtotal, s.delivery_fee, s.commission, s.tip,
 	s.created_at, s.updated_at, c.business_name`
 
 func scanSubOrder(s interface{ Scan(...any) error }) (*domain.SubOrder, error) {
 	so := &domain.SubOrder{}
 	err := s.Scan(
-		&so.ID, &so.OrderID, &so.ChefID, &so.Status, &so.Subtotal, &so.DeliveryFee, &so.Commission,
+		&so.ID, &so.OrderID, &so.ChefID, &so.Status, &so.Subtotal, &so.DeliveryFee, &so.Commission, &so.Tip,
 		&so.CreatedAt, &so.UpdatedAt, &so.ChefName,
 	)
 	return so, err
@@ -80,19 +80,19 @@ func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
 	orderQuery := `
 		INSERT INTO orders (
 			order_code, user_id,
-			subtotal, delivery_fee, service_fee, tax, discount, total_price,
+			subtotal, delivery_fee, service_fee, tax, discount, tip, total_price,
 			status, payment_method, payment_status, promo_code,
 			delivery_address, delivery_city, delivery_latitude, delivery_longitude,
 			customer_notes
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 		)
 		RETURNING id, created_at, updated_at`
 
 	err = tx.QueryRowContext(
 		ctx, orderQuery,
 		o.OrderCode, o.UserID,
-		o.Subtotal, o.DeliveryFee, o.ServiceFee, o.Tax, o.Discount, o.TotalPrice,
+		o.Subtotal, o.DeliveryFee, o.ServiceFee, o.Tax, o.Discount, o.Tip, o.TotalPrice,
 		o.Status, o.PaymentMethod, o.PaymentStatus, o.PromoCode,
 		o.DeliveryAddress, o.DeliveryCity, o.DeliveryLatitude, o.DeliveryLongitude,
 		o.CustomerNotes,
@@ -119,13 +119,13 @@ func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
 	}
 
 	subQuery := `
-		INSERT INTO sub_orders (order_id, chef_id, status, subtotal, delivery_fee, commission)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO sub_orders (order_id, chef_id, status, subtotal, delivery_fee, commission, tip)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at`
 
 	for _, s := range o.SubOrders {
 		s.OrderID = o.ID
-		err = tx.QueryRowContext(ctx, subQuery, s.OrderID, s.ChefID, s.Status, s.Subtotal, s.DeliveryFee, s.Commission).
+		err = tx.QueryRowContext(ctx, subQuery, s.OrderID, s.ChefID, s.Status, s.Subtotal, s.DeliveryFee, s.Commission, s.Tip).
 			Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
 		if err != nil {
 			return fmt.Errorf("create sub-order: %w", err)

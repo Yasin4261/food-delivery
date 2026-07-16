@@ -153,6 +153,9 @@ onBeforeUnmount(() => clearInterval(poll))
           <span v-if="order.delivery_fee > 0" class="block text-xs text-gray-400">
             {{ $t('orders.inclDelivery', { fee: `$${order.delivery_fee.toFixed(2)}` }) }}
           </span>
+          <span v-if="order.tip > 0" class="block text-xs text-gray-400">
+            {{ $t('orders.inclTip', { tip: `$${order.tip.toFixed(2)}` }) }}
+          </span>
           <span v-if="order.discount > 0" class="block text-xs text-green-600">
             {{ $t('orders.discount', { amount: `$${order.discount.toFixed(2)}`, code: order.promo_code }) }}
           </span>

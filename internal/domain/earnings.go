@@ -9,8 +9,9 @@ type Earnings struct {
 	ChefID          int     `json:"chef_id"`
 	TotalEarnings   float64 `json:"total_earnings"` // food subtotal (gross, pre-commission)
 	DeliveryFees    float64 `json:"delivery_fees"`  // kept by the chef in full
+	Tips            float64 `json:"tips"`           // customer gratuity, kept in full (#105)
 	Commission      float64 `json:"commission"`     // platform's cut
-	NetEarnings     float64 `json:"net_earnings"`   // subtotal + delivery fees - commission
+	NetEarnings     float64 `json:"net_earnings"`   // subtotal + delivery fees + tips - commission
 	DeliveredOrders int     `json:"delivered_orders"`
 	ItemsSold       int     `json:"items_sold"`
 }
