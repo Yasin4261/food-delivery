@@ -287,6 +287,7 @@ Tag history:
 | `v4.13.0` | chat read receipts + unread badges (#95, PR #101) |
 | `v4.14.0` | discount/promo codes: percent/fixed, platform-funded, atomic usage cap, admin management (#94, PR #102) |
 | `v4.15.0` | email verification on registration — `email_verification_tokens`, verify/resend endpoints, `is_verified` surfaced (not enforced) with an SPA resend banner (#103, PR #108) |
+| `v4.16.0` | chef away / vacation mode — one-tap availability toggle giving `is_accepting_orders` teeth (hidden from browse/search + orders blocked), no migration (#104, PR #109) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
