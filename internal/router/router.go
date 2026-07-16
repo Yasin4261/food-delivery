@@ -27,6 +27,7 @@ type Router struct {
 	chatHandler     *handler.ChatHandler
 	versionHandler  *handler.VersionHandler
 	paymentHandler  *handler.PaymentHandler
+	accountHandler  *handler.AccountHandler
 	authLimiter     middleware.Limiter
 }
 
@@ -48,6 +49,7 @@ func NewRouter(
 	chatHandler *handler.ChatHandler,
 	versionHandler *handler.VersionHandler,
 	paymentHandler *handler.PaymentHandler,
+	accountHandler *handler.AccountHandler,
 	authLimiter middleware.Limiter,
 ) *Router {
 	return &Router{
@@ -68,6 +70,7 @@ func NewRouter(
 		chatHandler:     chatHandler,
 		versionHandler:  versionHandler,
 		paymentHandler:  paymentHandler,
+		accountHandler:  accountHandler,
 		authLimiter:     authLimiter,
 	}
 }
@@ -102,6 +105,10 @@ func (r *Router) Setup() http.Handler {
 	// profile endpoint edits contact/location only (never email/username/role).
 	r.handleAuth("PUT /api/v2/auth/password", r.authHandler.ChangePassword)
 	r.handleAuth("PUT /api/v2/users/me", r.authHandler.UpdateProfile)
+	// Data rights (#107): export everything we hold; delete (anonymise) the
+	// account after a password check. Both are strictly caller-scoped.
+	r.handleAuth("GET /api/v2/users/me/export", r.accountHandler.Export)
+	r.handleAuth("DELETE /api/v2/users/me", r.accountHandler.Delete)
 
 	// Chefs: reads are public; opening a profile requires the chef role.
 	// The literal /nearby pattern is matched ahead of /{id} by ServeMux.

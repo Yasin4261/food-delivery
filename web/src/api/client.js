@@ -67,7 +67,7 @@ export const api = {
   post: (path, body) => request('POST', path, body),
   put: (path, body) => request('PUT', path, body),
   patch: (path, body) => request('PATCH', path, body),
-  del: (path) => request('DELETE', path),
+  del: (path, body) => request('DELETE', path, body),
   upload,
 }
 

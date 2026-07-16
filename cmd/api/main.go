@@ -185,6 +185,8 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	reviewService := service.NewReviewService(reviewRepo, orderRepo)
 	earningsService := service.NewEarningsService(earningsRepo, chefRepo)
 	searchService := service.NewSearchService(searchRepo)
+	accountRepo := repository.NewAccountRepository(db.DB)
+	accountService := service.NewAccountService(userRepo, chefRepo, addressRepo, orderRepo, reviewRepo, chatRepo, accountRepo)
 	chatService := service.NewChatService(chatRepo, chefRepo)
 
 	// Token denylist + auth rate limiter: in-memory by default (correct for a
@@ -227,7 +229,8 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	chatHandler := handler.NewChatHandler(chatService)
 	versionHandler := handler.NewVersionHandler(version)
 	paymentHandler := handler.NewPaymentHandler(paymentService, m)
+	accountHandler := handler.NewAccountHandler(accountService, revoker)
 
-	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, adminHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter)
+	r := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, adminHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, accountHandler, authLimiter)
 	return r.Setup()
 }

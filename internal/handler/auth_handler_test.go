@@ -244,9 +244,11 @@ func buildTestServer() testDeps {
 	chatHandler := handler.NewChatHandler(chatService)
 	versionHandler := handler.NewVersionHandler("v-test")
 	paymentHandler := handler.NewPaymentHandler(paymentService, nil)
+	accountService := service.NewAccountService(userRepo, chefRepo, addressRepo, orderRepo, newFakeReviewRepo(), newFakeChatRepo(), newFakeAccountRepo(userRepo))
+	accountHandler := handler.NewAccountHandler(accountService, denylist)
 	// A generous budget so no test trips the per-IP throttle accidentally.
 	authLimiter := middleware.NewRateLimiter(1000, time.Minute)
-	h := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, adminHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, authLimiter).Setup()
+	h := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, adminHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, accountHandler, authLimiter).Setup()
 	return testDeps{handler: h, mail: mail, users: userRepo, chefs: chefRepo, orders: orderRepo}
 }
 

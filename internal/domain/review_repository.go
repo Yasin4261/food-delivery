@@ -17,4 +17,7 @@ type ReviewRepository interface {
 	// ListByUserOrder returns the caller's own reviews for one order (their
 	// rating history for that order) — scoped to the user by construction.
 	ListByUserOrder(ctx context.Context, userID, orderID int) ([]*Review, error)
+	// ListByUser returns every review the user has written (newest first), for
+	// the data export (#107).
+	ListByUser(ctx context.Context, userID int) ([]*Review, error)
 }
