@@ -1,6 +1,8 @@
 package metrics_test
 
 import (
+	"bufio"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -8,6 +10,41 @@ import (
 
 	"github.com/Yasin4261/food-delivery/internal/metrics"
 )
+
+// hijackableWriter is an http.ResponseWriter that also supports Hijack, standing
+// in for the real server writer under a WebSocket upgrade.
+type hijackableWriter struct {
+	http.ResponseWriter
+	hijacked bool
+}
+
+func (w *hijackableWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	w.hijacked = true
+	return nil, nil, nil
+}
+
+// TestMetrics_MiddlewareForwardsHijack guards against the middleware breaking
+// WebSocket upgrades (chat /ws): the status wrapper must forward Hijack to the
+// underlying writer.
+func TestMetrics_MiddlewareForwardsHijack(t *testing.T) {
+	m := metrics.New()
+	hw := &hijackableWriter{ResponseWriter: httptest.NewRecorder()}
+
+	h := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hj, ok := w.(http.Hijacker)
+		if !ok {
+			t.Fatal("wrapped writer does not implement http.Hijacker")
+		}
+		if _, _, err := hj.Hijack(); err != nil {
+			t.Fatalf("Hijack: %v", err)
+		}
+	}))
+	h.ServeHTTP(hw, httptest.NewRequest(http.MethodGet, "/ws", nil))
+
+	if !hw.hijacked {
+		t.Error("Hijack was not forwarded to the underlying writer")
+	}
+}
 
 // scrape returns the /metrics text output.
 func scrape(t *testing.T, m *metrics.Metrics) string {

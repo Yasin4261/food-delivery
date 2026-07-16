@@ -10,7 +10,10 @@
 package metrics
 
 import (
+	"bufio"
 	"database/sql"
+	"errors"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -137,4 +140,14 @@ func (r *statusRecorder) WriteHeader(code int) {
 func (r *statusRecorder) Write(b []byte) (int, error) {
 	r.wrote = true
 	return r.ResponseWriter.Write(b)
+}
+
+// Hijack forwards to the underlying ResponseWriter so WebSocket upgrades (chat
+// /ws) keep working when this middleware is in the chain.
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("underlying ResponseWriter does not support hijacking")
+	}
+	return h.Hijack()
 }

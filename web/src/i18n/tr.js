@@ -353,6 +353,7 @@ export default {
     emptyHintCustomer: 'Bir şef sayfası açın ve "Şefle sohbet et"e dokunun.',
     live: '● canlı',
     offline: 'çevrimdışı',
+    seen: '✓ Görüldü',
     sayHello: 'Merhaba deyin 👋 — mesajlar anında iletilir.',
     typePlaceholder: 'Bir mesaj yazın…',
     send: 'Gönder',

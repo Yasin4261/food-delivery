@@ -4,12 +4,32 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/websocket"
 
+	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
+
+// wsFrame is the tagged envelope for every frame the server pushes over a chat
+// WebSocket. type == "message" carries a new message; type == "read" carries a
+// read receipt so the sender's client can show "seen" live (#106). Inbound
+// frames (client -> server) are still the bare {"body":...} shape.
+type wsFrame struct {
+	Type    string          `json:"type"`
+	Message *domain.Message `json:"message,omitempty"`
+	Read    *readReceipt    `json:"read,omitempty"`
+}
+
+// readReceipt announces that ReaderID has read the other party's messages in a
+// conversation up to ReadAt.
+type readReceipt struct {
+	ConversationID int       `json:"conversation_id"`
+	ReaderID       int       `json:"reader_id"`
+	ReadAt         time.Time `json:"read_at"`
+}
 
 // ChatHandler exposes the chat REST endpoints and the WebSocket transport.
 type ChatHandler struct {
@@ -97,7 +117,7 @@ func (h *ChatHandler) PostMessage(w http.ResponseWriter, r *http.Request) {
 		respondDomainError(w, err)
 		return
 	}
-	h.hub.Broadcast(id, msg)
+	h.hub.Broadcast(id, wsFrame{Type: "message", Message: msg})
 	respondJSON(w, http.StatusCreated, msg)
 }
 
@@ -139,6 +159,12 @@ func (h *ChatHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		respondDomainError(w, err)
 		return
 	}
+	// Tell the other party's live clients that their messages were seen (#106).
+	h.hub.Broadcast(id, wsFrame{Type: "read", Read: &readReceipt{
+		ConversationID: id,
+		ReaderID:       claims.UserID,
+		ReadAt:         time.Now().UTC(),
+	}})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -189,6 +215,6 @@ func (h *ChatHandler) WebSocket(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		h.hub.Broadcast(id, msg)
+		h.hub.Broadcast(id, wsFrame{Type: "message", Message: msg})
 	}
 }

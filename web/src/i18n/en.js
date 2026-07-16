@@ -354,6 +354,7 @@ export default {
     emptyHintCustomer: 'Open a chef page and hit "Chat with chef".',
     live: '● live',
     offline: 'offline',
+    seen: '✓ Seen',
     sayHello: 'Say hello 👋 — messages are delivered live.',
     typePlaceholder: 'Type a message…',
     send: 'Send',

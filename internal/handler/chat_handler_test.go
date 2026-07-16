@@ -235,12 +235,18 @@ func TestChat_WebSocketLiveDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("chef read: %v", err)
 	}
-	var msg domain.Message
-	if err := json.Unmarshal(data, &msg); err != nil {
-		t.Fatalf("decode ws message: %v", err)
+	var frame struct {
+		Type    string          `json:"type"`
+		Message *domain.Message `json:"message"`
 	}
-	if msg.Body != "live hello" {
-		t.Errorf("ws message body = %q, want %q", msg.Body, "live hello")
+	if err := json.Unmarshal(data, &frame); err != nil {
+		t.Fatalf("decode ws frame: %v", err)
+	}
+	if frame.Type != "message" || frame.Message == nil {
+		t.Fatalf("expected a message frame, got %s", data)
+	}
+	if frame.Message.Body != "live hello" {
+		t.Errorf("ws message body = %q, want %q", frame.Message.Body, "live hello")
 	}
 
 	// A non-participant is rejected at the handshake (HTTP 403).
@@ -290,5 +296,53 @@ func TestChat_MarkRead(t *testing.T) {
 	msgs := decodePage[domain.Message](t, rec.Body.Bytes())
 	if len(msgs.Data) != 1 || msgs.Data[0].ReadAt == nil {
 		t.Errorf("message read_at not set after mark read: %+v", msgs.Data)
+	}
+}
+
+// TestChat_ReadReceiptBroadcast: when one party marks a thread read, the other
+// party's live WebSocket receives a "read" frame so it can show "seen" (#106).
+func TestChat_ReadReceiptBroadcast(t *testing.T) {
+	srv := newTestServer()
+	chefToken, _ := seedChefWithItem(t, srv, "chefb", "chefb@example.com")
+	customer := registerCustomerToken(t, srv, "custb", "custb@example.com")
+	convID := startConversation(t, srv, customer)
+	path := "/api/v2/chat/conversations/" + itoa(convID)
+
+	// The customer sends a message, then connects a live socket.
+	if rec := do(t, srv, http.MethodPost, path+"/messages", customer, `{"body":"seen me?"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("post message = %d (%s)", rec.Code, rec.Body)
+	}
+	server := httptest.NewServer(srv)
+	defer server.Close()
+	custConn, _, err := dialWS(t, server.URL, path+"/ws", customer)
+	if err != nil {
+		t.Fatalf("customer dial: %v", err)
+	}
+	defer custConn.Close()
+	time.Sleep(100 * time.Millisecond) // let the join settle
+
+	// The chef reads the thread (shares the in-process hub via srv).
+	if rec := do(t, srv, http.MethodPost, path+"/read", chefToken, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("chef mark read = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// The customer's socket receives a read receipt.
+	_ = custConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, data, err := custConn.ReadMessage()
+	if err != nil {
+		t.Fatalf("customer read: %v", err)
+	}
+	var frame struct {
+		Type string `json:"type"`
+		Read *struct {
+			ConversationID int `json:"conversation_id"`
+			ReaderID       int `json:"reader_id"`
+		} `json:"read"`
+	}
+	if err := json.Unmarshal(data, &frame); err != nil {
+		t.Fatalf("decode ws frame: %v", err)
+	}
+	if frame.Type != "read" || frame.Read == nil || frame.Read.ConversationID != convID || frame.Read.ReaderID == 0 {
+		t.Errorf("expected a read frame for conv %d, got %s", convID, data)
 	}
 }
