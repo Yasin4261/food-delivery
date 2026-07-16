@@ -278,6 +278,14 @@ Tag history:
 | `v4.5.0` | photo upload — dish + kitchen photos via the `FileStore` port, EXIF-stripping re-encode, traversal-proof serving (#63, PR #83) |
 | `v4.6.0` | chef working hours — weekly schedules (overnight + split shifts), order-time enforcement in Europe/Istanbul, `is_open_now` (#70, PR #84) |
 | `v4.7.0` | money model — distance-based delivery fees + chef commission with per-slice snapshots (#65, PR #86); nightly DB backups + restore runbook (#74, PR #85) |
+| `v4.8.0` | CD pipeline: build/push to GHCR + deploy on tag (#72); observability: Prometheus `/metrics`, Grafana dashboard, alerts (#73) |
+| `v4.9.0` | staging environment: production-shaped throwaway stack, `ENV=staging` mock relaxation, deploy-on-main CD, E2E via `E2E_BASE_URL` (#75, PR #89) |
+| `v4.10.0` | admin panel: platform stats, user/chef activation, order overview behind `RequireRole(admin)` (#69, PR #90) |
+| `v4.11.0` | dietary tags & filters (#91); reorder from history (#96) |
+| `v4.12.0` | order ETAs (#92); multi-photo dish galleries (#93) |
+| `v4.13.0` | chat read receipts + unread badges (#95, PR #101) |
+| `v4.14.0` | discount/promo codes: percent/fixed, platform-funded, atomic usage cap, admin management (#94, PR #102) |
+| `v4.15.0` | email verification on registration — `email_verification_tokens`, verify/resend endpoints, `is_verified` surfaced (not enforced) with an SPA resend banner (#103, PR #108) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
