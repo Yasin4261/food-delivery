@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, page } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -62,12 +62,33 @@ function connect(conv) {
   socket.onclose = () => (live.value = false)
   socket.onmessage = (ev) => {
     try {
-      appendUnique(JSON.parse(ev.data))
+      const frame = JSON.parse(ev.data)
+      if (frame.type === 'read') {
+        // The other party opened the thread — mark my delivered messages seen.
+        if (frame.read && frame.read.reader_id !== myId) {
+          messages.value.forEach((m) => {
+            if (mine(m) && !m.read_at) m.read_at = frame.read.read_at
+          })
+        }
+        return
+      }
+      // A message frame (envelope, or defensively a bare message).
+      appendUnique(frame.message || frame)
     } catch {
       // ignore malformed frames
     }
   }
 }
+
+// Id of my most recent message the other party has read — drives the single
+// "seen" marker under the last read outgoing bubble.
+const lastSeenMineId = computed(() => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const m = messages.value[i]
+    if (mine(m) && m.read_at) return m.id
+  }
+  return null
+})
 
 function disconnect() {
   socket?.close()
@@ -183,7 +204,7 @@ onBeforeUnmount(disconnect)
             <p v-if="!messages.length" class="pt-10 text-center text-sm text-gray-400">
               {{ $t('chat.sayHello') }}
             </p>
-            <div v-for="m in messages" :key="m.id" class="flex" :class="mine(m) ? 'justify-end' : 'justify-start'">
+            <div v-for="m in messages" :key="m.id" class="flex flex-col" :class="mine(m) ? 'items-end' : 'items-start'">
               <div
                 class="max-w-[75%] rounded-2xl px-3 py-1.5 text-sm"
                 :class="mine(m) ? 'rounded-br-sm bg-brand-600 text-white' : 'rounded-bl-sm bg-gray-100 text-gray-800'"
@@ -191,6 +212,9 @@ onBeforeUnmount(disconnect)
                 <p class="whitespace-pre-wrap break-words">{{ m.body }}</p>
                 <p class="mt-0.5 text-right text-[10px] opacity-60">{{ when(m.created_at) }}</p>
               </div>
+              <span v-if="m.id === lastSeenMineId" class="mt-0.5 pr-1 text-[10px] text-gray-400">
+                {{ $t('chat.seen') }}
+              </span>
             </div>
           </div>
 
