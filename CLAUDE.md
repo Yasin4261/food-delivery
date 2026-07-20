@@ -295,6 +295,8 @@ Tag history:
 | `v4.18.0` | tips for chefs at checkout — order-level gratuity split per sub-order by subtotal, uncommissioned, into earnings + refunds (#105, PR #111) |
 | `v4.19.0` | account deletion + data export (GDPR) — caller-scoped JSON export; password-confirmed delete that anonymises (retaining counterparty orders/reviews) and revokes the token (#107, PR #112) |
 | `v4.19.1` | security fix: anonymised delete identity now carries a random suffix so a pre-registered `deleted-<id>` sentinel can't block a user's deletion (#113, PR #114) |
+| `v4.19.2` | security hardening: per-IP rate limiting extended to the password-bearing authenticated endpoints (change-password, delete-account) so a stolen session can't brute-force the account password (#115, PR #116) |
+| `v4.20.0` | saved cards — opt-in iyzico card storage (`cardUserKey`/`cardToken` + masked digits only, never a PAN/CVC), pay-with-stored-card, owner-scoped list/delete; plus a credential-gated iyzico sandbox smoke-test scaffold (#67, PR #117; #51 scaffold) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
