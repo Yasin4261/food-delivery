@@ -202,6 +202,13 @@ func loginToken(t *testing.T, srv http.Handler, email string) string {
 }
 
 func buildTestServer() testDeps {
+	// A generous budget so no ordinary test trips the per-IP throttle.
+	return buildTestServerWithLimit(1000)
+}
+
+// buildTestServerWithLimit wires the full server with a chosen per-IP request
+// budget, so throttling tests can drive the 429 path deliberately.
+func buildTestServerWithLimit(limit int) testDeps {
 	chefRepo := newFakeChefRepo()
 	itemRepo := newFakeMenuItemRepo()
 	userRepo := newFakeUserRepo()
@@ -246,8 +253,7 @@ func buildTestServer() testDeps {
 	paymentHandler := handler.NewPaymentHandler(paymentService, nil)
 	accountService := service.NewAccountService(userRepo, chefRepo, addressRepo, orderRepo, newFakeReviewRepo(), newFakeChatRepo(), newFakeAccountRepo(userRepo))
 	accountHandler := handler.NewAccountHandler(accountService, denylist)
-	// A generous budget so no test trips the per-IP throttle accidentally.
-	authLimiter := middleware.NewRateLimiter(1000, time.Minute)
+	authLimiter := middleware.NewRateLimiter(limit, time.Minute)
 	h := router.NewRouter(authMiddleware, healthHandler, authHandler, chefHandler, menuHandler, orderHandler, favoriteHandler, addressHandler, uploadHandler, adminHandler, reviewHandler, earningsHandler, searchHandler, chatHandler, versionHandler, paymentHandler, accountHandler, authLimiter).Setup()
 	return testDeps{handler: h, mail: mail, users: userRepo, chefs: chefRepo, orders: orderRepo}
 }
@@ -376,6 +382,41 @@ func TestLogout_RevokesToken(t *testing.T) {
 	if rec := do(t, srv, http.MethodPost, "/api/v2/auth/logout", "", ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("logout without token = %d, want 401", rec.Code)
 	}
+}
+
+// TestSensitiveEndpoints_RateLimited proves that the password-bearing
+// authenticated endpoints (#115) — change-password and delete-account — are
+// throttled per IP on top of requiring a session, so a stolen token cannot be
+// used to brute-force the account password. The throttle fires before the
+// handler, so the second request 429s regardless of the password supplied.
+func TestSensitiveEndpoints_RateLimited(t *testing.T) {
+	t.Run("change-password", func(t *testing.T) {
+		// Budget of 2: register consumes one hit, leaving exactly one for the
+		// first change-password (which succeeds); the second trips the throttle.
+		srv := buildTestServerWithLimit(2).handler
+		token := registerAndToken(t, srv, "yasin", "yasin@example.com")
+
+		body := `{"current_password":"secret123","new_password":"newsecret123"}`
+		if rec := do(t, srv, http.MethodPut, "/api/v2/auth/password", token, body); rec.Code != http.StatusOK {
+			t.Fatalf("first change-password = %d, want 200 (%s)", rec.Code, rec.Body)
+		}
+		if rec := do(t, srv, http.MethodPut, "/api/v2/auth/password", token, body); rec.Code != http.StatusTooManyRequests {
+			t.Errorf("second change-password = %d, want 429", rec.Code)
+		}
+	})
+
+	t.Run("delete-account", func(t *testing.T) {
+		srv := buildTestServerWithLimit(2).handler
+		token := registerAndToken(t, srv, "yasin", "yasin@example.com")
+
+		body := `{"password":"secret123"}`
+		if rec := do(t, srv, http.MethodDelete, "/api/v2/users/me", token, body); rec.Code != http.StatusOK {
+			t.Fatalf("first delete-account = %d, want 200 (%s)", rec.Code, rec.Body)
+		}
+		if rec := do(t, srv, http.MethodDelete, "/api/v2/users/me", token, body); rec.Code != http.StatusTooManyRequests {
+			t.Errorf("second delete-account = %d, want 429", rec.Code)
+		}
+	})
 }
 
 func TestAuthHTTP_ErrorCodes(t *testing.T) {

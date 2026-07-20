@@ -86,6 +86,11 @@ func (r *Router) Setup() http.Handler {
 	limited := func(pattern string, h http.HandlerFunc) {
 		r.mux.Handle(pattern, throttle(http.HandlerFunc(h)))
 	}
+	// limitedAuth requires a valid token AND throttles per IP — for
+	// authenticated but sensitive (e.g. password-bearing) endpoints.
+	limitedAuth := func(pattern string, h http.HandlerFunc) {
+		r.mux.Handle(pattern, throttle(r.auth.Require(http.HandlerFunc(h))))
+	}
 	limited("POST /api/v2/auth/register", r.authHandler.Register)
 	limited("POST /api/v2/auth/login", r.authHandler.Login)
 	limited("POST /api/v2/auth/forgot-password", r.authHandler.ForgotPassword)
@@ -96,19 +101,21 @@ func (r *Router) Setup() http.Handler {
 	// Logout requires a valid token so it can revoke that exact token.
 	r.handleAuth("POST /api/v2/auth/logout", r.authHandler.Logout)
 	// Resending a link requires a session and is throttled per IP.
-	r.mux.Handle("POST /api/v2/auth/resend-verification",
-		throttle(r.auth.Require(http.HandlerFunc(r.authHandler.ResendVerification))))
+	limitedAuth("POST /api/v2/auth/resend-verification", r.authHandler.ResendVerification)
 
 	// Protected: requires a valid bearer token.
 	r.mux.Handle("GET /api/v2/auth/me", r.auth.Require(http.HandlerFunc(r.authHandler.Me)))
 	// Profile self-service: password change proves the current password; the
 	// profile endpoint edits contact/location only (never email/username/role).
-	r.handleAuth("PUT /api/v2/auth/password", r.authHandler.ChangePassword)
+	// Password-bearing endpoints (change-password, delete-account) are also
+	// throttled per IP (#115) — a stolen session must not become a brute-force
+	// oracle against the account password.
+	limitedAuth("PUT /api/v2/auth/password", r.authHandler.ChangePassword)
 	r.handleAuth("PUT /api/v2/users/me", r.authHandler.UpdateProfile)
 	// Data rights (#107): export everything we hold; delete (anonymise) the
 	// account after a password check. Both are strictly caller-scoped.
 	r.handleAuth("GET /api/v2/users/me/export", r.accountHandler.Export)
-	r.handleAuth("DELETE /api/v2/users/me", r.accountHandler.Delete)
+	limitedAuth("DELETE /api/v2/users/me", r.accountHandler.Delete)
 
 	// Chefs: reads are public; opening a profile requires the chef role.
 	// The literal /nearby pattern is matched ahead of /{id} by ServeMux.
