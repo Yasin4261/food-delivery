@@ -99,7 +99,7 @@ func notifierFixture(t *testing.T) (*service.OrderService, *channelMailer, *fake
 
 	items := newFakeMenuItemRepo()
 	mailer := newChannelMailer()
-	notifier := service.NewOrderNotifier(mailer, users, chefs)
+	notifier := service.NewOrderNotifier(mailer, users, chefs, "TRY")
 	svc := service.NewOrderService(newFakeOrderRepo(), items, chefs, nil, nil, nil, domain.FeePolicy{}, nil, notifier)
 	return svc, mailer, items, users
 }
@@ -156,11 +156,17 @@ func TestOrderNotifier_NewOrderEmailsEachChef(t *testing.T) {
 	if !strings.Contains(one.Body, "Kitchen One") || strings.Contains(one.Body, "Kitchen Two") {
 		t.Errorf("chef1 body leaks other chef: %q", one.Body)
 	}
-	if !strings.Contains(one.Body, "$5.00") || strings.Contains(one.Body, "$6.00") {
+	if !strings.Contains(one.Body, "5.00 TRY") || strings.Contains(one.Body, "6.00 TRY") {
 		t.Errorf("chef1 body has wrong subtotals: %q", one.Body)
 	}
-	if !strings.Contains(two.Body, "$6.00") {
+	if !strings.Contains(two.Body, "6.00 TRY") {
 		t.Errorf("chef2 body missing their subtotal: %q", two.Body)
+	}
+	// Emails must never quote a hardcoded dollar amount (#125) — they are the
+	// record the recipient keeps, and the platform charges the configured
+	// currency.
+	if strings.Contains(one.Body, "$") || strings.Contains(two.Body, "$") {
+		t.Errorf("email quotes $ instead of the configured currency: %q / %q", one.Body, two.Body)
 	}
 }
 

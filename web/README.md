@@ -20,6 +20,16 @@ npm run dev        # http://localhost:5173
 
 Point at a different backend with `VITE_API_TARGET=http://host:port npm run dev`.
 
+### Currency
+
+Prices are rendered by `src/lib/money.js` (`formatMoney`), localised to the
+active UI language via `Intl.NumberFormat` — `₺45,00` in Turkish, `TRY 45.00` in
+English. **Never hardcode a currency symbol in a template.**
+
+`VITE_CURRENCY` (default `TRY`) selects the ISO-4217 code and **must match the
+API's `CURRENCY`** — otherwise the UI shows one currency while the gateway
+charges another (#125).
+
 ## Test & build
 
 ```bash

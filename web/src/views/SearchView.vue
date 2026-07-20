@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { formatMoney as money } from '@/lib/money'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { api, page } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -198,7 +199,7 @@ onMounted(() => {
             <h3 class="font-medium">{{ item.name }}</h3>
             <p v-if="item.description" class="truncate text-sm text-gray-500">{{ item.description }}</p>
             <p class="mt-1.5 flex flex-wrap items-center gap-1.5">
-              <span class="badge bg-brand-50 text-brand-700">${{ item.price?.toFixed(2) }}</span>
+              <span class="badge bg-brand-50 text-brand-700">{{ money(item.price) }}</span>
               <DietaryBadges :item="item" />
               <RouterLink :to="`/chefs/${item.chef_id}`" class="text-xs text-brand-600 hover:underline">
                 {{ $t('search.viewChef') }}

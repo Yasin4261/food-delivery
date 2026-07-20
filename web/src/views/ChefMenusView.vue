@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { formatMoney as money } from '@/lib/money'
 import { RouterLink } from 'vue-router'
 import DietaryBadges from '@/components/DietaryBadges.vue'
 import { api, page, ApiError } from '@/api/client'
@@ -225,7 +226,7 @@ onMounted(load)
               <img v-if="item.image_url" :src="item.image_url" :alt="item.name" class="h-9 w-9 shrink-0 rounded-lg object-cover" />
               <div class="min-w-0">
                 <span class="font-medium">{{ item.name }}</span>
-                <span class="ml-2 text-gray-500">${{ item.price?.toFixed(2) }}</span>
+                <span class="ml-2 text-gray-500">{{ money(item.price) }}</span>
                 <span class="ml-2 text-gray-400">
                   {{ item.is_unlimited ? $t('menus.unlimited') : $t('menus.stockN', { n: item.available_quantity ?? 0 }) }}
                 </span>
