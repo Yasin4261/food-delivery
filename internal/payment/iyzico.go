@@ -41,13 +41,15 @@ type Iyzico struct {
 }
 
 // NewIyzico builds an iyzico gateway. baseURL selects sandbox vs production
-// (e.g. https://sandbox-api.iyzipay.com).
-func NewIyzico(apiKey, secretKey, baseURL string) *Iyzico {
+// (e.g. https://sandbox-api.iyzipay.com); currency is the ISO-4217 code from
+// config — never hardcoded, so the charge always matches what the UI shows
+// (#125).
+func NewIyzico(apiKey, secretKey, baseURL, currency string) *Iyzico {
 	return &Iyzico{
 		apiKey:    apiKey,
 		secretKey: secretKey,
 		baseURL:   baseURL,
-		currency:  "TRY",
+		currency:  currency,
 		client:    &http.Client{Timeout: 15 * time.Second},
 		randomKey: func() string { return strconv.FormatInt(time.Now().UnixMilli(), 10) + "123456789" },
 	}

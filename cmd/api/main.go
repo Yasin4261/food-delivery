@@ -143,7 +143,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	// mock that simulates the hosted-checkout dance.
 	var gateway domain.PaymentGateway
 	if cfg.IyzicoAPIKey != "" {
-		gateway = payment.NewIyzico(cfg.IyzicoAPIKey, cfg.IyzicoSecretKey, cfg.IyzicoBaseURL)
+		gateway = payment.NewIyzico(cfg.IyzicoAPIKey, cfg.IyzicoSecretKey, cfg.IyzicoBaseURL, cfg.Currency)
 	} else {
 		slog.Warn("IYZICO_API_KEY not set; using the dev mock payment gateway (no real charges)")
 		gateway = payment.NewMock(cfg.AppBaseURL)
@@ -174,7 +174,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 		log.Fatalf("upload storage: %v", err)
 	}
 	uploadService := service.NewUploadService(fileStore, chefRepo, menuItemRepo)
-	orderNotifier := service.NewOrderNotifier(mail, userRepo, chefRepo)
+	orderNotifier := service.NewOrderNotifier(mail, userRepo, chefRepo, cfg.Currency)
 	feePolicy := domain.FeePolicy{
 		DeliveryBaseFee:  cfg.DeliveryBaseFee,
 		DeliveryFeePerKm: cfg.DeliveryFeePerKm,

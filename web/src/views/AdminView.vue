@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
+import { formatMoney as money } from '@/lib/money'
 import { api, page } from '@/api/client'
 import { statusClass } from '@/lib/status'
 
@@ -132,7 +133,7 @@ onMounted(loadStats)
     <!-- Overview -->
     <div v-if="tab === 'overview' && stats" class="space-y-6">
       <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        <div class="card"><p class="text-sm text-gray-500">{{ $t('admin.gmv') }}</p><p class="text-2xl font-bold">${{ stats.gmv?.toFixed(2) }}</p></div>
+        <div class="card"><p class="text-sm text-gray-500">{{ $t('admin.gmv') }}</p><p class="text-2xl font-bold">{{ money(stats.gmv) }}</p></div>
         <div class="card"><p class="text-sm text-gray-500">{{ $t('admin.totalOrders') }}</p><p class="text-2xl font-bold">{{ stats.total_orders }}</p></div>
         <div class="card"><p class="text-sm text-gray-500">{{ $t('admin.deliveredOrders') }}</p><p class="text-2xl font-bold">{{ stats.delivered_orders }}</p></div>
         <div class="card"><p class="text-sm text-gray-500">{{ $t('admin.ordersToday') }}</p><p class="text-2xl font-bold">{{ stats.orders_today }}</p></div>
@@ -144,7 +145,7 @@ onMounted(loadStats)
         <h2 class="mb-2 font-semibold">{{ $t('admin.topChefs') }}</h2>
         <div v-for="c in stats.top_chefs" :key="c.chef_id" class="flex justify-between border-t border-gray-100 py-1.5 text-sm">
           <span>{{ c.business_name }}</span>
-          <span class="text-gray-500">{{ c.orders }} {{ $t('admin.orders') }} · <span class="font-medium text-gray-700">${{ c.revenue?.toFixed(2) }}</span></span>
+          <span class="text-gray-500">{{ c.orders }} {{ $t('admin.orders') }} · <span class="font-medium text-gray-700">{{ money(c.revenue) }}</span></span>
         </div>
       </div>
     </div>
@@ -188,7 +189,7 @@ onMounted(loadStats)
             <td class="py-1.5 font-mono text-xs text-gray-500">{{ o.order_code }}</td>
             <td><span class="badge" :class="statusClass(o.status)">{{ $t(`status.${o.status}`) }}</span></td>
             <td>{{ o.payment_method === 'card' ? '💳' : '💵' }} {{ $t(`payment.${o.payment_status}`) }}</td>
-            <td class="text-right font-semibold">${{ o.total_price?.toFixed(2) }}</td>
+            <td class="text-right font-semibold">{{ money(o.total_price) }}</td>
           </tr>
         </tbody>
       </table>
@@ -213,7 +214,7 @@ onMounted(loadStats)
           <tbody>
             <tr v-for="p in promos" :key="p.id" class="border-t border-gray-100">
               <td class="py-1.5 font-mono font-medium">{{ p.code }}</td>
-              <td>{{ p.discount_type === 'percent' ? `${p.discount_value}%` : `$${p.discount_value.toFixed(2)}` }}<span v-if="p.min_order > 0" class="text-gray-400"> · min ${{ p.min_order.toFixed(2) }}</span></td>
+              <td>{{ p.discount_type === 'percent' ? `${p.discount_value}%` : money(p.discount_value) }}<span v-if="p.min_order > 0" class="text-gray-400"> · min {{ money(p.min_order) }}</span></td>
               <td>{{ p.used_count }}<span v-if="p.usage_limit > 0"> / {{ p.usage_limit }}</span></td>
               <td><span class="badge" :class="p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ p.is_active ? $t('admin.active') : $t('admin.inactive') }}</span></td>
               <td class="text-right"><button class="text-sm hover:underline" :class="p.is_active ? 'text-red-600' : 'text-green-600'" @click="togglePromo(p)">{{ p.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button></td>
