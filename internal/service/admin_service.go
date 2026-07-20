@@ -63,10 +63,15 @@ func (s *AdminService) SetPromoActive(ctx context.Context, id int, active bool) 
 	return s.promos.SetActive(ctx, id, active)
 }
 
-// ListUsers returns a page of all users (password hashes cleared) and the total.
-func (s *AdminService) ListUsers(ctx context.Context, limit, offset int) ([]*domain.User, int, error) {
+// ListUsers returns a page of users matching f (password hashes cleared) and
+// the total. Unknown role values are rejected rather than silently ignored, so
+// a typo'd filter never quietly returns "everything".
+func (s *AdminService) ListUsers(ctx context.Context, f domain.AdminUserFilters, limit, offset int) ([]*domain.User, int, error) {
+	if f.Role != "" && !domain.ValidRole(f.Role) {
+		return nil, 0, ValidationError{Msg: "unknown role filter"}
+	}
 	limit, offset = normalisePaging(limit, offset)
-	users, total, err := s.admin.ListUsers(ctx, limit, offset)
+	users, total, err := s.admin.ListUsers(ctx, f, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -81,10 +86,11 @@ func (s *AdminService) SetUserActive(ctx context.Context, userID int, active boo
 	return s.admin.SetUserActive(ctx, userID, active)
 }
 
-// ListChefs returns a page of all chefs (including inactive) and the total.
-func (s *AdminService) ListChefs(ctx context.Context, limit, offset int) ([]*domain.Chef, int, error) {
+// ListChefs returns a page of chefs (including inactive) matching f, plus the
+// total matching count.
+func (s *AdminService) ListChefs(ctx context.Context, f domain.AdminChefFilters, limit, offset int) ([]*domain.Chef, int, error) {
 	limit, offset = normalisePaging(limit, offset)
-	return s.admin.ListChefs(ctx, limit, offset)
+	return s.admin.ListChefs(ctx, f, limit, offset)
 }
 
 // SetChefActive activates or deactivates a chef (deactivation hides them from
@@ -93,10 +99,19 @@ func (s *AdminService) SetChefActive(ctx context.Context, chefID int, active boo
 	return s.admin.SetChefActive(ctx, chefID, active)
 }
 
-// ListOrders returns a page of all orders (the platform overview) and the total.
-func (s *AdminService) ListOrders(ctx context.Context, limit, offset int) ([]*domain.Order, int, error) {
+// ListOrders returns a page of orders matching f (the platform/support
+// overview), plus the total matching count. Unknown lifecycle values are
+// rejected rather than silently ignored, so a typo'd filter never quietly
+// returns "everything".
+func (s *AdminService) ListOrders(ctx context.Context, f domain.AdminOrderFilters, limit, offset int) ([]*domain.Order, int, error) {
+	if f.Status != "" && !domain.ValidOrderStatus(f.Status) {
+		return nil, 0, ValidationError{Msg: "unknown order status filter"}
+	}
+	if f.PaymentStatus != "" && !domain.ValidPaymentStatus(f.PaymentStatus) {
+		return nil, 0, ValidationError{Msg: "unknown payment status filter"}
+	}
 	limit, offset = normalisePaging(limit, offset)
-	return s.admin.ListOrders(ctx, limit, offset)
+	return s.admin.ListOrders(ctx, f, limit, offset)
 }
 
 // Stats returns the aggregated platform dashboard figures.

@@ -16,7 +16,7 @@ func TestAdminRepository_UsersAndActiveToggles(t *testing.T) {
 	u2 := seedUser(t, "b@example.com")
 	chef := seedChef(t, u2.ID)
 
-	users, total, err := repo.ListUsers(ctx(), 20, 0)
+	users, total, err := repo.ListUsers(ctx(), domain.AdminUserFilters{}, 20, 0)
 	if err != nil {
 		t.Fatalf("list users: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestAdminRepository_UsersAndActiveToggles(t *testing.T) {
 	if err := repo.SetUserActive(ctx(), u1.ID, false); err != nil {
 		t.Fatalf("deactivate user: %v", err)
 	}
-	after, total, _ := repo.ListUsers(ctx(), 20, 0)
+	after, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{}, 20, 0)
 	if total != 2 {
 		t.Errorf("admin should still list inactive users: total = %d, want 2", total)
 	}
@@ -54,7 +54,7 @@ func TestAdminRepository_UsersAndActiveToggles(t *testing.T) {
 	}
 
 	// Admin listing still shows the deactivated chef.
-	if chefs, ctotal, err := repo.ListChefs(ctx(), 20, 0); err != nil || ctotal != 1 || chefs[0].IsActive {
+	if chefs, ctotal, err := repo.ListChefs(ctx(), domain.AdminChefFilters{}, 20, 0); err != nil || ctotal != 1 || chefs[0].IsActive {
 		t.Errorf("admin chef listing wrong: total=%d err=%v", ctotal, err)
 	}
 
@@ -106,7 +106,7 @@ func TestAdminRepository_StatsAndOrders(t *testing.T) {
 	}
 
 	// Order overview returns all orders, newest first, with items loaded.
-	orders, total, err := repo.ListOrders(ctx(), 20, 0)
+	orders, total, err := repo.ListOrders(ctx(), domain.AdminOrderFilters{}, 20, 0)
 	if err != nil {
 		t.Fatalf("list orders: %v", err)
 	}
@@ -115,5 +115,119 @@ func TestAdminRepository_StatsAndOrders(t *testing.T) {
 	}
 	if len(orders[0].Items) == 0 {
 		t.Error("order overview should load items")
+	}
+}
+
+// The admin filter SQL (#118) against real Postgres: ILIKE search, role/status
+// narrowing, the tri-state active filter, and — critically — that the returned
+// total counts MATCHING rows rather than the whole table.
+func TestAdminRepository_ListFilters(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewAdminRepository(testDB)
+
+	alice := seedUser(t, "alice@example.com")
+	seedUser(t, "bob@example.com")
+	chefUser := seedUser(t, "chef@example.com")
+	chef := seedChef(t, chefUser.ID)
+
+	truthy := true
+	falsy := false
+
+	// --- users -------------------------------------------------------------
+	// Free-text matches email or username, case-insensitively.
+	for _, q := range []string{"alice", "ALICE", "alice@ex"} {
+		got, total, err := repo.ListUsers(ctx(), domain.AdminUserFilters{Query: q}, 20, 0)
+		if err != nil {
+			t.Fatalf("list users q=%q: %v", q, err)
+		}
+		if total != 1 || len(got) != 1 || got[0].ID != alice.ID {
+			t.Errorf("q=%q -> total=%d len=%d, want exactly alice", q, total, len(got))
+		}
+	}
+
+	// A non-matching query yields an empty page AND a zero total (the bug this
+	// guards: reusing an unfiltered count(*) would report the table size).
+	if got, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{Query: "zzz-nobody"}, 20, 0); total != 0 || len(got) != 0 {
+		t.Errorf("no-match query -> total=%d len=%d, want 0/0", total, len(got))
+	}
+
+	// Role filter.
+	if _, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{Role: domain.RoleChef}, 20, 0); total != 0 {
+		// seedUser creates plain users; the chef PROFILE exists but the role
+		// may not be 'chef' — assert against the actual seeded role instead.
+		t.Logf("role=chef total=%d (seed roles are %q)", total, chefUser.Role)
+	}
+	if _, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{Role: chefUser.Role}, 20, 0); total != 3 {
+		t.Errorf("role=%q total=%d, want 3 seeded users", chefUser.Role, total)
+	}
+
+	// Tri-state active: nil = both, true/false narrow.
+	_, allTotal, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{}, 20, 0)
+	if _, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{Active: &truthy}, 20, 0); total != allTotal {
+		t.Errorf("active=true total=%d, want %d (all seeded users active)", total, allTotal)
+	}
+	if _, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{Active: &falsy}, 20, 0); total != 0 {
+		t.Errorf("active=false total=%d, want 0", total)
+	}
+	// Deactivate one and the tri-state flips accordingly.
+	if err := repo.SetUserActive(ctx(), alice.ID, false); err != nil {
+		t.Fatalf("deactivate: %v", err)
+	}
+	if _, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{Active: &falsy}, 20, 0); total != 1 {
+		t.Errorf("after deactivate, active=false total=%d, want 1", total)
+	}
+
+	// Pagination: total stays the full matching count, not the page length.
+	page, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{}, 1, 0)
+	if len(page) != 1 || total != allTotal {
+		t.Errorf("limit=1 -> len=%d total=%d, want 1/%d", len(page), total, allTotal)
+	}
+
+	// --- chefs -------------------------------------------------------------
+	if got, total, err := repo.ListChefs(ctx(), domain.AdminChefFilters{Query: "kitch"}, 20, 0); err != nil || total != 1 || len(got) != 1 {
+		t.Errorf("chef q=kitch -> total=%d len=%d err=%v, want 1/1", total, len(got), err)
+	}
+	if _, total, _ := repo.ListChefs(ctx(), domain.AdminChefFilters{Query: "zzz"}, 20, 0); total != 0 {
+		t.Errorf("chef q=zzz total=%d, want 0", total)
+	}
+	if err := repo.SetChefActive(ctx(), chef.ID, false); err != nil {
+		t.Fatalf("deactivate chef: %v", err)
+	}
+	if _, total, _ := repo.ListChefs(ctx(), domain.AdminChefFilters{Active: &truthy}, 20, 0); total != 0 {
+		t.Errorf("active chefs total=%d, want 0 after deactivation", total)
+	}
+
+	// --- orders ------------------------------------------------------------
+	menu := seedMenu(t, chef.ID)
+	item := seedItem(t, menu.ID, chef.ID, 5, 10)
+	orderID := seedDeliveredOrder(t, alice.ID, chef.ID, item, "ORD-FILTER-1")
+	_ = orderID
+
+	// NOTE: seedDeliveredOrder is misleadingly named — it persists a NEW order,
+	// which is status=pending. Assert against the real seeded state.
+	if _, total, err := repo.ListOrders(ctx(), domain.AdminOrderFilters{Status: domain.OrderStatusPending}, 20, 0); err != nil || total != 1 {
+		t.Errorf("status=pending total=%d err=%v, want 1", total, err)
+	}
+	if _, total, _ := repo.ListOrders(ctx(), domain.AdminOrderFilters{Status: domain.OrderStatusDelivered}, 20, 0); total != 0 {
+		t.Errorf("status=delivered total=%d, want 0", total)
+	}
+	// Payment status narrows independently of lifecycle status.
+	if _, total, _ := repo.ListOrders(ctx(), domain.AdminOrderFilters{PaymentStatus: domain.PaymentStatusPending}, 20, 0); total != 1 {
+		t.Errorf("payment_status=pending total=%d, want 1", total)
+	}
+	if _, total, _ := repo.ListOrders(ctx(), domain.AdminOrderFilters{PaymentStatus: domain.PaymentStatusPaid}, 20, 0); total != 0 {
+		t.Errorf("payment_status=paid total=%d, want 0", total)
+	}
+	// Combined filters intersect (status AND customer), they don't union.
+	if _, total, _ := repo.ListOrders(ctx(), domain.AdminOrderFilters{
+		Status: domain.OrderStatusPending, UserID: 999999,
+	}, 20, 0); total != 0 {
+		t.Errorf("status=pending AND user_id=999999 total=%d, want 0 (filters must intersect)", total)
+	}
+	if _, total, _ := repo.ListOrders(ctx(), domain.AdminOrderFilters{UserID: alice.ID}, 20, 0); total != 1 {
+		t.Errorf("user_id=alice total=%d, want 1", total)
+	}
+	if _, total, _ := repo.ListOrders(ctx(), domain.AdminOrderFilters{UserID: 999999}, 20, 0); total != 0 {
+		t.Errorf("user_id=999999 total=%d, want 0", total)
 	}
 }

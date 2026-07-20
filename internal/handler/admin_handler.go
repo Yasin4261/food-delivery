@@ -2,10 +2,12 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/Yasin4261/food-delivery/internal/domain"
 	"github.com/Yasin4261/food-delivery/internal/middleware"
 	"github.com/Yasin4261/food-delivery/internal/service"
 )
@@ -25,12 +27,44 @@ type activeRequest struct {
 	Active bool `json:"active"`
 }
 
-// ListUsers handles GET /api/v2/admin/users (admin).
+// queryTriBool parses an optional boolean filter: absent (or unparseable) means
+// "either", so the caller can distinguish "only active", "only inactive" and
+// "both" with one parameter.
+func queryTriBool(r *http.Request, key string) *bool {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return nil
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return nil
+	}
+	return &v
+}
+
+// respondAdminError maps a service validation failure (an unknown filter value)
+// to 400 and everything else through the shared domain mapping.
+func respondAdminError(w http.ResponseWriter, err error) {
+	var ve service.ValidationError
+	if errors.As(err, &ve) {
+		respondError(w, http.StatusBadRequest, ve.Msg)
+		return
+	}
+	respondDomainError(w, err)
+}
+
+// ListUsers handles GET /api/v2/admin/users (admin), narrowed by
+// ?q=&role=&active= — the support console's "find this person" query.
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
-	users, total, err := h.admin.ListUsers(r.Context(), limit, offset)
+	f := domain.AdminUserFilters{
+		Query:  r.URL.Query().Get("q"),
+		Role:   r.URL.Query().Get("role"),
+		Active: queryTriBool(r, "active"),
+	}
+	users, total, err := h.admin.ListUsers(r.Context(), f, limit, offset)
 	if err != nil {
-		respondDomainError(w, err)
+		respondAdminError(w, err)
 		return
 	}
 	respondPage(w, users, limit, offset, total)
@@ -61,12 +95,17 @@ func (h *AdminHandler) SetUserActive(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]bool{"active": req.Active})
 }
 
-// ListChefs handles GET /api/v2/admin/chefs (admin) — all chefs incl inactive.
+// ListChefs handles GET /api/v2/admin/chefs (admin) — all chefs incl inactive,
+// narrowed by ?q=&active=.
 func (h *AdminHandler) ListChefs(w http.ResponseWriter, r *http.Request) {
 	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
-	chefs, total, err := h.admin.ListChefs(r.Context(), limit, offset)
+	f := domain.AdminChefFilters{
+		Query:  r.URL.Query().Get("q"),
+		Active: queryTriBool(r, "active"),
+	}
+	chefs, total, err := h.admin.ListChefs(r.Context(), f, limit, offset)
 	if err != nil {
-		respondDomainError(w, err)
+		respondAdminError(w, err)
 		return
 	}
 	respondPage(w, chefs, limit, offset, total)
@@ -91,12 +130,19 @@ func (h *AdminHandler) SetChefActive(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]bool{"active": req.Active})
 }
 
-// ListOrders handles GET /api/v2/admin/orders (admin) — platform overview.
+// ListOrders handles GET /api/v2/admin/orders (admin) — platform overview,
+// narrowed by ?status=&payment_status=&user_id= (the last scopes to one
+// customer's orders, for support drill-in).
 func (h *AdminHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 	limit, offset := queryInt(r, "limit", 20), queryInt(r, "offset", 0)
-	orders, total, err := h.admin.ListOrders(r.Context(), limit, offset)
+	f := domain.AdminOrderFilters{
+		Status:        r.URL.Query().Get("status"),
+		PaymentStatus: r.URL.Query().Get("payment_status"),
+		UserID:        queryInt(r, "user_id", 0),
+	}
+	orders, total, err := h.admin.ListOrders(r.Context(), f, limit, offset)
 	if err != nil {
-		respondDomainError(w, err)
+		respondAdminError(w, err)
 		return
 	}
 	respondPage(w, orders, limit, offset, total)

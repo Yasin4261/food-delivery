@@ -14,6 +14,27 @@ const promos = ref([])
 const newPromo = reactive({ code: '', discount_type: 'percent', discount_value: '', min_order: '', usage_limit: '' })
 const error = ref('')
 
+// Search / filter / pagination state per tab (#118). The API returns
+// {data,limit,offset,total}; `total` drives the pager, so a filtered list pages
+// over its matches rather than the whole table.
+const PAGE_SIZE = 20
+const filters = reactive({
+  users: { q: '', role: '', active: '', offset: 0, total: 0 },
+  chefs: { q: '', active: '', offset: 0, total: 0 },
+  orders: { status: '', payment_status: '', offset: 0, total: 0 },
+})
+
+// qs builds a query string from the non-empty filter fields plus paging.
+function qs(state, keys) {
+  const p = new URLSearchParams()
+  for (const k of keys) {
+    if (state[k] !== '' && state[k] != null) p.set(k, state[k])
+  }
+  p.set('limit', PAGE_SIZE)
+  p.set('offset', state.offset)
+  return `?${p}`
+}
+
 async function loadStats() {
   try {
     stats.value = await api.get('/admin/stats')
@@ -22,25 +43,52 @@ async function loadStats() {
   }
 }
 async function loadUsers() {
+  error.value = ''
   try {
-    users.value = page(await api.get('/admin/users?limit=100')).items
+    const res = page(await api.get(`/admin/users${qs(filters.users, ['q', 'role', 'active'])}`))
+    users.value = res.items
+    filters.users.total = res.total
   } catch (e) {
     error.value = e.message
   }
 }
 async function loadChefs() {
+  error.value = ''
   try {
-    chefs.value = page(await api.get('/admin/chefs?limit=100')).items
+    const res = page(await api.get(`/admin/chefs${qs(filters.chefs, ['q', 'active'])}`))
+    chefs.value = res.items
+    filters.chefs.total = res.total
   } catch (e) {
     error.value = e.message
   }
 }
 async function loadOrders() {
+  error.value = ''
   try {
-    orders.value = page(await api.get('/admin/orders?limit=100')).items
+    const res = page(await api.get(`/admin/orders${qs(filters.orders, ['status', 'payment_status'])}`))
+    orders.value = res.items
+    filters.orders.total = res.total
   } catch (e) {
     error.value = e.message
   }
+}
+
+// applyFilters resets to the first page — otherwise a narrower filter can leave
+// you stranded on an offset past the end of the new result set.
+function applyFilters(name, load) {
+  filters[name].offset = 0
+  load()
+}
+function pageBy(name, load, delta) {
+  const next = filters[name].offset + delta * PAGE_SIZE
+  if (next < 0 || next >= filters[name].total) return
+  filters[name].offset = next
+  load()
+}
+const pageInfo = (name) => {
+  const f = filters[name]
+  if (!f.total) return '0'
+  return `${f.offset + 1}–${Math.min(f.offset + PAGE_SIZE, f.total)} / ${f.total}`
 }
 
 async function loadPromos() {
@@ -80,9 +128,11 @@ async function togglePromo(p) {
 function select(t) {
   tab.value = t
   error.value = ''
-  if (t === 'users' && !users.value.length) loadUsers()
-  if (t === 'chefs' && !chefs.value.length) loadChefs()
-  if (t === 'orders' && !orders.value.length) loadOrders()
+  // Always refetch: a filter that legitimately matches nothing must not look
+  // like "not loaded yet", and an admin console should show current data.
+  if (t === 'users') loadUsers()
+  if (t === 'chefs') loadChefs()
+  if (t === 'orders') loadOrders()
   if (t === 'promos' && !promos.value.length) loadPromos()
 }
 
@@ -150,8 +200,36 @@ onMounted(loadStats)
     </div>
 
     <!-- Users -->
-    <div v-else-if="tab === 'users'" class="card overflow-x-auto">
-      <table class="w-full text-sm">
+    <div v-else-if="tab === 'users'" class="card space-y-3 overflow-x-auto">
+      <div class="flex flex-wrap items-end gap-2">
+        <input
+          v-model="filters.users.q"
+          class="input max-w-52"
+          :placeholder="$t('admin.searchUsers')"
+          @keyup.enter="applyFilters('users', loadUsers)"
+        />
+        <select v-model="filters.users.role" class="input max-w-36" @change="applyFilters('users', loadUsers)">
+          <option value="">{{ $t('admin.allRoles') }}</option>
+          <option value="customer">customer</option>
+          <option value="chef">chef</option>
+          <option value="admin">admin</option>
+        </select>
+        <select v-model="filters.users.active" class="input max-w-36" @change="applyFilters('users', loadUsers)">
+          <option value="">{{ $t('admin.anyStatus') }}</option>
+          <option value="true">{{ $t('admin.active') }}</option>
+          <option value="false">{{ $t('admin.inactive') }}</option>
+        </select>
+        <button class="btn-ghost" @click="applyFilters('users', loadUsers)">{{ $t('admin.search') }}</button>
+        <span class="ml-auto text-sm text-gray-500">{{ pageInfo('users') }}</span>
+        <button class="btn-ghost" :disabled="filters.users.offset === 0" @click="pageBy('users', loadUsers, -1)">‹</button>
+        <button
+          class="btn-ghost"
+          :disabled="filters.users.offset + 20 >= filters.users.total"
+          @click="pageBy('users', loadUsers, 1)"
+        >›</button>
+      </div>
+      <p v-if="!users.length" class="text-sm text-gray-500">{{ $t('admin.noResults') }}</p>
+      <table v-else class="w-full text-sm">
         <thead class="text-left text-gray-500"><tr><th class="py-1">{{ $t('admin.user') }}</th><th>{{ $t('admin.role') }}</th><th>{{ $t('admin.status') }}</th><th></th></tr></thead>
         <tbody>
           <tr v-for="u in users" :key="u.id" class="border-t border-gray-100">
@@ -165,8 +243,30 @@ onMounted(loadStats)
     </div>
 
     <!-- Chefs -->
-    <div v-else-if="tab === 'chefs'" class="card overflow-x-auto">
-      <table class="w-full text-sm">
+    <div v-else-if="tab === 'chefs'" class="card space-y-3 overflow-x-auto">
+      <div class="flex flex-wrap items-end gap-2">
+        <input
+          v-model="filters.chefs.q"
+          class="input max-w-52"
+          :placeholder="$t('admin.searchChefs')"
+          @keyup.enter="applyFilters('chefs', loadChefs)"
+        />
+        <select v-model="filters.chefs.active" class="input max-w-36" @change="applyFilters('chefs', loadChefs)">
+          <option value="">{{ $t('admin.anyStatus') }}</option>
+          <option value="true">{{ $t('admin.active') }}</option>
+          <option value="false">{{ $t('admin.inactive') }}</option>
+        </select>
+        <button class="btn-ghost" @click="applyFilters('chefs', loadChefs)">{{ $t('admin.search') }}</button>
+        <span class="ml-auto text-sm text-gray-500">{{ pageInfo('chefs') }}</span>
+        <button class="btn-ghost" :disabled="filters.chefs.offset === 0" @click="pageBy('chefs', loadChefs, -1)">‹</button>
+        <button
+          class="btn-ghost"
+          :disabled="filters.chefs.offset + 20 >= filters.chefs.total"
+          @click="pageBy('chefs', loadChefs, 1)"
+        >›</button>
+      </div>
+      <p v-if="!chefs.length" class="text-sm text-gray-500">{{ $t('admin.noResults') }}</p>
+      <table v-else class="w-full text-sm">
         <thead class="text-left text-gray-500"><tr><th class="py-1">{{ $t('admin.kitchen') }}</th><th>★</th><th>{{ $t('admin.status') }}</th><th></th></tr></thead>
         <tbody>
           <tr v-for="c in chefs" :key="c.id" class="border-t border-gray-100">
@@ -180,8 +280,28 @@ onMounted(loadStats)
     </div>
 
     <!-- Orders overview -->
-    <div v-else-if="tab === 'orders'" class="card overflow-x-auto">
-      <table class="w-full text-sm">
+    <div v-else-if="tab === 'orders'" class="card space-y-3 overflow-x-auto">
+      <div class="flex flex-wrap items-end gap-2">
+        <select v-model="filters.orders.status" class="input max-w-40" @change="applyFilters('orders', loadOrders)">
+          <option value="">{{ $t('admin.anyOrderStatus') }}</option>
+          <option v-for="s in ['pending','confirmed','preparing','ready','delivering','delivered','cancelled']" :key="s" :value="s">
+            {{ $t(`status.${s}`) }}
+          </option>
+        </select>
+        <select v-model="filters.orders.payment_status" class="input max-w-40" @change="applyFilters('orders', loadOrders)">
+          <option value="">{{ $t('admin.anyPayment') }}</option>
+          <option v-for="s in ['pending','paid','failed','refunded']" :key="s" :value="s">{{ $t(`payment.${s}`) }}</option>
+        </select>
+        <span class="ml-auto text-sm text-gray-500">{{ pageInfo('orders') }}</span>
+        <button class="btn-ghost" :disabled="filters.orders.offset === 0" @click="pageBy('orders', loadOrders, -1)">‹</button>
+        <button
+          class="btn-ghost"
+          :disabled="filters.orders.offset + 20 >= filters.orders.total"
+          @click="pageBy('orders', loadOrders, 1)"
+        >›</button>
+      </div>
+      <p v-if="!orders.length" class="text-sm text-gray-500">{{ $t('admin.noResults') }}</p>
+      <table v-else class="w-full text-sm">
         <thead class="text-left text-gray-500"><tr><th class="py-1">{{ $t('admin.order') }}</th><th>{{ $t('admin.status') }}</th><th>{{ $t('admin.payment') }}</th><th class="text-right">{{ $t('admin.total') }}</th></tr></thead>
         <tbody>
           <tr v-for="o in orders" :key="o.id" class="border-t border-gray-100">

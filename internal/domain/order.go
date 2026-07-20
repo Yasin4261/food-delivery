@@ -91,6 +91,27 @@ func ValidPaymentMethod(m string) bool {
 	return m == PaymentMethodCash || m == PaymentMethodCard
 }
 
+// ValidOrderStatus reports whether s is a recognised order lifecycle status.
+// Used to reject unknown filter values before they reach the database.
+func ValidOrderStatus(s string) bool {
+	switch s {
+	case OrderStatusPending, OrderStatusConfirmed, OrderStatusPreparing,
+		OrderStatusReady, OrderStatusDelivering, OrderStatusDelivered,
+		OrderStatusCancelled:
+		return true
+	}
+	return false
+}
+
+// ValidPaymentStatus reports whether s is a recognised payment status.
+func ValidPaymentStatus(s string) bool {
+	switch s {
+	case PaymentStatusPending, PaymentStatusPaid, PaymentStatusFailed, PaymentStatusRefunded:
+		return true
+	}
+	return false
+}
+
 // NewOrder builds a pending, unpaid order for a customer. The caller fills
 // pricing, items and OrderCode before persisting.
 func NewOrder(userID int, deliveryAddress string) *Order {
