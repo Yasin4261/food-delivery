@@ -211,14 +211,26 @@ When asked to "implement X", build it inside-out with the §2 recipe (domain →
 
 ## 7. Conventions
 
-- **Plan → issue → code, in that order (non-negotiable).** Never start implementing a
-  feature or change straight from a chat request. First **plan** it (scope, layers
-  touched, migrations, risks), then **create a GitHub issue** capturing that plan
-  (`gh issue create`), and only then write code — on a branch that references the
-  issue, closing it via the PR. This keeps every change traceable to a written
-  rationale, lets the plan be reviewed before effort is spent, and keeps the issue
-  tracker the source of truth for what the project is doing. If a request arrives as
-  "just build X", the first deliverable is still the plan + issue, not a diff.
+- **Plan → issue → branch → code, in that order (non-negotiable).** Never start
+  implementing a feature or change straight from a chat request:
+  1. **Plan** it — scope, layers touched, migrations, risks.
+  2. **Create a GitHub issue** capturing that plan (`gh issue create`).
+  3. **Create a new branch off an up-to-date `main`** — one branch per feature.
+  4. **Code** on it, then open a PR that closes the issue.
+
+  This keeps every change traceable to a written rationale, lets the plan be
+  reviewed before effort is spent, and keeps the issue tracker the source of truth
+  for what the project is doing. If a request arrives as "just build X", the first
+  deliverable is still the plan + issue, not a diff.
+- **Every new feature gets its own new branch (non-negotiable).** Branch off a
+  freshly pulled `main` (`git checkout main && git pull && git checkout -b <name>`).
+  **Never commit a feature directly to `main`**, and never reuse an existing feature
+  branch for unrelated work — one branch per issue keeps PRs reviewable, keeps CI
+  meaningful, and makes a rollback a single revert. Name it by intent, matching the
+  history: `feature/…` (new capability), `fix/…` (bug), `harden/…` (security),
+  `docs/…` (documentation), `tech-debt/…` (refactor). Branches are short-lived: merge
+  and delete. Only trivial docs touch-ups (e.g. adding a released tag to the §9
+  table) may land straight on `main`.
 - **Layering is non-negotiable:** SQL only in `repository/`, business rules only in `domain/`+`service/`, HTTP only in `handler/`/`middleware/`. Wiring only in `cmd/api/main.go`.
 - Repositories implement an interface declared in `domain/` and take `*sql.DB`; wrap errors with `fmt.Errorf("...: %w", err)`.
 - Mutate entity state through domain methods (e.g. `order.MarkReady()`), not by assigning fields, so invariants/`updated_at` stay correct.
