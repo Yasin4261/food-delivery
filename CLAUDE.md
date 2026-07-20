@@ -211,6 +211,14 @@ When asked to "implement X", build it inside-out with the §2 recipe (domain →
 
 ## 7. Conventions
 
+- **Plan → issue → code, in that order (non-negotiable).** Never start implementing a
+  feature or change straight from a chat request. First **plan** it (scope, layers
+  touched, migrations, risks), then **create a GitHub issue** capturing that plan
+  (`gh issue create`), and only then write code — on a branch that references the
+  issue, closing it via the PR. This keeps every change traceable to a written
+  rationale, lets the plan be reviewed before effort is spent, and keeps the issue
+  tracker the source of truth for what the project is doing. If a request arrives as
+  "just build X", the first deliverable is still the plan + issue, not a diff.
 - **Layering is non-negotiable:** SQL only in `repository/`, business rules only in `domain/`+`service/`, HTTP only in `handler/`/`middleware/`. Wiring only in `cmd/api/main.go`.
 - Repositories implement an interface declared in `domain/` and take `*sql.DB`; wrap errors with `fmt.Errorf("...: %w", err)`.
 - Mutate entity state through domain methods (e.g. `order.MarkReady()`), not by assigning fields, so invariants/`updated_at` stay correct.
