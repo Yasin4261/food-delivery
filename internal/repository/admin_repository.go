@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
@@ -202,4 +203,146 @@ func (r *AdminRepository) Stats(ctx context.Context) (*domain.PlatformStats, err
 		s.TopChefs = append(s.TopChefs, t)
 	}
 	return s, rows.Err()
+}
+
+// --- detail views (#119): read-only support drill-in -----------------------
+
+// UserDetail returns one account with its kitchen (if any), recent orders and
+// the reviews it wrote. Nested lists are capped at domain.AdminDetailLimit.
+func (r *AdminRepository) UserDetail(ctx context.Context, userID int) (*domain.AdminUserDetail, error) {
+	users := &UserRepository{db: r.db}
+	user, err := users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &domain.AdminUserDetail{User: user, Orders: []*domain.Order{}, Reviews: []*domain.Review{}}
+
+	// The kitchen this user owns, if they are a chef. Resolved without the
+	// is_active filter so a deactivated kitchen is still inspectable.
+	chef, err := r.findChefByUserID(ctx, userID)
+	if err != nil && !errors.Is(err, domain.ErrChefNotFound) {
+		return nil, err
+	}
+	out.Chef = chef
+
+	orders := &OrderRepository{db: r.db}
+	list, _, err := orders.ListByUser(ctx, userID, domain.AdminDetailLimit, 0)
+	if err != nil {
+		return nil, err
+	}
+	if list != nil {
+		out.Orders = list
+	}
+
+	reviews := &ReviewRepository{db: r.db}
+	written, err := reviews.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(written) > domain.AdminDetailLimit {
+		written = written[:domain.AdminDetailLimit]
+	}
+	if written != nil {
+		out.Reviews = written
+	}
+	return out, nil
+}
+
+// OrderDetail returns one order with items, sub-orders, its customer and every
+// payment attempt made against it.
+func (r *AdminRepository) OrderDetail(ctx context.Context, orderID int) (*domain.AdminOrderDetail, error) {
+	orders := &OrderRepository{db: r.db}
+	order, err := orders.FindByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	out := &domain.AdminOrderDetail{Order: order, Payments: []*domain.PaymentSession{}}
+
+	users := &UserRepository{db: r.db}
+	if customer, err := users.FindByID(ctx, order.UserID); err == nil {
+		out.Customer = customer
+	} else if !errors.Is(err, domain.ErrUserNotFound) {
+		return nil, err
+	}
+
+	// Every attempt, newest first — a failed-then-retried payment is exactly
+	// what a support ticket needs to see.
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT `+paymentSessionColumns+` FROM payment_sessions WHERE order_id = $1 ORDER BY id DESC`, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("admin order payments: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		ps, err := scanPaymentSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan payment session: %w", err)
+		}
+		out.Payments = append(out.Payments, ps)
+	}
+	return out, rows.Err()
+}
+
+// ChefDetail returns one kitchen with its owner, dishes and recent orders.
+func (r *AdminRepository) ChefDetail(ctx context.Context, chefID int) (*domain.AdminChefDetail, error) {
+	chef, err := r.findChefByID(ctx, chefID)
+	if err != nil {
+		return nil, err
+	}
+	out := &domain.AdminChefDetail{Chef: chef, Items: []*domain.MenuItem{}, Orders: []*domain.Order{}}
+
+	users := &UserRepository{db: r.db}
+	if owner, err := users.FindByID(ctx, chef.UserID); err == nil {
+		out.Owner = owner
+	} else if !errors.Is(err, domain.ErrUserNotFound) {
+		return nil, err
+	}
+
+	items := &MenuItemRepository{db: r.db}
+	dishes, _, err := items.ListByChef(ctx, chefID, domain.AdminDetailLimit, 0)
+	if err != nil {
+		return nil, err
+	}
+	if dishes != nil {
+		out.Items = dishes
+	}
+
+	orders := &OrderRepository{db: r.db}
+	list, _, err := orders.ListByChef(ctx, chefID, domain.AdminDetailLimit, 0)
+	if err != nil {
+		return nil, err
+	}
+	if list != nil {
+		out.Orders = list
+	}
+	return out, nil
+}
+
+// findChefByID resolves a chef by id WITHOUT the is_active filter that
+// ChefRepository.FindByID applies — support must be able to open a
+// deactivated kitchen.
+func (r *AdminRepository) findChefByID(ctx context.Context, chefID int) (*domain.Chef, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT`+chefColumns+` FROM chefs WHERE id = $1`, chefID)
+	c, err := scanChef(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrChefNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("admin find chef: %w", err)
+	}
+	return c, nil
+}
+
+// findChefByUserID is findChefByID's owner-side twin, also unfiltered.
+func (r *AdminRepository) findChefByUserID(ctx context.Context, userID int) (*domain.Chef, error) {
+	row := r.db.QueryRowContext(ctx, `SELECT`+chefColumns+` FROM chefs WHERE user_id = $1`, userID)
+	c, err := scanChef(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrChefNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("admin find chef by user: %w", err)
+	}
+	return c, nil
 }

@@ -248,6 +248,13 @@ export default {
   admin: {
     title: 'Admin',
     subtitle: 'Platform moderation and stats',
+    detail_users: 'Account detail',
+    detail_orders: 'Order detail',
+    detail_chefs: 'Kitchen detail',
+    recentOrders: 'Recent orders',
+    reviewsWritten: 'Reviews written',
+    paymentAttempts: 'Payment attempts',
+    dishes: 'Dishes',
     search: 'Search',
     searchUsers: 'Search name or email…',
     searchChefs: 'Search kitchen name…',

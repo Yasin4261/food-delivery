@@ -220,3 +220,58 @@ func (h *AdminHandler) SetPromoActive(w http.ResponseWriter, r *http.Request) {
 	}
 	respondJSON(w, http.StatusOK, map[string]bool{"active": req.Active})
 }
+
+// pathID parses the {id} path value, replying 400 with a caller-specific
+// message when it is not a number.
+func pathID(w http.ResponseWriter, r *http.Request, what string) (int, bool) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid "+what+" id")
+		return 0, false
+	}
+	return id, true
+}
+
+// UserDetail handles GET /api/v2/admin/users/{id} (admin) — the support
+// console's drill-in on one account.
+func (h *AdminHandler) UserDetail(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "user")
+	if !ok {
+		return
+	}
+	detail, err := h.admin.UserDetail(r.Context(), id)
+	if err != nil {
+		respondAdminError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, detail)
+}
+
+// OrderDetail handles GET /api/v2/admin/orders/{id} (admin).
+func (h *AdminHandler) OrderDetail(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "order")
+	if !ok {
+		return
+	}
+	detail, err := h.admin.OrderDetail(r.Context(), id)
+	if err != nil {
+		respondAdminError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, detail)
+}
+
+// ChefDetail handles GET /api/v2/admin/chefs/{id} (admin). Unlike the public
+// chef endpoint this resolves deactivated kitchens too.
+func (h *AdminHandler) ChefDetail(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "chef")
+	if !ok {
+		return
+	}
+	detail, err := h.admin.ChefDetail(r.Context(), id)
+	if err != nil {
+		respondAdminError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, detail)
+}
