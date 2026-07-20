@@ -227,7 +227,8 @@ func buildTestServerWithLimit(limit int) testDeps {
 	orderService.SetPromoRepository(promoRepo)
 	addressService := service.NewAddressService(addressRepo)
 	favoriteService := service.NewFavoriteService(newFakeFavoriteRepo(chefRepo), chefRepo)
-	reviewService := service.NewReviewService(newFakeReviewRepo(), orderRepo)
+	reviewRepo := newFakeReviewRepo()
+	reviewService := service.NewReviewService(reviewRepo, orderRepo)
 	earningsService := service.NewEarningsService(newFakeEarningsRepo(), chefRepo)
 	searchService := service.NewSearchService(newFakeSearchRepo())
 	chatService := service.NewChatService(newFakeChatRepo(), chefRepo)
@@ -240,7 +241,7 @@ func buildTestServerWithLimit(limit int) testDeps {
 	orderHandler := handler.NewOrderHandler(orderService, nil)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	addressHandler := handler.NewAddressHandler(addressService)
-	adminService := service.NewAdminService(newFakeAdminRepo(userRepo, chefRepo, orderRepo), promoRepo)
+	adminService := service.NewAdminService(newFakeAdminRepo(userRepo, chefRepo, orderRepo, itemRepo, reviewRepo), promoRepo)
 	adminHandler := handler.NewAdminHandler(adminService)
 	uploadDir := os.TempDir() + "/food-delivery-test-uploads"
 	fileStore, _ := storage.NewLocal(uploadDir)

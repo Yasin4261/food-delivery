@@ -21,6 +21,39 @@ type TopChef struct {
 	Revenue      float64 `json:"revenue"`
 }
 
+// AdminDetailLimit caps the nested lists on a detail view, so one support
+// lookup can never pull thousands of rows.
+const AdminDetailLimit = 20
+
+// AdminUserDetail is the support console's view of one account: who they are,
+// their kitchen if they run one, and what they have done recently.
+type AdminUserDetail struct {
+	User *User `json:"user"`
+	// Chef is the kitchen this user owns, when they are a chef.
+	Chef    *Chef     `json:"chef,omitempty"`
+	Orders  []*Order  `json:"orders"`
+	Reviews []*Review `json:"reviews"`
+}
+
+// AdminOrderDetail is the support console's view of one order — the artefact
+// most "where is my food" tickets are about. Payments carry only status and
+// timestamps: the gateway token and payment id are `json:"-"` on
+// PaymentSession and must stay hidden.
+type AdminOrderDetail struct {
+	Order    *Order            `json:"order"`
+	Customer *User             `json:"customer,omitempty"`
+	Payments []*PaymentSession `json:"payments"`
+}
+
+// AdminChefDetail is the support console's view of one kitchen.
+type AdminChefDetail struct {
+	Chef *Chef `json:"chef"`
+	// Owner is the user account behind the kitchen.
+	Owner  *User       `json:"owner,omitempty"`
+	Items  []*MenuItem `json:"items"`
+	Orders []*Order    `json:"orders"`
+}
+
 // AdminUserFilters narrows the admin user listing. The zero value matches
 // every user (the previous unfiltered behaviour).
 type AdminUserFilters struct {

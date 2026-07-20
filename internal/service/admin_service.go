@@ -114,6 +114,45 @@ func (s *AdminService) ListOrders(ctx context.Context, f domain.AdminOrderFilter
 	return s.admin.ListOrders(ctx, f, limit, offset)
 }
 
+// UserDetail returns one account's support context (kitchen, recent orders,
+// reviews written). The password hash is always cleared before it leaves the
+// service, exactly as in the listings.
+func (s *AdminService) UserDetail(ctx context.Context, userID int) (*domain.AdminUserDetail, error) {
+	d, err := s.admin.UserDetail(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if d.User != nil {
+		d.User.PasswordHash = ""
+	}
+	return d, nil
+}
+
+// OrderDetail returns one order's support context (items, sub-orders, customer,
+// payment attempts).
+func (s *AdminService) OrderDetail(ctx context.Context, orderID int) (*domain.AdminOrderDetail, error) {
+	d, err := s.admin.OrderDetail(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if d.Customer != nil {
+		d.Customer.PasswordHash = ""
+	}
+	return d, nil
+}
+
+// ChefDetail returns one kitchen's support context (owner, dishes, orders).
+func (s *AdminService) ChefDetail(ctx context.Context, chefID int) (*domain.AdminChefDetail, error) {
+	d, err := s.admin.ChefDetail(ctx, chefID)
+	if err != nil {
+		return nil, err
+	}
+	if d.Owner != nil {
+		d.Owner.PasswordHash = ""
+	}
+	return d, nil
+}
+
 // Stats returns the aggregated platform dashboard figures.
 func (s *AdminService) Stats(ctx context.Context) (*domain.PlatformStats, error) {
 	return s.admin.Stats(ctx)
