@@ -221,6 +221,7 @@ func buildTestServerWithLimit(limit int) testDeps {
 	orderRepo := newFakeOrderRepo()
 	addressRepo := newFakeAddressRepo()
 	paymentService := service.NewPaymentService(newFakePaymentSessionRepo(), orderRepo, userRepo, payment.NewMock("http://app.test"), "http://app.test")
+	paymentService.SetPaymentMethods(newFakePaymentMethodRepo())
 	promoRepo := newFakePromoRepo()
 	orderService := service.NewOrderService(orderRepo, itemRepo, chefRepo, addressRepo, hoursRepo, nil, domain.FeePolicy{}, paymentService, nil)
 	orderService.SetPromoRepository(promoRepo)

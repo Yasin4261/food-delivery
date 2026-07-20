@@ -172,6 +172,11 @@ func (r *Router) Setup() http.Handler {
 	r.handleAuth("POST /api/v2/orders/{id}/pay", r.paymentHandler.Pay)
 	r.mux.Handle("POST /api/v2/payments/callback", throttle(http.HandlerFunc(r.paymentHandler.Callback)))
 
+	// Saved cards (#67): list/remove the caller's stored cards (owner-scoped in
+	// the service). Only iyzico tokens + masked digits are ever held.
+	r.handleAuth("GET /api/v2/payment-methods", r.paymentHandler.ListMethods)
+	r.handleAuth("DELETE /api/v2/payment-methods/{token}", r.paymentHandler.DeleteMethod)
+
 	// Favorites: a customer favoriting chefs (any authenticated user).
 	r.handleAuth("GET /api/v2/favorites", r.favoriteHandler.List)
 	r.handleAuth("POST /api/v2/favorites/{chefId}", r.favoriteHandler.Add)

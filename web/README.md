@@ -81,7 +81,9 @@ src/
 - Card payments: "💳 Pay now" on pending card orders → hosted checkout
   (iyzico in production; in dev the mock gateway sends you to `/mock-pay`, a
   simulated sandbox page) → redirected back to `/orders` with a result banner.
-  Payment badges on every order; paid card orders refund on cancel.
+  Payment badges on every order; paid card orders refund on cancel. Tick
+  **"save this card"** at pay time to store it for reuse; manage saved cards
+  (masked digits only) under **Saved cards** on `/profile`.
 
 - Profile: `/profile` (navbar avatar chip) — edit contact/default location,
   change password (current password required), toggle order-email

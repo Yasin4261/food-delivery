@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, page } from '@/api/client'
@@ -30,10 +30,15 @@ const paymentClass = (s) => PAYMENT_BADGES[s] || 'bg-gray-100 text-gray-600'
 
 const payable = (o) => o.payment_method === 'card' && o.payment_status === 'pending' && o.status !== 'cancelled'
 
+// Per-order "save this card" opt-in for the checkout (#67).
+const saveCard = reactive({})
+
 async function payNow(order) {
   paying.value = order.id
   try {
-    const { payment_page_url } = await api.post(`/orders/${order.id}/pay`)
+    const { payment_page_url } = await api.post(`/orders/${order.id}/pay`, {
+      save_card: !!saveCard[order.id],
+    })
     window.location.href = payment_page_url
   } catch (e) {
     error.value = e.message
@@ -178,7 +183,11 @@ onBeforeUnmount(() => clearInterval(poll))
       <ul class="text-sm text-gray-600">
         <li v-for="it in order.items" :key="it.id">{{ it.quantity }}× {{ it.item_name }}</li>
       </ul>
-      <div class="flex justify-end gap-2">
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <label v-if="payable(order)" class="mr-auto flex items-center gap-2 text-sm text-gray-500">
+          <input v-model="saveCard[order.id]" type="checkbox" class="rounded border-gray-300" />
+          {{ $t('cards.saveThisCard') }}
+        </label>
         <button v-if="payable(order)" class="btn-primary" :disabled="paying === order.id" @click="payNow(order)">
           {{ paying === order.id ? $t('orders.redirecting') : $t('orders.payNow') }}
         </button>

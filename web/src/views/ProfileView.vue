@@ -80,6 +80,29 @@ async function removeAddress(a) {
   }
 }
 
+// --- saved cards (#67) ---
+const cards = ref([])
+const cardErr = ref('')
+
+async function loadCards() {
+  try {
+    const res = await api.get('/payment-methods')
+    cards.value = res.data || []
+  } catch (e) {
+    cardErr.value = e.message
+  }
+}
+
+async function removeCard(c) {
+  cardErr.value = ''
+  try {
+    await api.del(`/payment-methods/${encodeURIComponent(c.card_token)}`)
+    await loadCards()
+  } catch (e) {
+    cardErr.value = e.message
+  }
+}
+
 async function load() {
   try {
     const me = await api.get('/auth/me')
@@ -274,6 +297,7 @@ async function saveKitchen() {
 onMounted(() => {
   load()
   loadAddresses()
+  loadCards()
 })
 </script>
 
@@ -369,6 +393,28 @@ onMounted(() => {
         </div>
       </form>
       <p v-if="addressErr" class="text-sm text-red-600">{{ addressErr }}</p>
+    </div>
+
+    <!-- Saved cards (#67) -->
+    <div class="card space-y-4">
+      <h2 class="font-semibold">{{ $t('cards.title') }}</h2>
+      <p class="text-xs text-gray-400">{{ $t('cards.hint') }}</p>
+      <p v-if="!cards.length" class="text-sm text-gray-500">{{ $t('cards.empty') }}</p>
+      <ul v-else class="space-y-2">
+        <li
+          v-for="c in cards"
+          :key="c.card_token"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-100 px-3 py-2 text-sm"
+        >
+          <span class="min-w-0">
+            <span class="font-medium">💳 {{ c.masked_number }}</span>
+            <span v-if="c.association" class="badge ml-2 bg-gray-100 text-gray-600">{{ c.association }}</span>
+            <span v-if="c.bank_name" class="block truncate text-gray-500">{{ c.bank_name }}</span>
+          </span>
+          <button class="shrink-0 text-red-600 hover:underline" @click="removeCard(c)">{{ $t('cards.remove') }}</button>
+        </li>
+      </ul>
+      <p v-if="cardErr" class="text-sm text-red-600">{{ cardErr }}</p>
     </div>
 
     <!-- Kitchen (chefs with a profile) -->

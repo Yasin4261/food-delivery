@@ -36,11 +36,13 @@ type CheckoutSession struct {
 
 // PaymentResult is the outcome of verifying a checkout token with the gateway
 // (a server-to-server call — the browser-supplied token is never trusted on
-// its own).
+// its own). When the customer opted to save their card, RegisteredCard carries
+// the gateway's tokens + masked metadata for that card (nil otherwise).
 type PaymentResult struct {
-	Token     string
-	Paid      bool
-	PaymentID string
+	Token          string
+	Paid           bool
+	PaymentID      string
+	RegisteredCard *StoredCard
 }
 
 // PaymentGateway is the port for card processing. Adapters live in
@@ -48,15 +50,20 @@ type PaymentResult struct {
 // for development.
 type PaymentGateway interface {
 	// InitiateCheckout opens a hosted checkout for the order and returns where
-	// to send the customer's browser.
-	InitiateCheckout(ctx context.Context, order *Order, buyer *User, callbackURL string) (*CheckoutSession, error)
-	// VerifyCheckout resolves a callback token to a payment outcome.
+	// to send the customer's browser. opts carries the saved-card intent (reuse
+	// an existing wallet and/or register the card used this time).
+	InitiateCheckout(ctx context.Context, order *Order, buyer *User, callbackURL string, opts CheckoutOptions) (*CheckoutSession, error)
+	// VerifyCheckout resolves a callback token to a payment outcome (including a
+	// newly registered card, when the customer opted in).
 	VerifyCheckout(ctx context.Context, token string) (*PaymentResult, error)
 	// Refund returns a captured payment (full amount).
 	Refund(ctx context.Context, paymentID string) error
 	// RefundPartial returns part of a captured payment — a declined sub-order's
 	// subtotal in a multi-chef order that otherwise stays alive.
 	RefundPartial(ctx context.Context, paymentID string, amount float64) error
+	// DeleteStoredCard revokes a stored card at the gateway (called when the
+	// customer removes a saved card).
+	DeleteStoredCard(ctx context.Context, cardUserKey, cardToken string) error
 }
 
 // PaymentSessionRepository is the port for payment-session persistence.

@@ -23,6 +23,7 @@ var (
 
 	ErrPaymentSessionNotFound = errors.New("payment session not found")
 	ErrOrderNotPayable        = errors.New("only pending card orders can be paid online")
+	ErrCardNotFound           = errors.New("saved card not found")
 
 	ErrChefNotFound      = errors.New("chef not found")
 	ErrChefProfileExists = errors.New("chef profile already exists for this user")

@@ -19,12 +19,13 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/domain"
 )
 
-// API paths (iyzico "Checkout Form" flow).
+// API paths (iyzico "Checkout Form" flow + card storage).
 const (
 	pathCheckoutInit     = "/payment/iyzipos/checkoutform/initialize/auth/ecom"
 	pathCheckoutRetrieve = "/payment/iyzipos/checkoutform/auth/ecom/detail"
 	pathCancel           = "/payment/cancel"
 	pathRefundV2         = "/v2/payment/refund"
+	pathCardDelete       = "/cardstorage/card"
 )
 
 // Iyzico implements domain.PaymentGateway against the iyzico REST API using
@@ -121,19 +122,22 @@ type iyzicoBasketItem struct {
 }
 
 type checkoutInitRequest struct {
-	Locale              string             `json:"locale"`
-	ConversationID      string             `json:"conversationId"`
-	Price               string             `json:"price"`
-	PaidPrice           string             `json:"paidPrice"`
-	Currency            string             `json:"currency"`
-	BasketID            string             `json:"basketId"`
-	PaymentGroup        string             `json:"paymentGroup"`
-	CallbackURL         string             `json:"callbackUrl"`
-	EnabledInstallments []int              `json:"enabledInstallments"`
-	Buyer               iyzicoBuyer        `json:"buyer"`
-	ShippingAddress     iyzicoAddress      `json:"shippingAddress"`
-	BillingAddress      iyzicoAddress      `json:"billingAddress"`
-	BasketItems         []iyzicoBasketItem `json:"basketItems"`
+	Locale              string `json:"locale"`
+	ConversationID      string `json:"conversationId"`
+	Price               string `json:"price"`
+	PaidPrice           string `json:"paidPrice"`
+	Currency            string `json:"currency"`
+	BasketID            string `json:"basketId"`
+	PaymentGroup        string `json:"paymentGroup"`
+	CallbackURL         string `json:"callbackUrl"`
+	EnabledInstallments []int  `json:"enabledInstallments"`
+	// CardUserKey, when set, makes the hosted form show the buyer's previously
+	// stored cards and lets them save a new one to the same wallet (#67).
+	CardUserKey     string             `json:"cardUserKey,omitempty"`
+	Buyer           iyzicoBuyer        `json:"buyer"`
+	ShippingAddress iyzicoAddress      `json:"shippingAddress"`
+	BillingAddress  iyzicoAddress      `json:"billingAddress"`
+	BasketItems     []iyzicoBasketItem `json:"basketItems"`
 }
 
 type checkoutInitResponse struct {
@@ -149,6 +153,14 @@ type checkoutRetrieveResponse struct {
 	Token         string `json:"token"`
 	PaymentStatus string `json:"paymentStatus"`
 	PaymentID     string `json:"paymentId"`
+	// Card storage: populated when the buyer chose to save their card. The
+	// tokens are opaque gateway references — no PAN/CVC is ever returned.
+	CardUserKey     string `json:"cardUserKey"`
+	CardToken       string `json:"cardToken"`
+	CardAssociation string `json:"cardAssociation"`
+	CardFamily      string `json:"cardFamily"`
+	BinNumber       string `json:"binNumber"`
+	LastFourDigits  string `json:"lastFourDigits"`
 }
 
 type cancelResponse struct {
@@ -158,8 +170,10 @@ type cancelResponse struct {
 
 func money(v float64) string { return strconv.FormatFloat(v, 'f', 2, 64) }
 
-// InitiateCheckout opens a hosted Checkout Form session for the order.
-func (g *Iyzico) InitiateCheckout(ctx context.Context, order *domain.Order, buyer *domain.User, callbackURL string) (*domain.CheckoutSession, error) {
+// InitiateCheckout opens a hosted Checkout Form session for the order. When
+// opts.CardUserKey is set the form shows the buyer's saved cards and can store
+// a new one to that wallet (#67).
+func (g *Iyzico) InitiateCheckout(ctx context.Context, order *domain.Order, buyer *domain.User, callbackURL string, opts domain.CheckoutOptions) (*domain.CheckoutSession, error) {
 	city := "Istanbul"
 	if order.DeliveryCity != nil && *order.DeliveryCity != "" {
 		city = *order.DeliveryCity
@@ -186,6 +200,7 @@ func (g *Iyzico) InitiateCheckout(ctx context.Context, order *domain.Order, buye
 		PaymentGroup:        "PRODUCT",
 		CallbackURL:         callbackURL,
 		EnabledInstallments: []int{1},
+		CardUserKey:         opts.CardUserKey,
 		Buyer: iyzicoBuyer{
 			ID:      strconv.Itoa(buyer.ID),
 			Name:    buyer.Username,
@@ -225,11 +240,38 @@ func (g *Iyzico) VerifyCheckout(ctx context.Context, token string) (*domain.Paym
 	if res.Status != "success" {
 		return nil, fmt.Errorf("iyzico: checkout retrieve failed: %s", res.ErrorMessage)
 	}
-	return &domain.PaymentResult{
+	result := &domain.PaymentResult{
 		Token:     token,
 		Paid:      res.PaymentStatus == "SUCCESS",
 		PaymentID: res.PaymentID,
-	}, nil
+	}
+	// The buyer saved their card: surface the gateway tokens + masked metadata
+	// so the caller can persist the association (never the PAN).
+	if result.Paid && res.CardToken != "" {
+		masked := res.BinNumber + "******" + res.LastFourDigits
+		result.RegisteredCard = &domain.StoredCard{
+			CardUserKey:  res.CardUserKey,
+			CardToken:    res.CardToken,
+			MaskedNumber: masked,
+			Association:  res.CardAssociation,
+			Family:       res.CardFamily,
+		}
+	}
+	return result, nil
+}
+
+// DeleteStoredCard revokes a stored card at iyzico's card-storage service. The
+// exact wire format is confirmed against the sandbox in #51.
+func (g *Iyzico) DeleteStoredCard(ctx context.Context, cardUserKey, cardToken string) error {
+	req := map[string]string{"locale": "en", "cardUserKey": cardUserKey, "cardToken": cardToken}
+	var res cancelResponse
+	if err := g.post(ctx, pathCardDelete, req, &res); err != nil {
+		return err
+	}
+	if res.Status != "success" {
+		return fmt.Errorf("iyzico: delete stored card failed: %s", res.ErrorMessage)
+	}
+	return nil
 }
 
 // Refund cancels a captured payment in full.
