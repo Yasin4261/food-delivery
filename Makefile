@@ -1,4 +1,4 @@
-.PHONY: help dev prod build clean test test-integration migrate-up migrate-down
+.PHONY: help dev prod build clean test test-integration test-iyzico-sandbox migrate-up migrate-down
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -76,6 +76,9 @@ test-integration: ## Run repository + redisstore integration tests against Docke
 		status=$$? ; \
 		docker compose -f docker-compose.test.yml down -v ; \
 		exit $$status
+
+test-iyzico-sandbox: ## Smoke-test the iyzico adapter against the real sandbox (#51). Needs IYZICO_API_KEY/IYZICO_SECRET_KEY; skips without them.
+	go test -tags=iyzico_sandbox -v ./internal/payment/
 
 # Database migrations
 DB_URL ?= postgres://postgres:postgres123@localhost:5432/food_delivery?sslmode=disable
