@@ -31,7 +31,7 @@ The full OWASP Top 10 mapping and the **binding policies for new code** live in 
 - Passwords bcrypt-hashed; reset tokens stored only as sha256, single-use, expiring; JWTs (HS256) carry a `jti` revoked on logout via a denylist (Redis-backed in multi-instance deploys).
 - Role guards at the router plus **per-resource ownership checks in the service layer** (chefs own their menus, customers their orders, chat is participant-only); the `admin` role cannot be self-assigned.
 - SQL exists only in `internal/repository/` and only with parameterized placeholders.
-- Per-IP rate limiting on auth endpoints and the payment callback; enumeration-safe responses (forgot-password is silent for unknown emails).
+- Per-IP rate limiting on auth endpoints, the payment callback, and the password-bearing authenticated endpoints (change-password, delete-account); enumeration-safe responses (forgot-password is silent for unknown emails).
 - Card data never touches this codebase: payments go through iyzico hosted checkout with server-to-server verification; refunds are gateway-driven.
 - Config fails fast on missing/placeholder secrets outside development; no secrets in the repo.
 - Structured request logs never record credentials, tokens, or query strings.
