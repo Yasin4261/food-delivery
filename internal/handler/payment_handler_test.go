@@ -73,6 +73,79 @@ func (f *fakePaymentSessionRepo) UpdateStatus(_ context.Context, id int, status 
 	return nil
 }
 
+// fakePaymentMethodRepo is an in-memory domain.PaymentMethodRepository for the
+// saved-card HTTP tests.
+type fakePaymentMethodRepo struct {
+	mu     sync.Mutex
+	cards  []*domain.SavedCard
+	nextID int
+}
+
+func newFakePaymentMethodRepo() *fakePaymentMethodRepo {
+	return &fakePaymentMethodRepo{nextID: 1}
+}
+
+func (f *fakePaymentMethodRepo) Add(_ context.Context, c *domain.SavedCard) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, e := range f.cards {
+		if e.UserID == c.UserID && e.CardToken == c.CardToken {
+			c.ID, c.CreatedAt = e.ID, e.CreatedAt
+			return nil
+		}
+	}
+	c.ID = f.nextID
+	f.nextID++
+	c.CreatedAt = time.Now()
+	cp := *c
+	f.cards = append(f.cards, &cp)
+	return nil
+}
+func (f *fakePaymentMethodRepo) ListByUser(_ context.Context, userID int) ([]*domain.SavedCard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []*domain.SavedCard
+	for i := len(f.cards) - 1; i >= 0; i-- {
+		if f.cards[i].UserID == userID {
+			cp := *f.cards[i]
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+func (f *fakePaymentMethodRepo) FindByToken(_ context.Context, userID int, token string) (*domain.SavedCard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.cards {
+		if c.UserID == userID && c.CardToken == token {
+			cp := *c
+			return &cp, nil
+		}
+	}
+	return nil, domain.ErrCardNotFound
+}
+func (f *fakePaymentMethodRepo) CardUserKey(_ context.Context, userID int) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := len(f.cards) - 1; i >= 0; i-- {
+		if f.cards[i].UserID == userID {
+			return f.cards[i].CardUserKey, nil
+		}
+	}
+	return "", nil
+}
+func (f *fakePaymentMethodRepo) Delete(_ context.Context, userID int, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, c := range f.cards {
+		if c.UserID == userID && c.CardToken == token {
+			f.cards = append(f.cards[:i], f.cards[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrCardNotFound
+}
+
 // placeCardOrder places a card order for the customer and returns its id.
 func placeCardOrder(t *testing.T, srv http.Handler, customerToken string, itemID int) int {
 	t.Helper()
@@ -204,6 +277,81 @@ func TestPayment_Guards(t *testing.T) {
 	if !strings.Contains(loc, "payment=error") {
 		t.Errorf("unknown token redirect = %q, want payment=error", loc)
 	}
+}
+
+func TestPayment_SavedCards(t *testing.T) {
+	srv := newTestServer()
+	_, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+
+	// Initially no saved cards.
+	if cards := listCards(t, srv, customer); len(cards) != 0 {
+		t.Fatalf("initial cards = %d, want 0", len(cards))
+	}
+
+	// Pay opting to save the card, then complete via the callback.
+	orderID := placeCardOrder(t, srv, customer, itemID)
+	rec := do(t, srv, http.MethodPost, "/api/v2/orders/"+itoa(orderID)+"/pay", customer, `{"save_card":true}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("pay (save) = %d (%s)", rec.Code, rec.Body)
+	}
+	var payResp struct {
+		PaymentPageURL string `json:"payment_page_url"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &payResp)
+	u, _ := url.Parse(payResp.PaymentPageURL)
+	callback(t, srv, u.Query().Get("token"))
+
+	// The card is now saved (masked, tokenised — no PAN).
+	cards := listCards(t, srv, customer)
+	if len(cards) != 1 {
+		t.Fatalf("after save cards = %d, want 1", len(cards))
+	}
+	if cards[0].CardToken == "" || cards[0].MaskedNumber == "" {
+		t.Errorf("saved card missing token/mask: %+v", cards[0])
+	}
+
+	// Owner scoping: another customer sees none, and cannot delete this card.
+	other := registerCustomerToken(t, srv, "other", "other@example.com")
+	if c := listCards(t, srv, other); len(c) != 0 {
+		t.Errorf("other user sees %d cards, want 0", len(c))
+	}
+	if rec := do(t, srv, http.MethodDelete, "/api/v2/payment-methods/"+cards[0].CardToken, other, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("foreign delete = %d, want 404", rec.Code)
+	}
+
+	// Owner deletes the card.
+	if rec := do(t, srv, http.MethodDelete, "/api/v2/payment-methods/"+cards[0].CardToken, customer, ""); rec.Code != http.StatusOK {
+		t.Fatalf("delete own card = %d (%s)", rec.Code, rec.Body)
+	}
+	if c := listCards(t, srv, customer); len(c) != 0 {
+		t.Errorf("after delete cards = %d, want 0", len(c))
+	}
+	// Deleting again is a 404.
+	if rec := do(t, srv, http.MethodDelete, "/api/v2/payment-methods/"+cards[0].CardToken, customer, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("re-delete = %d, want 404", rec.Code)
+	}
+
+	// The endpoints require authentication.
+	if rec := do(t, srv, http.MethodGet, "/api/v2/payment-methods", "", ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("anon list = %d, want 401", rec.Code)
+	}
+}
+
+// listCards fetches the caller's saved cards.
+func listCards(t *testing.T, srv http.Handler, token string) []domain.SavedCard {
+	t.Helper()
+	rec := do(t, srv, http.MethodGet, "/api/v2/payment-methods", token, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list cards = %d (%s)", rec.Code, rec.Body)
+	}
+	var resp struct {
+		Data []domain.SavedCard `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode cards: %v", err)
+	}
+	return resp.Data
 }
 
 func TestPayment_RefundOnCancel(t *testing.T) {

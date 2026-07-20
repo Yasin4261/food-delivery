@@ -225,6 +225,7 @@ Built inside-out following the recipe in [CLAUDE.md §2](./CLAUDE.md):
 - [x] Menus & dishes (chef-owned CRUD, stock)
 - [x] Orders — multi-chef cart, status lifecycle, **per-chef sub-order status**, cash/card
 - [x] Card payments (iyzico hosted checkout, refunds incl. partial per-slice)
+- [x] Saved cards (opt-in card storage — gateway tokens + masked digits only, one-tap reuse)
 - [x] Favorites, reviews & ratings, search
 - [x] Real-time chat (WebSocket)
 - [x] Chef earnings (per delivered slice)

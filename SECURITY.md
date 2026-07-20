@@ -32,7 +32,7 @@ The full OWASP Top 10 mapping and the **binding policies for new code** live in 
 - Role guards at the router plus **per-resource ownership checks in the service layer** (chefs own their menus, customers their orders, chat is participant-only); the `admin` role cannot be self-assigned.
 - SQL exists only in `internal/repository/` and only with parameterized placeholders.
 - Per-IP rate limiting on auth endpoints, the payment callback, and the password-bearing authenticated endpoints (change-password, delete-account); enumeration-safe responses (forgot-password is silent for unknown emails).
-- Card data never touches this codebase: payments go through iyzico hosted checkout with server-to-server verification; refunds are gateway-driven.
+- Card data never touches this codebase: payments go through iyzico hosted checkout with server-to-server verification; refunds are gateway-driven. Saved cards (#67) store **only** the gateway tokens (`cardUserKey`/`cardToken`) and masked digits — never a PAN or CVC — and are owner-scoped.
 - Config fails fast on missing/placeholder secrets outside development; no secrets in the repo.
 - Structured request logs never record credentials, tokens, or query strings.
 

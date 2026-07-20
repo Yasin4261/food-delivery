@@ -57,7 +57,7 @@ func TestIyzico_AuthorizationHeader(t *testing.T) {
 	})
 
 	order, buyer := cardOrder()
-	if _, err := g.InitiateCheckout(context.Background(), order, buyer, "http://cb"); err != nil {
+	if _, err := g.InitiateCheckout(context.Background(), order, buyer, "http://cb", domain.CheckoutOptions{}); err != nil {
 		t.Fatalf("initiate: %v", err)
 	}
 
@@ -100,7 +100,7 @@ func TestIyzico_InitiateCheckout(t *testing.T) {
 	})
 
 	order, buyer := cardOrder()
-	cs, err := g.InitiateCheckout(context.Background(), order, buyer, "http://cb")
+	cs, err := g.InitiateCheckout(context.Background(), order, buyer, "http://cb", domain.CheckoutOptions{})
 	if err != nil {
 		t.Fatalf("initiate: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestIyzico_InitiateCheckout_GatewayError(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"status": "failure", "errorMessage": "invalid signature"})
 	})
 	order, buyer := cardOrder()
-	if _, err := g.InitiateCheckout(context.Background(), order, buyer, "cb"); err == nil || !strings.Contains(err.Error(), "invalid signature") {
+	if _, err := g.InitiateCheckout(context.Background(), order, buyer, "cb", domain.CheckoutOptions{}); err == nil || !strings.Contains(err.Error(), "invalid signature") {
 		t.Errorf("err = %v, want gateway error surfaced", err)
 	}
 }
@@ -177,7 +177,7 @@ func TestMock_RoundTrip(t *testing.T) {
 	m := NewMock("http://app.test/")
 	order, buyer := cardOrder()
 
-	cs, err := m.InitiateCheckout(context.Background(), order, buyer, "cb")
+	cs, err := m.InitiateCheckout(context.Background(), order, buyer, "cb", domain.CheckoutOptions{})
 	if err != nil {
 		t.Fatalf("initiate: %v", err)
 	}

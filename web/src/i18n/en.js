@@ -312,6 +312,13 @@ export default {
     labelPlaceholder: 'Home / Work',
     addressPlaceholder: 'Street, number, apartment…',
   },
+  cards: {
+    title: 'Saved cards',
+    hint: 'Only the card scheme and masked digits are stored — never your full card number.',
+    empty: 'No saved cards yet. Tick “save this card” when you pay to store one.',
+    remove: 'Remove',
+    saveThisCard: 'Save this card',
+  },
   profile: {
     title: 'My profile',
     account: 'Contact & delivery location',

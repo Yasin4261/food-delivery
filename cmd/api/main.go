@@ -128,6 +128,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	emailVerificationRepo := repository.NewEmailVerificationRepository(db.DB)
 	chatRepo := repository.NewChatRepository(db.DB)
 	paymentSessionRepo := repository.NewPaymentSessionRepository(db.DB)
+	paymentMethodRepo := repository.NewPaymentMethodRepository(db.DB)
 
 	// Mailer (driven adapter): real SMTP when configured, else the dev logger.
 	var mail domain.Mailer
@@ -163,6 +164,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	chefService := service.NewChefService(chefRepo, chefHoursRepo, loc)
 	menuService := service.NewMenuService(chefRepo, menuRepo, menuItemRepo)
 	paymentService := service.NewPaymentService(paymentSessionRepo, orderRepo, userRepo, gateway, cfg.AppBaseURL)
+	paymentService.SetPaymentMethods(paymentMethodRepo)
 	addressRepo := repository.NewAddressRepository(db.DB)
 	addressService := service.NewAddressService(addressRepo)
 	promoRepo := repository.NewPromoRepository(db.DB)

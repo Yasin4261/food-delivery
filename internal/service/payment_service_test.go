@@ -73,6 +73,79 @@ func (f *fakePaymentSessionRepo) UpdateStatus(_ context.Context, id int, status 
 	return nil
 }
 
+// fakePaymentMethodRepo is an in-memory domain.PaymentMethodRepository.
+type fakePaymentMethodRepo struct {
+	mu     sync.Mutex
+	cards  []*domain.SavedCard
+	nextID int
+}
+
+func newFakePaymentMethodRepo() *fakePaymentMethodRepo {
+	return &fakePaymentMethodRepo{nextID: 1}
+}
+
+func (f *fakePaymentMethodRepo) Add(_ context.Context, c *domain.SavedCard) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, existing := range f.cards {
+		if existing.UserID == c.UserID && existing.CardToken == c.CardToken {
+			c.ID = existing.ID
+			c.CreatedAt = existing.CreatedAt
+			return nil // idempotent
+		}
+	}
+	c.ID = f.nextID
+	f.nextID++
+	c.CreatedAt = time.Now()
+	cp := *c
+	f.cards = append(f.cards, &cp)
+	return nil
+}
+func (f *fakePaymentMethodRepo) ListByUser(_ context.Context, userID int) ([]*domain.SavedCard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []*domain.SavedCard
+	for i := len(f.cards) - 1; i >= 0; i-- {
+		if f.cards[i].UserID == userID {
+			cp := *f.cards[i]
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+func (f *fakePaymentMethodRepo) FindByToken(_ context.Context, userID int, token string) (*domain.SavedCard, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.cards {
+		if c.UserID == userID && c.CardToken == token {
+			cp := *c
+			return &cp, nil
+		}
+	}
+	return nil, domain.ErrCardNotFound
+}
+func (f *fakePaymentMethodRepo) CardUserKey(_ context.Context, userID int) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := len(f.cards) - 1; i >= 0; i-- {
+		if f.cards[i].UserID == userID {
+			return f.cards[i].CardUserKey, nil
+		}
+	}
+	return "", nil
+}
+func (f *fakePaymentMethodRepo) Delete(_ context.Context, userID int, token string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, c := range f.cards {
+		if c.UserID == userID && c.CardToken == token {
+			f.cards = append(f.cards[:i], f.cards[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrCardNotFound
+}
+
 // paymentFixture wires a PaymentService over fakes + the mock gateway, seeds a
 // user (buyer) and returns the order repo for placing orders.
 func paymentFixture(t *testing.T) (*service.PaymentService, *fakeOrderRepo, *fakePaymentSessionRepo) {
@@ -106,7 +179,7 @@ func TestPaymentService_StartCheckout(t *testing.T) {
 	ctx := context.Background()
 	order := seedCardOrder(t, orders, 1)
 
-	url, err := svc.StartCheckout(ctx, 1, order.ID)
+	url, err := svc.StartCheckout(ctx, 1, order.ID, false)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -115,14 +188,14 @@ func TestPaymentService_StartCheckout(t *testing.T) {
 	}
 
 	// Guards: wrong owner, cash order, already paid.
-	if _, err := svc.StartCheckout(ctx, 99, order.ID); !errors.Is(err, domain.ErrForbidden) {
+	if _, err := svc.StartCheckout(ctx, 99, order.ID, false); !errors.Is(err, domain.ErrForbidden) {
 		t.Errorf("foreign order = %v, want ErrForbidden", err)
 	}
 	cash := domain.NewOrder(1, "1 St")
 	m := domain.PaymentMethodCash
 	cash.PaymentMethod = &m
 	_ = orders.Create(ctx, cash)
-	if _, err := svc.StartCheckout(ctx, 1, cash.ID); !errors.Is(err, domain.ErrOrderNotPayable) {
+	if _, err := svc.StartCheckout(ctx, 1, cash.ID, false); !errors.Is(err, domain.ErrOrderNotPayable) {
 		t.Errorf("cash order = %v, want ErrOrderNotPayable", err)
 	}
 }
@@ -132,7 +205,7 @@ func TestPaymentService_CompleteCheckout(t *testing.T) {
 	ctx := context.Background()
 	order := seedCardOrder(t, orders, 1)
 
-	pageURL, err := svc.StartCheckout(ctx, 1, order.ID)
+	pageURL, err := svc.StartCheckout(ctx, 1, order.ID, false)
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
@@ -158,7 +231,7 @@ func TestPaymentService_CompleteCheckout(t *testing.T) {
 
 	// Failure outcome marks the session failed and leaves the order pending.
 	order2 := seedCardOrder(t, orders, 1)
-	page2, _ := svc.StartCheckout(ctx, 1, order2.ID)
+	page2, _ := svc.StartCheckout(ctx, 1, order2.ID, false)
 	token2 := strings.TrimPrefix(page2, "http://app.test/mock-pay?token=")
 	_, paid, err = svc.CompleteCheckout(ctx, token2+":fail")
 	if err != nil || paid {
@@ -172,6 +245,77 @@ func TestPaymentService_CompleteCheckout(t *testing.T) {
 	// Unknown token surfaces not-found.
 	if _, _, err := svc.CompleteCheckout(ctx, "ghost"); !errors.Is(err, domain.ErrPaymentSessionNotFound) {
 		t.Errorf("unknown token = %v, want ErrPaymentSessionNotFound", err)
+	}
+}
+
+func TestPaymentService_SavedCards(t *testing.T) {
+	ctx := context.Background()
+	users := newFakeUserRepo()
+	_ = users.Create(ctx, &domain.User{Username: "cust", Email: "c@e.com", Role: domain.RoleCustomer, IsActive: true})
+	orders := newFakeOrderRepo()
+	sessions := newFakePaymentSessionRepo()
+	cards := newFakePaymentMethodRepo()
+	svc := service.NewPaymentService(sessions, orders, users, payment.NewMock("http://app.test"), "http://app.test")
+	svc.SetPaymentMethods(cards)
+
+	// No cards yet.
+	if list, err := svc.ListSavedCards(ctx, 1); err != nil || len(list) != 0 {
+		t.Fatalf("initial list = (%v,%v), want empty", list, err)
+	}
+
+	// Checkout WITHOUT opting to save: nothing is stored.
+	order := seedCardOrder(t, orders, 1)
+	page, err := svc.StartCheckout(ctx, 1, order.ID, false)
+	if err != nil {
+		t.Fatalf("start (no save): %v", err)
+	}
+	token := strings.TrimPrefix(page, "http://app.test/mock-pay?token=")
+	if _, paid, err := svc.CompleteCheckout(ctx, token); err != nil || !paid {
+		t.Fatalf("complete (no save) = (%v,%v)", paid, err)
+	}
+	if list, _ := svc.ListSavedCards(ctx, 1); len(list) != 0 {
+		t.Fatalf("no-save checkout stored %d cards, want 0", len(list))
+	}
+
+	// Checkout opting to save: the card is persisted.
+	order2 := seedCardOrder(t, orders, 1)
+	page2, err := svc.StartCheckout(ctx, 1, order2.ID, true)
+	if err != nil {
+		t.Fatalf("start (save): %v", err)
+	}
+	token2 := strings.TrimPrefix(page2, "http://app.test/mock-pay?token=")
+	if _, paid, err := svc.CompleteCheckout(ctx, token2); err != nil || !paid {
+		t.Fatalf("complete (save) = (%v,%v)", paid, err)
+	}
+	list, err := svc.ListSavedCards(ctx, 1)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("after save list = (%d,%v), want 1 card", len(list), err)
+	}
+	saved := list[0]
+	if saved.MaskedNumber == "" || saved.CardToken == "" {
+		t.Errorf("saved card missing metadata: %+v", saved)
+	}
+	if strings.Contains(saved.MaskedNumber, "0006") == false {
+		t.Errorf("masked number = %q, want masked digits", saved.MaskedNumber)
+	}
+
+	// The saved card is scoped to its owner — another user sees none.
+	if list, _ := svc.ListSavedCards(ctx, 2); len(list) != 0 {
+		t.Errorf("foreign user sees %d cards, want 0", len(list))
+	}
+
+	// Delete: unknown token → ErrCardNotFound; own token → removed.
+	if err := svc.DeleteSavedCard(ctx, 1, "ghost"); !errors.Is(err, domain.ErrCardNotFound) {
+		t.Errorf("delete unknown = %v, want ErrCardNotFound", err)
+	}
+	if err := svc.DeleteSavedCard(ctx, 2, saved.CardToken); !errors.Is(err, domain.ErrCardNotFound) {
+		t.Errorf("delete as foreign user = %v, want ErrCardNotFound", err)
+	}
+	if err := svc.DeleteSavedCard(ctx, 1, saved.CardToken); err != nil {
+		t.Fatalf("delete own card: %v", err)
+	}
+	if list, _ := svc.ListSavedCards(ctx, 1); len(list) != 0 {
+		t.Errorf("after delete list = %d, want 0", len(list))
 	}
 }
 

@@ -58,6 +58,7 @@ func respondDomainError(w http.ResponseWriter, err error) {
 		errors.Is(err, domain.ErrOrderNotFound),
 		errors.Is(err, domain.ErrConversationNotFound),
 		errors.Is(err, domain.ErrPaymentSessionNotFound),
+		errors.Is(err, domain.ErrCardNotFound),
 		errors.Is(err, domain.ErrAddressNotFound),
 		errors.Is(err, domain.ErrPromoNotFound):
 		respondError(w, http.StatusNotFound, err.Error())

@@ -311,6 +311,13 @@ export default {
     labelPlaceholder: 'Ev / İş',
     addressPlaceholder: 'Sokak, numara, daire…',
   },
+  cards: {
+    title: 'Kayıtlı kartlar',
+    hint: 'Yalnızca kart türü ve maskeli haneler saklanır — kart numaranızın tamamı asla saklanmaz.',
+    empty: 'Henüz kayıtlı kart yok. Ödeme sırasında “bu kartı kaydet” seçeneğini işaretleyin.',
+    remove: 'Sil',
+    saveThisCard: 'Bu kartı kaydet',
+  },
   profile: {
     title: 'Profilim',
     account: 'İletişim ve teslimat konumu',
