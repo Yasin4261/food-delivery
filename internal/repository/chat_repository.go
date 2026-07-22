@@ -19,24 +19,45 @@ func NewChatRepository(db *sql.DB) *ChatRepository {
 	return &ChatRepository{db: db}
 }
 
-const conversationColumns = `id, user_id, chef_id, order_id, last_message_at, created_at`
+const conversationColumns = `id, kind, user_id, chef_id, order_id, last_message_at, created_at`
 
+// scanConversation scans a conversation row. chef_id is nullable (support
+// threads carry no kitchen) and maps to ChefID 0.
 func scanConversation(s interface{ Scan(...any) error }) (*domain.Conversation, error) {
 	c := &domain.Conversation{}
-	err := s.Scan(&c.ID, &c.UserID, &c.ChefID, &c.OrderID, &c.LastMessageAt, &c.CreatedAt)
+	var chefID sql.NullInt64
+	err := s.Scan(&c.ID, &c.Kind, &c.UserID, &chefID, &c.OrderID, &c.LastMessageAt, &c.CreatedAt)
+	c.ChefID = int(chefID.Int64)
 	return c, err
 }
 
-// FindConversation returns the thread for a (userID, chefID) pair.
+// FindConversation returns the customer<->chef thread for a (userID, chefID)
+// pair.
 func (r *ChatRepository) FindConversation(ctx context.Context, userID, chefID int) (*domain.Conversation, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT `+conversationColumns+` FROM chat_conversations WHERE user_id = $1 AND chef_id = $2`, userID, chefID)
+		`SELECT `+conversationColumns+` FROM chat_conversations
+		 WHERE user_id = $1 AND chef_id = $2 AND kind = 'chef'`, userID, chefID)
 	c, err := scanConversation(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrConversationNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("find conversation: %w", err)
+	}
+	return c, nil
+}
+
+// FindSupportConversation returns a user's support thread.
+func (r *ChatRepository) FindSupportConversation(ctx context.Context, userID int) (*domain.Conversation, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT `+conversationColumns+` FROM chat_conversations
+		 WHERE user_id = $1 AND kind = 'support'`, userID)
+	c, err := scanConversation(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrConversationNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find support conversation: %w", err)
 	}
 	return c, nil
 }
@@ -54,12 +75,21 @@ func (r *ChatRepository) FindConversationByID(ctx context.Context, id int) (*dom
 	return c, nil
 }
 
-// CreateConversation inserts a thread and back-fills id and created_at.
+// CreateConversation inserts a thread and back-fills id and created_at. A
+// support thread (Kind == "support") stores chef_id NULL; a chef thread stores
+// its ChefID. Kind defaults to "chef" when unset.
 func (r *ChatRepository) CreateConversation(ctx context.Context, c *domain.Conversation) error {
+	if c.Kind == "" {
+		c.Kind = domain.ConversationKindChef
+	}
+	var chefID any
+	if c.ChefID != 0 {
+		chefID = c.ChefID
+	}
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO chat_conversations (user_id, chef_id, order_id)
-		VALUES ($1, $2, $3)
-		RETURNING id, created_at`, c.UserID, c.ChefID, c.OrderID).Scan(&c.ID, &c.CreatedAt)
+		INSERT INTO chat_conversations (kind, user_id, chef_id, order_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, created_at`, c.Kind, c.UserID, chefID, c.OrderID).Scan(&c.ID, &c.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("create conversation: %w", err)
 	}
@@ -84,12 +114,28 @@ func (r *ChatRepository) ListConversationsByUser(ctx context.Context, userID int
 }
 
 // ListConversationsByChef returns a chef's threads, most recently active
-// first, each with the chef's unread count.
+// first, each with the chef's unread count. Only chef threads have a chef_id,
+// so this never returns support threads.
 func (r *ChatRepository) ListConversationsByChef(ctx context.Context, chefID int) ([]*domain.Conversation, error) {
 	return r.listConversations(ctx, `
 		SELECT `+conversationColumns+`, `+unreadForChef+` AS unread
-		FROM chat_conversations c WHERE c.chef_id = $1
+		FROM chat_conversations c WHERE c.chef_id = $1 AND c.kind = 'chef'
 		ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC`, chefID)
+}
+
+// ListSupportConversations returns every support thread — the admin inbox. The
+// admin is the "other party", so the unread count is messages FROM the target
+// user (unreadForChef, expressed over c.user_id).
+func (r *ChatRepository) ListSupportConversations(ctx context.Context) ([]*domain.Conversation, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT `+conversationColumns+`, `+unreadForChef+` AS unread
+		FROM chat_conversations c WHERE c.kind = 'support'
+		ORDER BY c.last_message_at DESC NULLS LAST, c.created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list support conversations: %w", err)
+	}
+	defer rows.Close()
+	return scanConversationRows(rows)
 }
 
 func (r *ChatRepository) listConversations(ctx context.Context, query string, arg int) ([]*domain.Conversation, error) {
@@ -98,13 +144,20 @@ func (r *ChatRepository) listConversations(ctx context.Context, query string, ar
 		return nil, fmt.Errorf("list conversations: %w", err)
 	}
 	defer rows.Close()
+	return scanConversationRows(rows)
+}
 
+// scanConversationRows scans conversation rows that carry a trailing unread
+// count column (nullable chef_id -> ChefID 0).
+func scanConversationRows(rows *sql.Rows) ([]*domain.Conversation, error) {
 	out := make([]*domain.Conversation, 0)
 	for rows.Next() {
 		c := &domain.Conversation{}
-		if err := rows.Scan(&c.ID, &c.UserID, &c.ChefID, &c.OrderID, &c.LastMessageAt, &c.CreatedAt, &c.UnreadCount); err != nil {
+		var chefID sql.NullInt64
+		if err := rows.Scan(&c.ID, &c.Kind, &c.UserID, &chefID, &c.OrderID, &c.LastMessageAt, &c.CreatedAt, &c.UnreadCount); err != nil {
 			return nil, fmt.Errorf("scan conversation: %w", err)
 		}
+		c.ChefID = int(chefID.Int64)
 		out = append(out, c)
 	}
 	return out, rows.Err()

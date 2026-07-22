@@ -2,12 +2,22 @@ package domain
 
 import "time"
 
-// Conversation is a message thread between a customer (UserID) and a chef
-// (ChefID), optionally tied to an order (mirrors chat_conversations).
+// Conversation kinds. A chef thread is the original customer<->chef shape; a
+// support thread is admin<->user (#120).
+const (
+	ConversationKindChef    = "chef"
+	ConversationKindSupport = "support"
+)
+
+// Conversation is a message thread. For a chef thread (Kind == "chef") it is
+// between a customer (UserID) and a chef (ChefID). For a support thread
+// (Kind == "support") it is between a user (UserID — the customer or chef being
+// helped) and any admin, and ChefID is 0. Mirrors chat_conversations.
 type Conversation struct {
 	ID            int        `json:"id"`
+	Kind          string     `json:"kind"`
 	UserID        int        `json:"user_id"`
-	ChefID        int        `json:"chef_id"`
+	ChefID        int        `json:"chef_id,omitempty"` // 0 on a support thread
 	OrderID       *int       `json:"order_id,omitempty"`
 	LastMessageAt *time.Time `json:"last_message_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
@@ -18,11 +28,22 @@ type Conversation struct {
 	UnreadCount int `json:"unread_count"`
 }
 
+// IsSupport reports whether this is an admin<->user support thread.
+func (c *Conversation) IsSupport() bool { return c.Kind == ConversationKindSupport }
+
 // IsParticipant reports whether the requester may access the conversation. The
-// requester is identified by their user id and, if they are a chef, their chef
-// profile id (pass 0 when the requester has no chef profile). Only the customer
-// (UserID) and the owning chef (ChefID) are participants.
-func (c *Conversation) IsParticipant(userID, chefID int) bool {
+// requester is identified by their user id, their chef profile id (0 when they
+// have none), and whether they are an admin.
+//
+//   - Support thread: the target user (UserID) or ANY admin. A chef profile is
+//     irrelevant here.
+//   - Chef thread: the customer (UserID) or the owning chef (ChefID). Admins are
+//     deliberately NOT participants — support must never read a customer<->chef
+//     thread through this door (#120).
+func (c *Conversation) IsParticipant(userID, chefID int, isAdmin bool) bool {
+	if c.IsSupport() {
+		return userID == c.UserID || isAdmin
+	}
 	if userID == c.UserID {
 		return true
 	}

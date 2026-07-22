@@ -48,6 +48,10 @@ func NewChatHandler(chat *service.ChatService) *ChatHandler {
 	}
 }
 
+// isAdmin reports whether the authenticated caller holds the admin role — used
+// to admit them as a participant of a support thread.
+func isAdmin(claims *service.Claims) bool { return claims.Role == domain.RoleAdmin }
+
 type startConversationRequest struct {
 	ChefID  int  `json:"chef_id"`
 	OrderID *int `json:"order_id"`
@@ -112,7 +116,7 @@ func (h *ChatHandler) PostMessage(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	msg, err := h.chat.SendMessage(r.Context(), claims.UserID, id, req.Body)
+	msg, err := h.chat.SendMessage(r.Context(), claims.UserID, isAdmin(claims), id, req.Body)
 	if err != nil {
 		respondDomainError(w, err)
 		return
@@ -134,7 +138,7 @@ func (h *ChatHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := queryInt(r, "limit", 50), queryInt(r, "offset", 0)
-	msgs, total, err := h.chat.Messages(r.Context(), claims.UserID, id, limit, offset)
+	msgs, total, err := h.chat.Messages(r.Context(), claims.UserID, isAdmin(claims), id, limit, offset)
 	if err != nil {
 		respondDomainError(w, err)
 		return
@@ -155,7 +159,7 @@ func (h *ChatHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid conversation id")
 		return
 	}
-	if err := h.chat.MarkRead(r.Context(), claims.UserID, id); err != nil {
+	if err := h.chat.MarkRead(r.Context(), claims.UserID, isAdmin(claims), id); err != nil {
 		respondDomainError(w, err)
 		return
 	}
@@ -183,7 +187,7 @@ func (h *ChatHandler) WebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Authorise before upgrading so failures are plain HTTP responses.
-	if _, err := h.chat.Authorize(r.Context(), claims.UserID, id); err != nil {
+	if _, err := h.chat.Authorize(r.Context(), claims.UserID, isAdmin(claims), id); err != nil {
 		respondDomainError(w, err)
 		return
 	}
@@ -211,10 +215,61 @@ func (h *ChatHandler) WebSocket(w http.ResponseWriter, r *http.Request) {
 		if json.Unmarshal(data, &in) != nil || in.Body == "" {
 			continue
 		}
-		msg, err := h.chat.SendMessage(r.Context(), claims.UserID, id, in.Body)
+		msg, err := h.chat.SendMessage(r.Context(), claims.UserID, isAdmin(claims), id, in.Body)
 		if err != nil {
 			continue
 		}
 		h.hub.Broadcast(id, wsFrame{Type: "message", Message: msg})
 	}
+}
+
+// ContactSupport handles POST /api/v2/support/conversations (auth) — a user
+// opens (or reuses) their own support thread with the platform.
+func (h *ChatHandler) ContactSupport(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	conv, err := h.chat.StartSupportConversation(r.Context(), claims.UserID)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusCreated, conv)
+}
+
+type adminSupportRequest struct {
+	UserID int `json:"user_id"`
+}
+
+// AdminStartSupport handles POST /api/v2/admin/support/conversations (admin) —
+// an admin opens (or reuses) a support thread with a target user.
+func (h *ChatHandler) AdminStartSupport(w http.ResponseWriter, r *http.Request) {
+	var req adminSupportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.UserID == 0 {
+		respondError(w, http.StatusBadRequest, "user_id is required")
+		return
+	}
+	conv, err := h.chat.StartSupportConversation(r.Context(), req.UserID)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusCreated, conv)
+}
+
+// AdminListSupport handles GET /api/v2/admin/support/conversations (admin) —
+// the support inbox: every support thread, most recently active first.
+func (h *ChatHandler) AdminListSupport(w http.ResponseWriter, r *http.Request) {
+	convs, err := h.chat.SupportConversations(r.Context())
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondPage(w, convs, len(convs), 0, len(convs))
 }

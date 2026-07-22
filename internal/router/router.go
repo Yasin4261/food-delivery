@@ -215,6 +215,11 @@ func (r *Router) Setup() http.Handler {
 	r.handleAdmin("GET /api/v2/admin/promos", r.adminHandler.ListPromos)
 	r.handleAdmin("POST /api/v2/admin/promos", r.adminHandler.CreatePromo)
 	r.handleAdmin("PATCH /api/v2/admin/promos/{id}/active", r.adminHandler.SetPromoActive)
+	// Support messaging (#120): admin inbox + opening a thread with a user.
+	// Replies/history/live delivery reuse the shared chat endpoints below (the
+	// admin is a participant of a support thread by role).
+	r.handleAdmin("GET /api/v2/admin/support/conversations", r.chatHandler.AdminListSupport)
+	r.handleAdmin("POST /api/v2/admin/support/conversations", r.chatHandler.AdminStartSupport)
 
 	// Notification badge counts, polled by the SPA.
 	r.handleAuth("GET /api/v2/notifications/summary", r.orderHandler.Summary)
@@ -223,6 +228,9 @@ func (r *Router) Setup() http.Handler {
 	// conversation). The /ws route upgrades to a WebSocket for live delivery.
 	r.handleAuth("POST /api/v2/chat/conversations", r.chatHandler.StartConversation)
 	r.handleAuth("GET /api/v2/chat/conversations", r.chatHandler.ListConversations)
+	// A user opens their own support thread ("Contact support"); it then behaves
+	// like any other conversation in the endpoints below.
+	r.handleAuth("POST /api/v2/support/conversations", r.chatHandler.ContactSupport)
 	r.handleAuth("POST /api/v2/chat/conversations/{id}/messages", r.chatHandler.PostMessage)
 	r.handleAuth("GET /api/v2/chat/conversations/{id}/messages", r.chatHandler.ListMessages)
 	r.handleAuth("POST /api/v2/chat/conversations/{id}/read", r.chatHandler.MarkRead)

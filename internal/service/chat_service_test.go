@@ -28,12 +28,35 @@ func (f *fakeChatRepo) FindConversation(_ context.Context, userID, chefID int) (
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, c := range f.convs {
-		if c.UserID == userID && c.ChefID == chefID {
+		if !c.IsSupport() && c.UserID == userID && c.ChefID == chefID {
 			cp := *c
 			return &cp, nil
 		}
 	}
 	return nil, domain.ErrConversationNotFound
+}
+func (f *fakeChatRepo) FindSupportConversation(_ context.Context, userID int) (*domain.Conversation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.convs {
+		if c.IsSupport() && c.UserID == userID {
+			cp := *c
+			return &cp, nil
+		}
+	}
+	return nil, domain.ErrConversationNotFound
+}
+func (f *fakeChatRepo) ListSupportConversations(_ context.Context) ([]*domain.Conversation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]*domain.Conversation, 0)
+	for _, c := range f.convs {
+		if c.IsSupport() {
+			cp := *c
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
 }
 func (f *fakeChatRepo) FindConversationByID(_ context.Context, id int) (*domain.Conversation, error) {
 	f.mu.Lock()
@@ -151,23 +174,23 @@ func TestChatService_SendAndHistoryAuthorization(t *testing.T) {
 	}
 
 	// Customer can send.
-	if _, err := svc.SendMessage(ctx, 100, conv.ID, "hello chef"); err != nil {
+	if _, err := svc.SendMessage(ctx, 100, false, conv.ID, "hello chef"); err != nil {
 		t.Fatalf("customer send: %v", err)
 	}
 	// The chef (user 1, owning chef 1) can also send.
-	if _, err := svc.SendMessage(ctx, 1, conv.ID, "hi customer"); err != nil {
+	if _, err := svc.SendMessage(ctx, 1, false, conv.ID, "hi customer"); err != nil {
 		t.Fatalf("chef send: %v", err)
 	}
 	// A stranger cannot send or read.
-	if _, err := svc.SendMessage(ctx, 999, conv.ID, "intrude"); !errors.Is(err, domain.ErrForbidden) {
+	if _, err := svc.SendMessage(ctx, 999, false, conv.ID, "intrude"); !errors.Is(err, domain.ErrForbidden) {
 		t.Errorf("stranger send = %v, want ErrForbidden", err)
 	}
-	if _, _, err := svc.Messages(ctx, 999, conv.ID, 50, 0); !errors.Is(err, domain.ErrForbidden) {
+	if _, _, err := svc.Messages(ctx, 999, false, conv.ID, 50, 0); !errors.Is(err, domain.ErrForbidden) {
 		t.Errorf("stranger read = %v, want ErrForbidden", err)
 	}
 
 	// History loads for a participant, in order.
-	msgs, total, err := svc.Messages(ctx, 100, conv.ID, 50, 0)
+	msgs, total, err := svc.Messages(ctx, 100, false, conv.ID, 50, 0)
 	if total != 2 {
 		t.Errorf("messages total = %d, want 2", total)
 	}
@@ -183,8 +206,59 @@ func TestChatService_EmptyMessageRejected(t *testing.T) {
 	svc, _ := chatFixture(t, 1)
 	ctx := context.Background()
 	conv, _ := svc.StartConversation(ctx, 100, 1, nil)
-	if _, err := svc.SendMessage(ctx, 100, conv.ID, "   "); !errors.Is(err, domain.ErrEmptyMessage) {
+	if _, err := svc.SendMessage(ctx, 100, false, conv.ID, "   "); !errors.Is(err, domain.ErrEmptyMessage) {
 		t.Errorf("empty message = %v, want ErrEmptyMessage", err)
+	}
+}
+
+func TestChatService_SupportThread(t *testing.T) {
+	svc, _ := chatFixture(t, 1) // user 1 owns chef 1
+	ctx := context.Background()
+
+	// A support thread for target user 100, opened idempotently.
+	conv, err := svc.StartSupportConversation(ctx, 100)
+	if err != nil {
+		t.Fatalf("start support: %v", err)
+	}
+	if !conv.IsSupport() || conv.UserID != 100 || conv.ChefID != 0 {
+		t.Fatalf("unexpected support conv: %+v", conv)
+	}
+	if again, _ := svc.StartSupportConversation(ctx, 100); again.ID != conv.ID {
+		t.Errorf("support thread not idempotent: %d vs %d", again.ID, conv.ID)
+	}
+
+	// The target user can post; an admin (any user id, isAdmin=true) can too.
+	if _, err := svc.SendMessage(ctx, 100, false, conv.ID, "help me"); err != nil {
+		t.Fatalf("target send: %v", err)
+	}
+	if _, err := svc.SendMessage(ctx, 500, true, conv.ID, "how can we help?"); err != nil {
+		t.Fatalf("admin send: %v", err)
+	}
+
+	// A random non-admin, non-target user cannot read or write — even the chef.
+	if _, err := svc.SendMessage(ctx, 1, false, conv.ID, "nosy chef"); !errors.Is(err, domain.ErrForbidden) {
+		t.Errorf("chef into support = %v, want ErrForbidden", err)
+	}
+	if _, _, err := svc.Messages(ctx, 999, false, conv.ID, 50, 0); !errors.Is(err, domain.ErrForbidden) {
+		t.Errorf("stranger read support = %v, want ErrForbidden", err)
+	}
+
+	// The support inbox lists it.
+	inbox, err := svc.SupportConversations(ctx)
+	if err != nil || len(inbox) != 1 || inbox[0].ID != conv.ID {
+		t.Fatalf("support inbox = %+v, %v, want the one thread", inbox, err)
+	}
+
+	// Crucially: an admin is NOT a participant of a customer<->chef thread.
+	chefThread, err := svc.StartConversation(ctx, 100, 1, nil)
+	if err != nil {
+		t.Fatalf("start chef thread: %v", err)
+	}
+	if _, _, err := svc.Messages(ctx, 500, true, chefThread.ID, 50, 0); !errors.Is(err, domain.ErrForbidden) {
+		t.Errorf("admin reading a chef thread = %v, want ErrForbidden (#120 privacy)", err)
+	}
+	if _, err := svc.SendMessage(ctx, 500, true, chefThread.ID, "spying"); !errors.Is(err, domain.ErrForbidden) {
+		t.Errorf("admin writing a chef thread = %v, want ErrForbidden", err)
 	}
 }
 
