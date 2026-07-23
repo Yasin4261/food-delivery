@@ -20,11 +20,24 @@ type OrderNotifier struct {
 	mailer domain.Mailer
 	users  domain.UserRepository
 	chefs  domain.ChefRepository
+	// currency is the ISO-4217 code amounts are quoted in (config). Emails are
+	// the record people keep, so they must never state the wrong currency.
+	currency string
 }
 
-// NewOrderNotifier builds an OrderNotifier.
-func NewOrderNotifier(mailer domain.Mailer, users domain.UserRepository, chefs domain.ChefRepository) *OrderNotifier {
-	return &OrderNotifier{mailer: mailer, users: users, chefs: chefs}
+// NewOrderNotifier builds an OrderNotifier. currency is the ISO-4217 code from
+// config; an empty value falls back to TRY.
+func NewOrderNotifier(mailer domain.Mailer, users domain.UserRepository, chefs domain.ChefRepository, currency string) *OrderNotifier {
+	if currency == "" {
+		currency = "TRY"
+	}
+	return &OrderNotifier{mailer: mailer, users: users, chefs: chefs, currency: currency}
+}
+
+// money renders an amount with its currency code — deliberately unambiguous
+// ("45.00 TRY") rather than a locale-guessed symbol (#125).
+func (n *OrderNotifier) money(amount float64) string {
+	return fmt.Sprintf("%.2f %s", amount, n.currency)
 }
 
 // OrderPlaced emails every chef with a slice of the new order (their items
@@ -50,7 +63,7 @@ func (n *OrderNotifier) OrderPlaced(ctx context.Context, order *domain.Order) {
 			msg := domain.Email{
 				To:      user.Email,
 				Subject: fmt.Sprintf("New order %s", order.OrderCode),
-				Body:    newOrderBody(order, sub, chef.BusinessName),
+				Body:    n.newOrderBody(order, sub, chef.BusinessName),
 			}
 			if err := n.mailer.Send(ctx, msg); err != nil {
 				n.logFailure("new-order", order, err)
@@ -93,7 +106,7 @@ func (n *OrderNotifier) SubOrderAdvanced(ctx context.Context, order *domain.Orde
 		msg := domain.Email{
 			To:      user.Email,
 			Subject: fmt.Sprintf("Order %s: %s %s", order.OrderCode, chefName, verb),
-			Body:    statusChangeBody(order, sub, chefName, verb),
+			Body:    n.statusChangeBody(order, sub, chefName, verb),
 		}
 		if err := n.mailer.Send(ctx, msg); err != nil {
 			n.logFailure("status-change", order, err)
@@ -107,16 +120,16 @@ func (n *OrderNotifier) logFailure(kind string, order *domain.Order, err error) 
 
 // newOrderBody renders the chef-facing "new order" email: the chef's own
 // items and slice subtotal, never other chefs' lines.
-func newOrderBody(order *domain.Order, sub *domain.SubOrder, businessName string) string {
+func (n *OrderNotifier) newOrderBody(order *domain.Order, sub *domain.SubOrder, businessName string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Hi %s,\n\nYou have a new order (%s):\n\n", businessName, order.OrderCode)
 	for _, it := range order.Items {
 		if it.ChefID != sub.ChefID {
 			continue
 		}
-		fmt.Fprintf(&b, "  %d x %s — $%.2f\n", it.Quantity, it.ItemName, it.Subtotal)
+		fmt.Fprintf(&b, "  %d x %s — %s\n", it.Quantity, it.ItemName, n.money(it.Subtotal))
 	}
-	fmt.Fprintf(&b, "\nYour subtotal: $%.2f\n", sub.Subtotal)
+	fmt.Fprintf(&b, "\nYour subtotal: %s\n", n.money(sub.Subtotal))
 	fmt.Fprintf(&b, "Delivery address: %s\n", order.DeliveryAddress)
 	if order.CustomerNotes != nil && *order.CustomerNotes != "" {
 		fmt.Fprintf(&b, "Customer notes: %s\n", *order.CustomerNotes)
@@ -126,7 +139,7 @@ func newOrderBody(order *domain.Order, sub *domain.SubOrder, businessName string
 }
 
 // statusChangeBody renders the customer-facing "status changed" email.
-func statusChangeBody(order *domain.Order, sub *domain.SubOrder, chefName, verb string) string {
+func (n *OrderNotifier) statusChangeBody(order *domain.Order, sub *domain.SubOrder, chefName, verb string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Hi,\n\n%s %s (%s).\n", chefName, verb, order.OrderCode)
 	// A declined slice of a card payment is refunded (the order shows paid
@@ -134,7 +147,7 @@ func statusChangeBody(order *domain.Order, sub *domain.SubOrder, chefName, verb 
 	cardCharged := order.PaymentMethod != nil && *order.PaymentMethod == domain.PaymentMethodCard &&
 		(order.PaymentStatus == domain.PaymentStatusPaid || order.PaymentStatus == domain.PaymentStatusRefunded)
 	if sub.Status == domain.OrderStatusCancelled && cardCharged {
-		fmt.Fprintf(&b, "The $%.2f you paid for this part of the order is being refunded.\n", sub.Subtotal)
+		fmt.Fprintf(&b, "The %s you paid for this part of the order is being refunded.\n", n.money(sub.Subtotal))
 	}
 	b.WriteString("\nYou can follow your order on the My orders page.\n")
 	return b.String()

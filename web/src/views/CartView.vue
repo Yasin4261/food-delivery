@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { formatMoney as money } from '@/lib/money'
 import { useRouter, RouterLink } from 'vue-router'
 import { api } from '@/api/client'
 import { useCartStore } from '@/stores/cart'
@@ -92,7 +93,7 @@ async function placeOrder() {
               :value="line.quantity"
               @input="cart.setQuantity(line.menuItemId, Number($event.target.value))"
             />
-            <span class="w-16 text-right text-sm">${{ (line.price * line.quantity).toFixed(2) }}</span>
+            <span class="w-16 text-right text-sm">{{ money(line.price * line.quantity) }}</span>
             <button class="text-sm text-red-600 hover:underline" @click="cart.remove(line.menuItemId)">{{ $t('cart.remove') }}</button>
           </div>
         </div>
@@ -100,7 +101,7 @@ async function placeOrder() {
 
       <div class="flex justify-between text-lg font-semibold">
         <span>{{ $t('cart.total') }}</span>
-        <span>${{ cart.total.toFixed(2) }}</span>
+        <span>{{ money(cart.total) }}</span>
       </div>
       <p class="text-xs text-gray-400">{{ $t('cart.deliveryFeeHint') }}</p>
 
@@ -149,11 +150,11 @@ async function placeOrder() {
         </div>
         <div class="flex justify-between border-t border-gray-100 pt-3 text-lg font-semibold">
           <span>{{ $t('cart.grandTotal') }}</span>
-          <span>${{ grandTotal.toFixed(2) }}</span>
+          <span>{{ money(grandTotal) }}</span>
         </div>
         <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
         <button class="btn-primary w-full" :disabled="placing">
-          {{ placing ? $t('cart.placing') : $t('cart.placeOrder', { total: `$${grandTotal.toFixed(2)}` }) }}
+          {{ placing ? $t('cart.placing') : $t('cart.placeOrder', { total: money(grandTotal) }) }}
         </button>
       </form>
     </template>

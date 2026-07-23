@@ -17,6 +17,7 @@ func setBase(t *testing.T) {
 		"ALLOWED_ORIGINS", "SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD",
 		"MAIL_FROM", "APP_BASE_URL", "IYZICO_API_KEY", "IYZICO_SECRET_KEY", "IYZICO_BASE_URL",
 		"DELIVERY_BASE_FEE", "DELIVERY_FEE_PER_KM", "COMMISSION_PERCENT", "ETA_MINUTES",
+		"CURRENCY",
 	} {
 		t.Setenv(k, "")
 	}
@@ -45,6 +46,36 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	}
 	if cfg.SMTPPort != "587" {
 		t.Errorf("smtp port default = %q, want 587", cfg.SMTPPort)
+	}
+	if cfg.Currency != "TRY" {
+		t.Errorf("currency default = %q, want TRY", cfg.Currency)
+	}
+}
+
+// Currency is the single source of truth for what the gateway charges and what
+// the UI/emails show, so a bad code fails the boot rather than silently
+// defaulting (#125).
+func TestLoadConfig_CurrencyValidation(t *testing.T) {
+	t.Run("uppercased", func(t *testing.T) {
+		setBase(t)
+		t.Setenv("CURRENCY", "eur")
+		cfg, err := config.LoadConfig()
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		if cfg.Currency != "EUR" {
+			t.Errorf("currency = %q, want EUR (normalised)", cfg.Currency)
+		}
+	})
+
+	for _, bad := range []string{"TR", "TURKISH", "TR1", "€"} {
+		t.Run("rejects "+bad, func(t *testing.T) {
+			setBase(t)
+			t.Setenv("CURRENCY", bad)
+			if _, err := config.LoadConfig(); err == nil || !strings.Contains(err.Error(), "CURRENCY") {
+				t.Errorf("CURRENCY=%q err = %v, want rejection", bad, err)
+			}
+		})
 	}
 }
 

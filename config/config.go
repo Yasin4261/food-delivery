@@ -54,6 +54,11 @@ type Config struct {
 	DeliveryFeePerKm  float64
 	CommissionPercent float64
 
+	// Currency is the ISO-4217 code every amount in the platform is denominated
+	// in — what the gateway charges and what emails/UI must display. Single
+	// source of truth: nothing may hardcode a currency or a symbol.
+	Currency string
+
 	// ETAMinutes is the prep+delivery window used to stamp an order's estimated
 	// delivery time when a chef accepts it (#92). 0 disables ETAs.
 	ETAMinutes int
@@ -136,7 +141,28 @@ func LoadConfig() (*Config, error) {
 	}
 	cfg.ETAMinutes = eta
 
+	// Currency: a 3-letter ISO-4217 code. Rejected rather than silently
+	// defaulted, so a typo can never make the gateway charge one currency while
+	// the UI shows another (#125).
+	cfg.Currency = strings.ToUpper(getEnv("CURRENCY", "TRY"))
+	if !isCurrencyCode(cfg.Currency) {
+		return nil, fmt.Errorf("CURRENCY must be a 3-letter ISO-4217 code (e.g. TRY), got %q", cfg.Currency)
+	}
+
 	return cfg, nil
+}
+
+// isCurrencyCode reports whether s is three ASCII letters (ISO-4217 shape).
+func isCurrencyCode(s string) bool {
+	if len(s) != 3 {
+		return false
+	}
+	for _, r := range s {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 // envInt parses an optional int variable, failing fast on garbage.
