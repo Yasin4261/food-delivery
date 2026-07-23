@@ -168,7 +168,7 @@ func initializeApp(db *database.DB, cfg *config.Config, version string, m *metri
 	addressRepo := repository.NewAddressRepository(db.DB)
 	addressService := service.NewAddressService(addressRepo)
 	promoRepo := repository.NewPromoRepository(db.DB)
-	adminService := service.NewAdminService(repository.NewAdminRepository(db.DB), promoRepo)
+	adminService := service.NewAdminService(repository.NewAdminRepository(db.DB))
 	fileStore, err := storage.NewLocal(cfg.UploadDir)
 	if err != nil {
 		log.Fatalf("upload storage: %v", err)

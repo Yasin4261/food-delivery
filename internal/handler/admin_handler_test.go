@@ -19,10 +19,25 @@ type fakeAdminRepo struct {
 	orders  *fakeOrderRepo
 	items   *fakeMenuItemRepo
 	reviews *fakeReviewRepo
+	promos  *fakePromoRepo // shared with the order service, so admin-created promos are orderable
+	audits  []*domain.AuditEntry
 }
 
-func newFakeAdminRepo(u *fakeUserRepo, c *fakeChefRepo, o *fakeOrderRepo, i *fakeMenuItemRepo, rv *fakeReviewRepo) *fakeAdminRepo {
-	return &fakeAdminRepo{users: u, chefs: c, orders: o, items: i, reviews: rv}
+func newFakeAdminRepo(u *fakeUserRepo, c *fakeChefRepo, o *fakeOrderRepo, i *fakeMenuItemRepo, rv *fakeReviewRepo, p *fakePromoRepo) *fakeAdminRepo {
+	return &fakeAdminRepo{users: u, chefs: c, orders: o, items: i, reviews: rv, promos: p}
+}
+
+// record appends an audit entry (with before/after) exactly as the real adapter
+// would inside the mutation's transaction.
+func (f *fakeAdminRepo) record(e *domain.AuditEntry, before, after any) {
+	if before != nil {
+		e.Before = auditJSONTest(before)
+	}
+	if after != nil {
+		e.After = auditJSONTest(after)
+	}
+	cp := *e
+	f.audits = append(f.audits, &cp)
 }
 
 // UserDetail / OrderDetail / ChefDetail compose the same support context the
@@ -76,6 +91,12 @@ func (f *fakeAdminRepo) ChefDetail(ctx context.Context, chefID int) (*domain.Adm
 	return out, nil
 }
 
+// auditJSONTest marshals a before/after snapshot like the real adapter.
+func auditJSONTest(v any) json.RawMessage {
+	b, _ := json.Marshal(v)
+	return b
+}
+
 // matchesQuery mirrors the adapter's case-insensitive substring match.
 func matchesQuery(q string, fields ...string) bool {
 	if q == "" {
@@ -119,12 +140,14 @@ func (f *fakeAdminRepo) ListUsers(_ context.Context, filters domain.AdminUserFil
 	return all[offset:end], total, nil
 }
 
-func (f *fakeAdminRepo) SetUserActive(_ context.Context, userID int, active bool) error {
+func (f *fakeAdminRepo) SetUserActive(_ context.Context, e *domain.AuditEntry, userID int, active bool) error {
 	u, ok := f.users.users[userID]
 	if !ok {
 		return domain.ErrUserNotFound
 	}
+	before := u.IsActive
 	u.IsActive = active
+	f.record(e, map[string]bool{"is_active": before}, map[string]bool{"is_active": active})
 	return nil
 }
 
@@ -144,13 +167,121 @@ func (f *fakeAdminRepo) ListChefs(_ context.Context, filters domain.AdminChefFil
 	return all, len(all), nil
 }
 
-func (f *fakeAdminRepo) SetChefActive(_ context.Context, chefID int, active bool) error {
+func (f *fakeAdminRepo) SetChefActive(_ context.Context, e *domain.AuditEntry, chefID int, active bool) error {
 	c, ok := f.chefs.chefs[chefID]
 	if !ok {
 		return domain.ErrChefNotFound
 	}
+	before := c.IsActive
 	c.IsActive = active
+	f.record(e, map[string]bool{"is_active": before}, map[string]bool{"is_active": active})
 	return nil
+}
+func (f *fakeAdminRepo) SetChefOnline(_ context.Context, e *domain.AuditEntry, chefID int, online bool) error {
+	c, ok := f.chefs.chefs[chefID]
+	if !ok {
+		return domain.ErrChefNotFound
+	}
+	before := c.IsOnline
+	c.IsOnline = online
+	f.record(e, map[string]bool{"is_online": before}, map[string]bool{"is_online": online})
+	return nil
+}
+func (f *fakeAdminRepo) SetChefAcceptingOrders(_ context.Context, e *domain.AuditEntry, chefID int, accepting bool) error {
+	c, ok := f.chefs.chefs[chefID]
+	if !ok {
+		return domain.ErrChefNotFound
+	}
+	before := c.IsAcceptingOrders
+	c.IsAcceptingOrders = accepting
+	f.record(e, map[string]bool{"is_accepting_orders": before}, map[string]bool{"is_accepting_orders": accepting})
+	return nil
+}
+
+// --- promo management (delegates storage to the shared promo fake) ---
+func (f *fakeAdminRepo) ListPromos(ctx context.Context, limit, offset int) ([]*domain.PromoCode, int, error) {
+	return f.promos.List(ctx, limit, offset)
+}
+func (f *fakeAdminRepo) FindPromo(_ context.Context, id int) (*domain.PromoCode, error) {
+	if p, ok := f.promos.byID[id]; ok {
+		cp := *p
+		return &cp, nil
+	}
+	return nil, domain.ErrPromoNotFound
+}
+func (f *fakeAdminRepo) CreatePromo(ctx context.Context, e *domain.AuditEntry, p *domain.PromoCode) error {
+	if err := f.promos.Create(ctx, p); err != nil {
+		return err
+	}
+	e.TargetID = p.ID
+	f.record(e, nil, map[string]any{"code": p.Code})
+	return nil
+}
+func (f *fakeAdminRepo) UpdatePromo(_ context.Context, e *domain.AuditEntry, p *domain.PromoCode) error {
+	existing, ok := f.promos.byID[p.ID]
+	if !ok {
+		return domain.ErrPromoNotFound
+	}
+	before := map[string]any{"code": existing.Code, "discount_value": existing.DiscountValue}
+	delete(f.promos.byCode, existing.Code)
+	cp := *p
+	f.promos.byID[p.ID] = &cp
+	f.promos.byCode[p.Code] = &cp
+	f.record(e, before, map[string]any{"code": p.Code, "discount_value": p.DiscountValue})
+	return nil
+}
+func (f *fakeAdminRepo) DeletePromo(_ context.Context, e *domain.AuditEntry, id int) error {
+	existing, ok := f.promos.byID[id]
+	if !ok {
+		return domain.ErrPromoNotFound
+	}
+	delete(f.promos.byID, id)
+	delete(f.promos.byCode, existing.Code)
+	f.record(e, map[string]any{"code": existing.Code}, nil)
+	return nil
+}
+func (f *fakeAdminRepo) SetPromoActive(ctx context.Context, e *domain.AuditEntry, id int, active bool) error {
+	p, ok := f.promos.byID[id]
+	if !ok {
+		return domain.ErrPromoNotFound
+	}
+	before := p.IsActive
+	if err := f.promos.SetActive(ctx, id, active); err != nil {
+		return err
+	}
+	f.record(e, map[string]bool{"is_active": before}, map[string]bool{"is_active": active})
+	return nil
+}
+
+// ListAudit returns recorded audit entries matching f, newest first.
+func (f *fakeAdminRepo) ListAudit(_ context.Context, filters domain.AuditFilters, limit, offset int) ([]*domain.AuditEntry, int, error) {
+	var matched []*domain.AuditEntry
+	for i := len(f.audits) - 1; i >= 0; i-- {
+		e := f.audits[i]
+		if filters.Action != "" && e.Action != filters.Action {
+			continue
+		}
+		if filters.TargetType != "" && e.TargetType != filters.TargetType {
+			continue
+		}
+		if filters.TargetID != 0 && e.TargetID != filters.TargetID {
+			continue
+		}
+		if filters.ActorID != 0 && e.ActorUserID != filters.ActorID {
+			continue
+		}
+		cp := *e
+		matched = append(matched, &cp)
+	}
+	total := len(matched)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return matched[offset:end], total, nil
 }
 
 func (f *fakeAdminRepo) ListOrders(_ context.Context, filters domain.AdminOrderFilters, limit, offset int) ([]*domain.Order, int, error) {
@@ -245,7 +376,7 @@ func TestAdminHTTP_ModerationAndStats(t *testing.T) {
 	}
 
 	// Deactivate the victim -> their login is blocked.
-	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/users/3/active", admin, `{"active":false}`); rec.Code != http.StatusOK {
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/users/3/active", admin, `{"active":false,"reason":"policy violation"}`); rec.Code != http.StatusOK {
 		t.Fatalf("deactivate = %d (%s)", rec.Code, rec.Body)
 	}
 	_ = victim
@@ -260,7 +391,7 @@ func TestAdminHTTP_ModerationAndStats(t *testing.T) {
 	}
 
 	// Unknown user -> 404.
-	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/users/9999/active", admin, `{"active":false}`); rec.Code != http.StatusNotFound {
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/users/9999/active", admin, `{"active":false,"reason":"cleanup"}`); rec.Code != http.StatusNotFound {
 		t.Errorf("unknown user = %d, want 404", rec.Code)
 	}
 }
@@ -282,7 +413,7 @@ func TestAdminHTTP_DeactivateChefHidesAndBlocks(t *testing.T) {
 		t.Fatalf("browse before = %d chefs, want 1", len(p.Data))
 	}
 
-	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/chefs/1/active", admin, `{"active":false}`); rec.Code != http.StatusOK {
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/chefs/1/active", admin, `{"active":false,"reason":"hygiene complaint"}`); rec.Code != http.StatusOK {
 		t.Fatalf("deactivate chef = %d (%s)", rec.Code, rec.Body)
 	}
 
@@ -542,7 +673,7 @@ func TestAdminHTTP_DetailViews(t *testing.T) {
 	for id := range chefs.chefs {
 		chefID = id
 	}
-	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/chefs/"+itoa(chefID)+"/active", admin, `{"active":false}`); rec.Code != http.StatusOK {
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/chefs/"+itoa(chefID)+"/active", admin, `{"active":false,"reason":"support request"}`); rec.Code != http.StatusOK {
 		t.Fatalf("deactivate chef = %d", rec.Code)
 	}
 	// The public endpoint hides it...
@@ -586,5 +717,90 @@ func TestAdminHTTP_DetailViews(t *testing.T) {
 		if rec := do(t, srv, http.MethodGet, path, "", ""); rec.Code != http.StatusUnauthorized {
 			t.Errorf("anon GET %s = %d, want 401", path, rec.Code)
 		}
+	}
+}
+
+// Audit + chef status control + promo edit/delete (#121/#122): every admin
+// mutation lands in the read-only audit log; chef status is drivable on the
+// chef's behalf; deactivation requires a reason.
+func TestAdminHTTP_AuditAndWrites(t *testing.T) {
+	srv, _, users := newTestServerWithRepos()
+	admin := registerCustomerToken(t, srv, "boss", "boss@example.com")
+	promoteAdmin(t, users, "boss@example.com")
+	admin = loginToken(t, srv, "boss@example.com")
+
+	chefToken, _ := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	_ = chefToken
+
+	// Deactivating a user requires a reason (400 without, 200 with).
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/users/2/active", admin, `{"active":false}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("deactivate without reason = %d, want 400", rec.Code)
+	}
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/users/2/active", admin, `{"active":false,"reason":"spam"}`); rec.Code != http.StatusOK {
+		t.Fatalf("deactivate with reason = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// Admin drives the chef's presence + availability on their behalf.
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/chefs/1/status", admin, `{"online":false,"reason":"chef asked"}`); rec.Code != http.StatusOK {
+		t.Errorf("set chef offline = %d (%s)", rec.Code, rec.Body)
+	}
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/chefs/1/availability", admin, `{"accepting_orders":false}`); rec.Code != http.StatusOK {
+		t.Errorf("set chef unavailable = %d (%s)", rec.Code, rec.Body)
+	}
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/chefs/9999/status", admin, `{"online":true}`); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown chef status = %d, want 404", rec.Code)
+	}
+
+	// Promo lifecycle: create -> edit -> delete, each audited.
+	rec := do(t, srv, http.MethodPost, "/api/v2/admin/promos", admin,
+		`{"code":"AUDIT10","discount_type":"percent","discount_value":10,"usage_limit":5}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create promo = %d (%s)", rec.Code, rec.Body)
+	}
+	var promo map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &promo)
+	pid := itoa(int(promo["id"].(float64)))
+	if rec := do(t, srv, http.MethodPut, "/api/v2/admin/promos/"+pid, admin,
+		`{"code":"AUDIT15","discount_type":"percent","discount_value":15,"usage_limit":5}`); rec.Code != http.StatusOK {
+		t.Errorf("edit promo = %d (%s)", rec.Code, rec.Body)
+	}
+	if rec := do(t, srv, http.MethodDelete, "/api/v2/admin/promos/"+pid, admin, ""); rec.Code != http.StatusOK {
+		t.Errorf("delete promo = %d (%s)", rec.Code, rec.Body)
+	}
+	if rec := do(t, srv, http.MethodDelete, "/api/v2/admin/promos/9999", admin, ""); rec.Code != http.StatusNotFound {
+		t.Errorf("delete unknown promo = %d, want 404", rec.Code)
+	}
+
+	// The audit log records every one of those mutations, newest first.
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/audit", admin, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("audit list = %d (%s)", rec.Code, rec.Body)
+	}
+	log := decodePage[domain.AuditEntry](t, rec.Body.Bytes())
+	// user.set_active + chef.set_online + chef.set_accepting + promo.create +
+	// promo.update + promo.delete = 6
+	if log.Total != 6 {
+		t.Errorf("audit total = %d, want 6 (%+v)", log.Total, log.Data)
+	}
+	// Every entry names the acting admin and carries an action + reason where set.
+	for _, e := range log.Data {
+		if e.ActorUserID == 0 || e.Action == "" || e.TargetType == "" {
+			t.Errorf("incomplete audit entry: %+v", e)
+		}
+	}
+	// Filter by action.
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/audit?action=promo.delete", admin, "")
+	filtered := decodePage[domain.AuditEntry](t, rec.Body.Bytes())
+	if filtered.Total != 1 || filtered.Data[0].Action != "promo.delete" {
+		t.Errorf("filtered audit = %+v, want the one delete", filtered)
+	}
+	// The delete entry captured a before snapshot (and no after).
+	if len(filtered.Data[0].Before) == 0 {
+		t.Error("promo.delete audit should capture a before snapshot")
+	}
+
+	// The audit log is read-only and admin-only.
+	if rec := do(t, srv, http.MethodGet, "/api/v2/admin/audit", chefToken, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("chef reading audit = %d, want 403", rec.Code)
 	}
 }

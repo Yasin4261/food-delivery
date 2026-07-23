@@ -11,6 +11,12 @@ import (
 	"github.com/Yasin4261/food-delivery/internal/repository"
 )
 
+// auditFor builds a minimal audit entry for tests that are not about the audit
+// trail itself (actorID must be a real user for the FK).
+func auditFor(actorID int, action, targetType string, targetID int) *domain.AuditEntry {
+	return &domain.AuditEntry{ActorUserID: actorID, Action: action, TargetType: targetType, TargetID: targetID}
+}
+
 func TestAdminRepository_UsersAndActiveToggles(t *testing.T) {
 	resetDB(t)
 	repo := repository.NewAdminRepository(testDB)
@@ -33,7 +39,7 @@ func TestAdminRepository_UsersAndActiveToggles(t *testing.T) {
 
 	// Deactivate a user; it still appears in the admin listing (unlike browse),
 	// but now flagged inactive.
-	if err := repo.SetUserActive(ctx(), u1.ID, false); err != nil {
+	if err := repo.SetUserActive(ctx(), auditFor(u2.ID, domain.AuditUserSetActive, domain.AuditTargetUser, u1.ID), u1.ID, false); err != nil {
 		t.Fatalf("deactivate user: %v", err)
 	}
 	after, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{}, 20, 0)
@@ -47,7 +53,7 @@ func TestAdminRepository_UsersAndActiveToggles(t *testing.T) {
 	}
 
 	// Deactivate the chef -> browse (List, active-only) drops it.
-	if err := repo.SetChefActive(ctx(), chef.ID, false); err != nil {
+	if err := repo.SetChefActive(ctx(), auditFor(u2.ID, domain.AuditChefSetActive, domain.AuditTargetChef, chef.ID), chef.ID, false); err != nil {
 		t.Fatalf("deactivate chef: %v", err)
 	}
 	chefRepo := repository.NewChefRepository(testDB)
@@ -61,10 +67,10 @@ func TestAdminRepository_UsersAndActiveToggles(t *testing.T) {
 	}
 
 	// Unknown ids.
-	if err := repo.SetUserActive(ctx(), 9999, true); err != domain.ErrUserNotFound {
+	if err := repo.SetUserActive(ctx(), auditFor(u1.ID, domain.AuditUserSetActive, domain.AuditTargetUser, 9999), 9999, true); err != domain.ErrUserNotFound {
 		t.Errorf("unknown user = %v, want ErrUserNotFound", err)
 	}
-	if err := repo.SetChefActive(ctx(), 9999, true); err != domain.ErrChefNotFound {
+	if err := repo.SetChefActive(ctx(), auditFor(u1.ID, domain.AuditChefSetActive, domain.AuditTargetChef, 9999), 9999, true); err != domain.ErrChefNotFound {
 		t.Errorf("unknown chef = %v, want ErrChefNotFound", err)
 	}
 }
@@ -172,7 +178,7 @@ func TestAdminRepository_ListFilters(t *testing.T) {
 		t.Errorf("active=false total=%d, want 0", total)
 	}
 	// Deactivate one and the tri-state flips accordingly.
-	if err := repo.SetUserActive(ctx(), alice.ID, false); err != nil {
+	if err := repo.SetUserActive(ctx(), auditFor(alice.ID, domain.AuditUserSetActive, domain.AuditTargetUser, alice.ID), alice.ID, false); err != nil {
 		t.Fatalf("deactivate: %v", err)
 	}
 	if _, total, _ := repo.ListUsers(ctx(), domain.AdminUserFilters{Active: &falsy}, 20, 0); total != 1 {
@@ -192,7 +198,7 @@ func TestAdminRepository_ListFilters(t *testing.T) {
 	if _, total, _ := repo.ListChefs(ctx(), domain.AdminChefFilters{Query: "zzz"}, 20, 0); total != 0 {
 		t.Errorf("chef q=zzz total=%d, want 0", total)
 	}
-	if err := repo.SetChefActive(ctx(), chef.ID, false); err != nil {
+	if err := repo.SetChefActive(ctx(), auditFor(alice.ID, domain.AuditChefSetActive, domain.AuditTargetChef, chef.ID), chef.ID, false); err != nil {
 		t.Fatalf("deactivate chef: %v", err)
 	}
 	if _, total, _ := repo.ListChefs(ctx(), domain.AdminChefFilters{Active: &truthy}, 20, 0); total != 0 {
@@ -328,7 +334,7 @@ func TestAdminRepository_DetailViews(t *testing.T) {
 	}
 
 	// Deactivate: the public lookup hides it, the admin drill-in must not.
-	if err := repo.SetChefActive(ctx(), chef.ID, false); err != nil {
+	if err := repo.SetChefActive(ctx(), auditFor(chefUser.ID, domain.AuditChefSetActive, domain.AuditTargetChef, chef.ID), chef.ID, false); err != nil {
 		t.Fatalf("deactivate chef: %v", err)
 	}
 	if _, err := repository.NewChefRepository(testDB).FindByID(ctx(), chef.ID); !errors.Is(err, domain.ErrChefNotFound) {
@@ -351,5 +357,86 @@ func TestAdminRepository_DetailViews(t *testing.T) {
 	}
 	if _, err := repo.ChefDetail(ctx(), 999999); !errors.Is(err, domain.ErrChefNotFound) {
 		t.Errorf("unknown chef detail = %v, want ErrChefNotFound", err)
+	}
+}
+
+// Audit log (#121) against real Postgres: every admin mutation writes exactly
+// one audit row in the SAME transaction, so the trail and the change commit
+// together — and a mutation that can't be audited leaves nothing behind.
+func TestAdminRepository_AuditAtomicity(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewAdminRepository(testDB)
+	admin := seedUser(t, "admin@example.com")
+	target := seedUser(t, "target@example.com")
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+
+	// A successful toggle writes one audit row with before/after.
+	e := &domain.AuditEntry{ActorUserID: admin.ID, Action: domain.AuditUserSetActive, TargetType: domain.AuditTargetUser, TargetID: target.ID, Reason: "spam"}
+	if err := repo.SetUserActive(ctx(), e, target.ID, false); err != nil {
+		t.Fatalf("set user inactive: %v", err)
+	}
+	if e.ID == 0 {
+		t.Error("audit entry id not back-filled")
+	}
+	log, total, err := repo.ListAudit(ctx(), domain.AuditFilters{}, 20, 0)
+	if err != nil || total != 1 || len(log) != 1 {
+		t.Fatalf("audit after toggle = %d/%v", total, err)
+	}
+	got := log[0]
+	if got.ActorUserID != admin.ID || got.Action != domain.AuditUserSetActive || got.Reason != "spam" {
+		t.Errorf("audit row wrong: %+v", got)
+	}
+	if string(got.Before) != `{"is_active": true}` && string(got.Before) != `{"is_active":true}` {
+		t.Errorf("before = %s, want the prior true", got.Before)
+	}
+
+	// Chef status toggles are audited too.
+	if err := repo.SetChefOnline(ctx(), &domain.AuditEntry{ActorUserID: admin.ID, Action: domain.AuditChefSetOnline, TargetType: domain.AuditTargetChef, TargetID: chef.ID}, chef.ID, true); err != nil {
+		t.Fatalf("set chef online: %v", err)
+	}
+	if _, total, _ := repo.ListAudit(ctx(), domain.AuditFilters{Action: domain.AuditChefSetOnline}, 20, 0); total != 1 {
+		t.Errorf("chef.set_online audit = %d, want 1", total)
+	}
+
+	// ATOMICITY: a mutation against a missing row writes NO audit row (the tx
+	// rolls back before the audit insert).
+	before, _, _ := repo.ListAudit(ctx(), domain.AuditFilters{}, 50, 0)
+	miss := &domain.AuditEntry{ActorUserID: admin.ID, Action: domain.AuditChefSetActive, TargetType: domain.AuditTargetChef, TargetID: 999999, Reason: "x"}
+	if err := repo.SetChefActive(ctx(), miss, 999999, false); !errors.Is(err, domain.ErrChefNotFound) {
+		t.Errorf("toggle missing chef = %v, want ErrChefNotFound", err)
+	}
+	after, _, _ := repo.ListAudit(ctx(), domain.AuditFilters{}, 50, 0)
+	if len(after) != len(before) {
+		t.Errorf("a failed mutation still wrote an audit row: %d -> %d", len(before), len(after))
+	}
+
+	// Promo create/update/delete are audited with the right before/after shape.
+	promo := &domain.PromoCode{Code: "SAVE10", DiscountType: "percent", DiscountValue: 10, IsActive: true}
+	if err := repo.CreatePromo(ctx(), &domain.AuditEntry{ActorUserID: admin.ID, Action: domain.AuditPromoCreate, TargetType: domain.AuditTargetPromo}, promo); err != nil {
+		t.Fatalf("create promo: %v", err)
+	}
+	if promo.ID == 0 {
+		t.Fatal("promo id not back-filled")
+	}
+	del := &domain.AuditEntry{ActorUserID: admin.ID, Action: domain.AuditPromoDelete, TargetType: domain.AuditTargetPromo, TargetID: promo.ID}
+	if err := repo.DeletePromo(ctx(), del, promo.ID); err != nil {
+		t.Fatalf("delete promo: %v", err)
+	}
+	// The create entry has an after (target id back-filled), the delete a before.
+	create, _, _ := repo.ListAudit(ctx(), domain.AuditFilters{Action: domain.AuditPromoCreate}, 5, 0)
+	if len(create) != 1 || create[0].TargetID != promo.ID || len(create[0].After) == 0 {
+		t.Errorf("promo.create audit = %+v", create)
+	}
+	deletes, _, _ := repo.ListAudit(ctx(), domain.AuditFilters{Action: domain.AuditPromoDelete}, 5, 0)
+	if len(deletes) != 1 || len(deletes[0].Before) == 0 {
+		t.Errorf("promo.delete audit = %+v", deletes)
+	}
+
+	// Filters are honoured (by actor, by target).
+	if _, total, _ := repo.ListAudit(ctx(), domain.AuditFilters{ActorID: admin.ID}, 50, 0); total == 0 {
+		t.Error("actor filter returned nothing")
+	}
+	if _, total, _ := repo.ListAudit(ctx(), domain.AuditFilters{ActorID: 999999}, 50, 0); total != 0 {
+		t.Error("unknown actor filter should return nothing")
 	}
 }

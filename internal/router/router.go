@@ -214,7 +214,15 @@ func (r *Router) Setup() http.Handler {
 	r.handleAdmin("GET /api/v2/admin/chefs/{id}", r.adminHandler.ChefDetail)
 	r.handleAdmin("GET /api/v2/admin/promos", r.adminHandler.ListPromos)
 	r.handleAdmin("POST /api/v2/admin/promos", r.adminHandler.CreatePromo)
+	r.handleAdmin("PUT /api/v2/admin/promos/{id}", r.adminHandler.UpdatePromo)
+	r.handleAdmin("DELETE /api/v2/admin/promos/{id}", r.adminHandler.DeletePromo)
 	r.handleAdmin("PATCH /api/v2/admin/promos/{id}/active", r.adminHandler.SetPromoActive)
+	// Chef status control (#122): admin drives a chef's presence/availability
+	// on their behalf (support). Distinct from the chef's own /chefs/me/* routes.
+	r.handleAdmin("PATCH /api/v2/admin/chefs/{id}/status", r.adminHandler.SetChefStatus)
+	r.handleAdmin("PATCH /api/v2/admin/chefs/{id}/availability", r.adminHandler.SetChefAvailability)
+	// Audit log (#121): read-only trail of every admin mutation.
+	r.handleAdmin("GET /api/v2/admin/audit", r.adminHandler.ListAudit)
 	// Support messaging (#120): admin inbox + opening a thread with a user.
 	// Replies/history/live delivery reuse the shared chat endpoints below (the
 	// admin is a participant of a support thread by role).
