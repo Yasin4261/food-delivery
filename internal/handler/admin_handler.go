@@ -24,7 +24,17 @@ func NewAdminHandler(admin *service.AdminService) *AdminHandler {
 }
 
 type activeRequest struct {
-	Active bool `json:"active"`
+	Active bool   `json:"active"`
+	Reason string `json:"reason"`
+}
+
+// actorID returns the authenticated admin's user id, or false when unauthenticated.
+func actorID(r *http.Request) (int, bool) {
+	claims, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		return 0, false
+	}
+	return claims.UserID, true
 }
 
 // queryTriBool parses an optional boolean filter: absent (or unparseable) means
@@ -82,14 +92,19 @@ func (h *AdminHandler) SetUserActive(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
 	// An admin deactivating their own account would lock everyone out of
 	// moderation on a single-admin platform; forbid self-deactivation.
-	if claims, ok := middleware.ClaimsFromContext(r.Context()); ok && claims.UserID == id && !req.Active {
+	if actor == id && !req.Active {
 		respondError(w, http.StatusUnprocessableEntity, "you cannot deactivate your own account")
 		return
 	}
-	if err := h.admin.SetUserActive(r.Context(), id, req.Active); err != nil {
-		respondDomainError(w, err)
+	if err := h.admin.SetUserActive(r.Context(), actor, id, req.Active, req.Reason); err != nil {
+		respondAdminError(w, err)
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]bool{"active": req.Active})
@@ -123,11 +138,74 @@ func (h *AdminHandler) SetChefActive(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := h.admin.SetChefActive(r.Context(), id, req.Active); err != nil {
-		respondDomainError(w, err)
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if err := h.admin.SetChefActive(r.Context(), actor, id, req.Active, req.Reason); err != nil {
+		respondAdminError(w, err)
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]bool{"active": req.Active})
+}
+
+type adminChefStatusRequest struct {
+	Online bool   `json:"online"`
+	Reason string `json:"reason"`
+}
+
+// SetChefStatus handles PATCH /api/v2/admin/chefs/{id}/status (admin) — drive a
+// chef's online presence on their behalf.
+func (h *AdminHandler) SetChefStatus(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "chef")
+	if !ok {
+		return
+	}
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req adminChefStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.admin.SetChefOnline(r.Context(), actor, id, req.Online, req.Reason); err != nil {
+		respondAdminError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]bool{"online": req.Online})
+}
+
+type chefAvailabilityRequest struct {
+	AcceptingOrders bool   `json:"accepting_orders"`
+	Reason          string `json:"reason"`
+}
+
+// SetChefAvailability handles PATCH /api/v2/admin/chefs/{id}/availability
+// (admin) — pause/reopen a chef's orders on their behalf.
+func (h *AdminHandler) SetChefAvailability(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "chef")
+	if !ok {
+		return
+	}
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req chefAvailabilityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.admin.SetChefAcceptingOrders(r.Context(), actor, id, req.AcceptingOrders, req.Reason); err != nil {
+		respondAdminError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]bool{"accepting_orders": req.AcceptingOrders})
 }
 
 // ListOrders handles GET /api/v2/admin/orders (admin) — platform overview,
@@ -179,22 +257,31 @@ func (h *AdminHandler) ListPromos(w http.ResponseWriter, r *http.Request) {
 	respondPage(w, promos, limit, offset, total)
 }
 
+func (r *createPromoRequest) input() service.PromoInput {
+	return service.PromoInput{
+		Code:          r.Code,
+		DiscountType:  r.DiscountType,
+		DiscountValue: r.DiscountValue,
+		MinOrder:      r.MinOrder,
+		ValidFrom:     r.ValidFrom,
+		ValidUntil:    r.ValidUntil,
+		UsageLimit:    r.UsageLimit,
+	}
+}
+
 // CreatePromo handles POST /api/v2/admin/promos (admin).
 func (h *AdminHandler) CreatePromo(w http.ResponseWriter, r *http.Request) {
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
 	var req createPromoRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	promo, err := h.admin.CreatePromo(r.Context(), service.PromoInput{
-		Code:          req.Code,
-		DiscountType:  req.DiscountType,
-		DiscountValue: req.DiscountValue,
-		MinOrder:      req.MinOrder,
-		ValidFrom:     req.ValidFrom,
-		ValidUntil:    req.ValidUntil,
-		UsageLimit:    req.UsageLimit,
-	})
+	promo, err := h.admin.CreatePromo(r.Context(), actor, req.input())
 	if err != nil {
 		respondDomainError(w, err)
 		return
@@ -202,11 +289,58 @@ func (h *AdminHandler) CreatePromo(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusCreated, promo)
 }
 
+// UpdatePromo handles PUT /api/v2/admin/promos/{id} (admin) — edit a code's
+// definition (never its usage counter).
+func (h *AdminHandler) UpdatePromo(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "promo")
+	if !ok {
+		return
+	}
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req createPromoRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	promo, err := h.admin.UpdatePromo(r.Context(), actor, id, req.input())
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, promo)
+}
+
+// DeletePromo handles DELETE /api/v2/admin/promos/{id} (admin).
+func (h *AdminHandler) DeletePromo(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "promo")
+	if !ok {
+		return
+	}
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	if err := h.admin.DeletePromo(r.Context(), actor, id); err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{"message": "promo deleted"})
+}
+
 // SetPromoActive handles PATCH /api/v2/admin/promos/{id}/active (admin).
 func (h *AdminHandler) SetPromoActive(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid promo id")
+	id, ok := pathID(w, r, "promo")
+	if !ok {
+		return
+	}
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
 		return
 	}
 	var req activeRequest
@@ -214,11 +348,29 @@ func (h *AdminHandler) SetPromoActive(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if err := h.admin.SetPromoActive(r.Context(), id, req.Active); err != nil {
+	if err := h.admin.SetPromoActive(r.Context(), actor, id, req.Active); err != nil {
 		respondDomainError(w, err)
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]bool{"active": req.Active})
+}
+
+// ListAudit handles GET /api/v2/admin/audit (admin) — the read-only audit log,
+// narrowed by ?action=&target_type=&target_id=&actor_id=.
+func (h *AdminHandler) ListAudit(w http.ResponseWriter, r *http.Request) {
+	limit, offset := queryInt(r, "limit", 50), queryInt(r, "offset", 0)
+	f := domain.AuditFilters{
+		Action:     r.URL.Query().Get("action"),
+		TargetType: r.URL.Query().Get("target_type"),
+		TargetID:   queryInt(r, "target_id", 0),
+		ActorID:    queryInt(r, "actor_id", 0),
+	}
+	entries, total, err := h.admin.ListAudit(r.Context(), f, limit, offset)
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondPage(w, entries, limit, offset, total)
 }
 
 // pathID parses the {id} path value, replying 400 with a caller-specific

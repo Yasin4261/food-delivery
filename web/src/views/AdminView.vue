@@ -4,7 +4,7 @@ import { api, page } from '@/api/client'
 import { statusClass } from '@/lib/status'
 
 const tab = ref('overview')
-const tabs = ['overview', 'users', 'chefs', 'orders', 'promos']
+const tabs = ['overview', 'users', 'chefs', 'orders', 'promos', 'audit']
 
 const stats = ref(null)
 const users = ref([])
@@ -149,6 +149,28 @@ async function togglePromo(p) {
   }
 }
 
+async function deletePromo(p) {
+  if (!window.confirm(i18n.global.t('admin.confirmDeletePromo', { code: p.code }))) return
+  error.value = ''
+  try {
+    await api.del(`/admin/promos/${p.id}`)
+    await loadPromos()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
+// Audit log (#121).
+const audits = ref([])
+async function loadAudit() {
+  error.value = ''
+  try {
+    audits.value = page(await api.get('/admin/audit?limit=100')).items
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
 function select(t) {
   tab.value = t
   error.value = ''
@@ -158,12 +180,19 @@ function select(t) {
   if (t === 'chefs') loadChefs()
   if (t === 'orders') loadOrders()
   if (t === 'promos' && !promos.value.length) loadPromos()
+  if (t === 'audit') loadAudit()
 }
 
 async function toggleUser(u) {
   error.value = ''
+  // Deactivation is destructive and requires a recorded reason (#121).
+  let reason = ''
+  if (u.is_active) {
+    reason = window.prompt(i18n.global.t('admin.reasonPrompt'))
+    if (reason === null) return
+  }
   try {
-    const r = await api.patch(`/admin/users/${u.id}/active`, { active: !u.is_active })
+    const r = await api.patch(`/admin/users/${u.id}/active`, { active: !u.is_active, reason })
     u.is_active = r.active
   } catch (e) {
     error.value = e.message
@@ -171,9 +200,33 @@ async function toggleUser(u) {
 }
 async function toggleChef(c) {
   error.value = ''
+  let reason = ''
+  if (c.is_active) {
+    reason = window.prompt(i18n.global.t('admin.reasonPrompt'))
+    if (reason === null) return
+  }
   try {
-    const r = await api.patch(`/admin/chefs/${c.id}/active`, { active: !c.is_active })
+    const r = await api.patch(`/admin/chefs/${c.id}/active`, { active: !c.is_active, reason })
     c.is_active = r.active
+  } catch (e) {
+    error.value = e.message
+  }
+}
+// Drive a chef's presence / availability on their behalf (support).
+async function toggleChefOnline(c) {
+  error.value = ''
+  try {
+    const r = await api.patch(`/admin/chefs/${c.id}/status`, { online: !c.is_online })
+    c.is_online = r.online
+  } catch (e) {
+    error.value = e.message
+  }
+}
+async function toggleChefAvailability(c) {
+  error.value = ''
+  try {
+    const r = await api.patch(`/admin/chefs/${c.id}/availability`, { accepting_orders: !c.is_accepting_orders })
+    c.is_accepting_orders = r.accepting_orders
   } catch (e) {
     error.value = e.message
   }
@@ -370,8 +423,16 @@ onMounted(loadStats)
           <tr v-for="c in chefs" :key="c.id" class="cursor-pointer border-t border-gray-100 hover:bg-gray-50" @click="openDetail('chefs', c.id)">
             <td class="py-1.5 font-medium">{{ c.business_name }}</td>
             <td>{{ c.rating?.toFixed(1) ?? '—' }} ({{ c.total_reviews }})</td>
-            <td><span class="badge" :class="c.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ c.is_active ? $t('admin.active') : $t('admin.inactive') }}</span></td>
-            <td class="text-right"><button class="text-sm hover:underline" :class="c.is_active ? 'text-red-600' : 'text-green-600'" @click.stop="toggleChef(c)">{{ c.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button></td>
+            <td>
+              <span class="badge" :class="c.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ c.is_active ? $t('admin.active') : $t('admin.inactive') }}</span>
+              <span v-if="c.is_online" class="badge ml-1 bg-emerald-100 text-emerald-700">●</span>
+              <span v-if="!c.is_accepting_orders" class="badge ml-1 bg-amber-100 text-amber-700">🌴</span>
+            </td>
+            <td class="space-x-2 text-right">
+              <button class="text-xs text-gray-500 hover:underline" @click.stop="toggleChefOnline(c)">{{ c.is_online ? $t('admin.goOffline') : $t('admin.goOnline') }}</button>
+              <button class="text-xs text-gray-500 hover:underline" @click.stop="toggleChefAvailability(c)">{{ c.is_accepting_orders ? $t('admin.pause') : $t('admin.reopen') }}</button>
+              <button class="text-sm hover:underline" :class="c.is_active ? 'text-red-600' : 'text-green-600'" @click.stop="toggleChef(c)">{{ c.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -434,11 +495,33 @@ onMounted(loadStats)
               <td>{{ p.discount_type === 'percent' ? `${p.discount_value}%` : `$${p.discount_value.toFixed(2)}` }}<span v-if="p.min_order > 0" class="text-gray-400"> · min ${{ p.min_order.toFixed(2) }}</span></td>
               <td>{{ p.used_count }}<span v-if="p.usage_limit > 0"> / {{ p.usage_limit }}</span></td>
               <td><span class="badge" :class="p.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ p.is_active ? $t('admin.active') : $t('admin.inactive') }}</span></td>
-              <td class="text-right"><button class="text-sm hover:underline" :class="p.is_active ? 'text-red-600' : 'text-green-600'" @click="togglePromo(p)">{{ p.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button></td>
+              <td class="space-x-2 text-right">
+                <button class="text-sm hover:underline" :class="p.is_active ? 'text-red-600' : 'text-green-600'" @click="togglePromo(p)">{{ p.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button>
+                <button class="text-sm text-red-600 hover:underline" @click="deletePromo(p)">{{ $t('admin.delete') }}</button>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Audit log (#121): read-only trail of every admin mutation -->
+    <div v-else-if="tab === 'audit'" class="card overflow-x-auto">
+      <p v-if="!audits.length" class="text-sm text-gray-500">{{ $t('admin.noAudit') }}</p>
+      <table v-else class="w-full text-sm">
+        <thead class="text-left text-gray-500">
+          <tr><th class="py-1">{{ $t('admin.when') }}</th><th>{{ $t('admin.action') }}</th><th>{{ $t('admin.target') }}</th><th>{{ $t('admin.actor') }}</th><th>{{ $t('admin.reason') }}</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="a in audits" :key="a.id" class="border-t border-gray-100">
+            <td class="py-1.5 whitespace-nowrap text-gray-500">{{ new Date(a.created_at).toLocaleString() }}</td>
+            <td class="font-mono text-xs">{{ a.action }}</td>
+            <td>{{ a.target_type }} #{{ a.target_id }}</td>
+            <td>#{{ a.actor_user_id }}</td>
+            <td class="text-gray-500">{{ a.reason || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </template>
