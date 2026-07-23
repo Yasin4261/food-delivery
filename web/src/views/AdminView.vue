@@ -85,6 +85,30 @@ function pageBy(name, load, delta) {
   filters[name].offset = next
   load()
 }
+// Support drill-in (#119): one call returns the whole context for a row.
+const detail = ref(null)
+const detailKind = ref('')
+const detailLoading = ref(false)
+
+async function openDetail(kind, id) {
+  detailKind.value = kind
+  detail.value = null
+  detailLoading.value = true
+  error.value = ''
+  try {
+    detail.value = await api.get(`/admin/${kind}/${id}`)
+  } catch (e) {
+    error.value = e.message
+    detailKind.value = ''
+  } finally {
+    detailLoading.value = false
+  }
+}
+const closeDetail = () => {
+  detail.value = null
+  detailKind.value = ''
+}
+
 const pageInfo = (name) => {
   const f = filters[name]
   if (!f.total) return '0'
@@ -179,6 +203,80 @@ onMounted(loadStats)
 
     <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
 
+    <!-- Support drill-in (#119): the whole context for one row, read-only. -->
+    <div v-if="detailKind" class="card space-y-3 border-brand-200 bg-brand-50/40">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold">{{ $t(`admin.detail_${detailKind}`) }}</h2>
+        <button class="text-gray-400 hover:text-gray-600" @click="closeDetail">✕</button>
+      </div>
+      <p v-if="detailLoading" class="text-sm text-gray-500">…</p>
+
+      <!-- User -->
+      <div v-else-if="detail && detailKind === 'users'" class="space-y-2 text-sm">
+        <p>
+          <span class="font-medium">{{ detail.user.username }}</span>
+          <span class="text-gray-500"> · {{ detail.user.email }}</span>
+          <span class="badge ml-2 bg-gray-100 text-gray-600">{{ detail.user.role }}</span>
+          <span class="badge ml-1" :class="detail.user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
+            {{ detail.user.is_active ? $t('admin.active') : $t('admin.inactive') }}
+          </span>
+        </p>
+        <p v-if="detail.user.phone_number" class="text-gray-500">📞 {{ detail.user.phone_number }}</p>
+        <p v-if="detail.chef" class="text-gray-600">🍲 {{ detail.chef.business_name }}</p>
+        <p class="font-medium">{{ $t('admin.recentOrders') }} ({{ detail.orders.length }})</p>
+        <ul class="space-y-1">
+          <li v-for="o in detail.orders" :key="o.id" class="flex justify-between">
+            <span class="font-mono text-xs text-gray-500">{{ o.order_code }}</span>
+            <span class="badge" :class="statusClass(o.status)">{{ $t(`status.${o.status}`) }}</span>
+          </li>
+        </ul>
+        <p class="font-medium">{{ $t('admin.reviewsWritten') }} ({{ detail.reviews.length }})</p>
+      </div>
+
+      <!-- Order -->
+      <div v-else-if="detail && detailKind === 'orders'" class="space-y-2 text-sm">
+        <p>
+          <span class="font-mono text-gray-500">{{ detail.order.order_code }}</span>
+          <span class="badge ml-2" :class="statusClass(detail.order.status)">{{ $t(`status.${detail.order.status}`) }}</span>
+          <span class="badge ml-1 bg-gray-100 text-gray-600">{{ $t(`payment.${detail.order.payment_status}`) }}</span>
+        </p>
+        <p v-if="detail.customer" class="text-gray-600">
+          👤 {{ detail.customer.username }} · {{ detail.customer.email }}
+        </p>
+        <p class="text-gray-500">📍 {{ detail.order.delivery_address }}</p>
+        <ul class="space-y-1">
+          <li v-for="it in detail.order.items" :key="it.id">{{ it.quantity }}× {{ it.item_name }}</li>
+        </ul>
+        <div v-if="detail.order.sub_orders?.length" class="flex flex-wrap gap-2">
+          <span v-for="s in detail.order.sub_orders" :key="s.id" class="badge" :class="statusClass(s.status)">
+            {{ s.chef_name }}: {{ $t(`status.${s.status}`) }}
+          </span>
+        </div>
+        <p class="font-medium">{{ $t('admin.paymentAttempts') }} ({{ detail.payments.length }})</p>
+        <ul class="space-y-1">
+          <li v-for="p in detail.payments" :key="p.id" class="text-gray-600">
+            {{ p.status }} · {{ new Date(p.created_at).toLocaleString() }}
+          </li>
+        </ul>
+      </div>
+
+      <!-- Chef -->
+      <div v-else-if="detail && detailKind === 'chefs'" class="space-y-2 text-sm">
+        <p>
+          <span class="font-medium">{{ detail.chef.business_name }}</span>
+          <span class="badge ml-2" :class="detail.chef.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">
+            {{ detail.chef.is_active ? $t('admin.active') : $t('admin.inactive') }}
+          </span>
+        </p>
+        <p v-if="detail.owner" class="text-gray-600">👤 {{ detail.owner.username }} · {{ detail.owner.email }}</p>
+        <p class="font-medium">{{ $t('admin.dishes') }} ({{ detail.items.length }})</p>
+        <ul class="space-y-1">
+          <li v-for="it in detail.items" :key="it.id" class="text-gray-600">{{ it.name }}</li>
+        </ul>
+        <p class="font-medium">{{ $t('admin.recentOrders') }} ({{ detail.orders.length }})</p>
+      </div>
+    </div>
+
     <!-- Overview -->
     <div v-if="tab === 'overview' && stats" class="space-y-6">
       <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -232,11 +330,11 @@ onMounted(loadStats)
       <table v-else class="w-full text-sm">
         <thead class="text-left text-gray-500"><tr><th class="py-1">{{ $t('admin.user') }}</th><th>{{ $t('admin.role') }}</th><th>{{ $t('admin.status') }}</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="u in users" :key="u.id" class="border-t border-gray-100">
+          <tr v-for="u in users" :key="u.id" class="cursor-pointer border-t border-gray-100 hover:bg-gray-50" @click="openDetail('users', u.id)">
             <td class="py-1.5"><span class="font-medium">{{ u.username }}</span> <span class="text-gray-400">{{ u.email }}</span></td>
             <td><span class="badge bg-gray-100 text-gray-600">{{ u.role }}</span></td>
             <td><span class="badge" :class="u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ u.is_active ? $t('admin.active') : $t('admin.inactive') }}</span></td>
-            <td class="text-right"><button class="text-sm hover:underline" :class="u.is_active ? 'text-red-600' : 'text-green-600'" @click="toggleUser(u)">{{ u.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button></td>
+            <td class="text-right"><button class="text-sm hover:underline" :class="u.is_active ? 'text-red-600' : 'text-green-600'" @click.stop="toggleUser(u)">{{ u.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button></td>
           </tr>
         </tbody>
       </table>
@@ -269,11 +367,11 @@ onMounted(loadStats)
       <table v-else class="w-full text-sm">
         <thead class="text-left text-gray-500"><tr><th class="py-1">{{ $t('admin.kitchen') }}</th><th>★</th><th>{{ $t('admin.status') }}</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="c in chefs" :key="c.id" class="border-t border-gray-100">
+          <tr v-for="c in chefs" :key="c.id" class="cursor-pointer border-t border-gray-100 hover:bg-gray-50" @click="openDetail('chefs', c.id)">
             <td class="py-1.5 font-medium">{{ c.business_name }}</td>
             <td>{{ c.rating?.toFixed(1) ?? '—' }} ({{ c.total_reviews }})</td>
             <td><span class="badge" :class="c.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">{{ c.is_active ? $t('admin.active') : $t('admin.inactive') }}</span></td>
-            <td class="text-right"><button class="text-sm hover:underline" :class="c.is_active ? 'text-red-600' : 'text-green-600'" @click="toggleChef(c)">{{ c.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button></td>
+            <td class="text-right"><button class="text-sm hover:underline" :class="c.is_active ? 'text-red-600' : 'text-green-600'" @click.stop="toggleChef(c)">{{ c.is_active ? $t('admin.deactivate') : $t('admin.activate') }}</button></td>
           </tr>
         </tbody>
       </table>
@@ -304,7 +402,7 @@ onMounted(loadStats)
       <table v-else class="w-full text-sm">
         <thead class="text-left text-gray-500"><tr><th class="py-1">{{ $t('admin.order') }}</th><th>{{ $t('admin.status') }}</th><th>{{ $t('admin.payment') }}</th><th class="text-right">{{ $t('admin.total') }}</th></tr></thead>
         <tbody>
-          <tr v-for="o in orders" :key="o.id" class="border-t border-gray-100">
+          <tr v-for="o in orders" :key="o.id" class="cursor-pointer border-t border-gray-100 hover:bg-gray-50" @click="openDetail('orders', o.id)">
             <td class="py-1.5 font-mono text-xs text-gray-500">{{ o.order_code }}</td>
             <td><span class="badge" :class="statusClass(o.status)">{{ $t(`status.${o.status}`) }}</span></td>
             <td>{{ o.payment_method === 'card' ? '💳' : '💵' }} {{ $t(`payment.${o.payment_status}`) }}</td>

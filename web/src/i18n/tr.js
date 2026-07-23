@@ -247,6 +247,13 @@ export default {
   admin: {
     title: 'Yönetim',
     subtitle: 'Platform denetimi ve istatistikler',
+    detail_users: 'Hesap detayı',
+    detail_orders: 'Sipariş detayı',
+    detail_chefs: 'Mutfak detayı',
+    recentOrders: 'Son siparişler',
+    reviewsWritten: 'Yazdığı değerlendirmeler',
+    paymentAttempts: 'Ödeme denemeleri',
+    dishes: 'Yemekler',
     search: 'Ara',
     searchUsers: 'Ad veya e-posta ara…',
     searchChefs: 'Mutfak adı ara…',

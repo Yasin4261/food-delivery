@@ -3,6 +3,8 @@
 package repository_test
 
 import (
+	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
@@ -229,5 +231,125 @@ func TestAdminRepository_ListFilters(t *testing.T) {
 	}
 	if _, total, _ := repo.ListOrders(ctx(), domain.AdminOrderFilters{UserID: 999999}, 20, 0); total != 0 {
 		t.Errorf("user_id=999999 total=%d, want 0", total)
+	}
+}
+
+// Detail views (#119) against real Postgres: the support drill-in must compose
+// the whole context in one call, resolve a DEACTIVATED kitchen (unlike the
+// public chef lookup), and surface every payment attempt on an order.
+func TestAdminRepository_DetailViews(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewAdminRepository(testDB)
+
+	customer := seedUser(t, "cust@example.com")
+	chefUser := seedUser(t, "chef@example.com")
+	chef := seedChef(t, chefUser.ID)
+	menu := seedMenu(t, chef.ID)
+	item := seedItem(t, menu.ID, chef.ID, 5, 10)
+	orderID := seedDeliveredOrder(t, customer.ID, chef.ID, item, "ORD-DETAIL-1")
+
+	// A review written by the customer, so UserDetail has one to return.
+	reviewRepo := repository.NewReviewRepository(testDB)
+	if err := reviewRepo.Create(ctx(), &domain.Review{
+		UserID: customer.ID, OrderID: orderID, ChefID: &chef.ID, Rating: 5,
+	}); err != nil {
+		t.Fatalf("seed review: %v", err)
+	}
+
+	// Two payment attempts: one failed, one paid — exactly the history a
+	// support ticket needs.
+	sessions := repository.NewPaymentSessionRepository(testDB)
+	for i, status := range []string{domain.PaymentSessionFailed, domain.PaymentSessionPaid} {
+		s := &domain.PaymentSession{OrderID: orderID, Token: "tok-detail-" + strconv.Itoa(i)}
+		if err := sessions.Create(ctx(), s); err != nil {
+			t.Fatalf("seed session: %v", err)
+		}
+		if err := sessions.UpdateStatus(ctx(), s.ID, status, nil); err != nil {
+			t.Fatalf("set session status: %v", err)
+		}
+	}
+
+	// --- user detail --------------------------------------------------------
+	ud, err := repo.UserDetail(ctx(), customer.ID)
+	if err != nil {
+		t.Fatalf("user detail: %v", err)
+	}
+	if ud.User == nil || ud.User.ID != customer.ID {
+		t.Fatalf("user detail user = %+v", ud.User)
+	}
+	if ud.Chef != nil {
+		t.Errorf("customer has no kitchen, got %+v", ud.Chef)
+	}
+	if len(ud.Orders) != 1 || len(ud.Reviews) != 1 {
+		t.Errorf("user detail orders=%d reviews=%d, want 1/1", len(ud.Orders), len(ud.Reviews))
+	}
+
+	// The chef's own account resolves its kitchen.
+	chefDetailUser, err := repo.UserDetail(ctx(), chefUser.ID)
+	if err != nil {
+		t.Fatalf("chef user detail: %v", err)
+	}
+	if chefDetailUser.Chef == nil || chefDetailUser.Chef.ID != chef.ID {
+		t.Errorf("chef user detail did not resolve the kitchen: %+v", chefDetailUser.Chef)
+	}
+
+	// --- order detail -------------------------------------------------------
+	od, err := repo.OrderDetail(ctx(), orderID)
+	if err != nil {
+		t.Fatalf("order detail: %v", err)
+	}
+	if od.Order == nil || od.Order.ID != orderID {
+		t.Fatalf("order detail order = %+v", od.Order)
+	}
+	if len(od.Order.Items) != 1 {
+		t.Errorf("order detail items = %d, want 1", len(od.Order.Items))
+	}
+	if od.Customer == nil || od.Customer.ID != customer.ID {
+		t.Errorf("order detail customer = %+v", od.Customer)
+	}
+	if len(od.Payments) != 2 {
+		t.Fatalf("order detail payments = %d, want 2 attempts", len(od.Payments))
+	}
+	// Newest first: the paid attempt is the most recent.
+	if od.Payments[0].Status != domain.PaymentSessionPaid {
+		t.Errorf("payments[0] = %q, want the newest (paid) attempt first", od.Payments[0].Status)
+	}
+
+	// --- chef detail, including after deactivation --------------------------
+	cd, err := repo.ChefDetail(ctx(), chef.ID)
+	if err != nil {
+		t.Fatalf("chef detail: %v", err)
+	}
+	if cd.Owner == nil || cd.Owner.ID != chefUser.ID {
+		t.Errorf("chef detail owner = %+v", cd.Owner)
+	}
+	if len(cd.Items) != 1 || len(cd.Orders) != 1 {
+		t.Errorf("chef detail items=%d orders=%d, want 1/1", len(cd.Items), len(cd.Orders))
+	}
+
+	// Deactivate: the public lookup hides it, the admin drill-in must not.
+	if err := repo.SetChefActive(ctx(), chef.ID, false); err != nil {
+		t.Fatalf("deactivate chef: %v", err)
+	}
+	if _, err := repository.NewChefRepository(testDB).FindByID(ctx(), chef.ID); !errors.Is(err, domain.ErrChefNotFound) {
+		t.Errorf("public chef lookup on deactivated kitchen = %v, want ErrChefNotFound", err)
+	}
+	deactivated, err := repo.ChefDetail(ctx(), chef.ID)
+	if err != nil {
+		t.Fatalf("admin chef detail on deactivated kitchen: %v", err)
+	}
+	if deactivated.Chef.IsActive {
+		t.Error("expected the deactivated kitchen to report is_active=false")
+	}
+
+	// --- not found ----------------------------------------------------------
+	if _, err := repo.UserDetail(ctx(), 999999); !errors.Is(err, domain.ErrUserNotFound) {
+		t.Errorf("unknown user detail = %v, want ErrUserNotFound", err)
+	}
+	if _, err := repo.OrderDetail(ctx(), 999999); !errors.Is(err, domain.ErrOrderNotFound) {
+		t.Errorf("unknown order detail = %v, want ErrOrderNotFound", err)
+	}
+	if _, err := repo.ChefDetail(ctx(), 999999); !errors.Is(err, domain.ErrChefNotFound) {
+		t.Errorf("unknown chef detail = %v, want ErrChefNotFound", err)
 	}
 }

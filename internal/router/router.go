@@ -206,6 +206,12 @@ func (r *Router) Setup() http.Handler {
 	r.handleAdmin("GET /api/v2/admin/orders", r.adminHandler.ListOrders)
 	r.handleAdmin("GET /api/v2/admin/chefs", r.adminHandler.ListChefs)
 	r.handleAdmin("PATCH /api/v2/admin/chefs/{id}/active", r.adminHandler.SetChefActive)
+	// Support drill-in (#119): read-only detail for one account / order /
+	// kitchen. The chef view resolves deactivated kitchens too, unlike the
+	// public /chefs/{id}.
+	r.handleAdmin("GET /api/v2/admin/users/{id}", r.adminHandler.UserDetail)
+	r.handleAdmin("GET /api/v2/admin/orders/{id}", r.adminHandler.OrderDetail)
+	r.handleAdmin("GET /api/v2/admin/chefs/{id}", r.adminHandler.ChefDetail)
 	r.handleAdmin("GET /api/v2/admin/promos", r.adminHandler.ListPromos)
 	r.handleAdmin("POST /api/v2/admin/promos", r.adminHandler.CreatePromo)
 	r.handleAdmin("PATCH /api/v2/admin/promos/{id}/active", r.adminHandler.SetPromoActive)

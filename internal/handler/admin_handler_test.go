@@ -14,13 +14,66 @@ import (
 // fakeAdminRepo implements domain.AdminRepository over the shared in-memory
 // fakes, so admin mutations really affect login/browse in the same test.
 type fakeAdminRepo struct {
-	users  *fakeUserRepo
-	chefs  *fakeChefRepo
-	orders *fakeOrderRepo
+	users   *fakeUserRepo
+	chefs   *fakeChefRepo
+	orders  *fakeOrderRepo
+	items   *fakeMenuItemRepo
+	reviews *fakeReviewRepo
 }
 
-func newFakeAdminRepo(u *fakeUserRepo, c *fakeChefRepo, o *fakeOrderRepo) *fakeAdminRepo {
-	return &fakeAdminRepo{users: u, chefs: c, orders: o}
+func newFakeAdminRepo(u *fakeUserRepo, c *fakeChefRepo, o *fakeOrderRepo, i *fakeMenuItemRepo, rv *fakeReviewRepo) *fakeAdminRepo {
+	return &fakeAdminRepo{users: u, chefs: c, orders: o, items: i, reviews: rv}
+}
+
+// UserDetail / OrderDetail / ChefDetail compose the same support context the
+// Postgres adapter does (#119).
+func (f *fakeAdminRepo) UserDetail(ctx context.Context, userID int) (*domain.AdminUserDetail, error) {
+	user, err := f.users.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := &domain.AdminUserDetail{User: user, Orders: []*domain.Order{}, Reviews: []*domain.Review{}}
+	if chef, err := f.chefs.FindByUserID(ctx, userID); err == nil {
+		out.Chef = chef
+	}
+	if orders, _, err := f.orders.ListByUser(ctx, userID, domain.AdminDetailLimit, 0); err == nil && orders != nil {
+		out.Orders = orders
+	}
+	if reviews, err := f.reviews.ListByUser(ctx, userID); err == nil && reviews != nil {
+		out.Reviews = reviews
+	}
+	return out, nil
+}
+
+func (f *fakeAdminRepo) OrderDetail(ctx context.Context, orderID int) (*domain.AdminOrderDetail, error) {
+	order, err := f.orders.FindByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	out := &domain.AdminOrderDetail{Order: order, Payments: []*domain.PaymentSession{}}
+	if customer, err := f.users.FindByID(ctx, order.UserID); err == nil {
+		out.Customer = customer
+	}
+	return out, nil
+}
+
+func (f *fakeAdminRepo) ChefDetail(ctx context.Context, chefID int) (*domain.AdminChefDetail, error) {
+	chef, ok := f.chefs.chefs[chefID]
+	if !ok {
+		return nil, domain.ErrChefNotFound
+	}
+	cp := *chef
+	out := &domain.AdminChefDetail{Chef: &cp, Items: []*domain.MenuItem{}, Orders: []*domain.Order{}}
+	if owner, err := f.users.FindByID(ctx, chef.UserID); err == nil {
+		out.Owner = owner
+	}
+	if items, _, err := f.items.ListByChef(ctx, chefID, domain.AdminDetailLimit, 0); err == nil && items != nil {
+		out.Items = items
+	}
+	if orders, _, err := f.orders.ListByChef(ctx, chefID, domain.AdminDetailLimit, 0); err == nil && orders != nil {
+		out.Orders = orders
+	}
+	return out, nil
 }
 
 // matchesQuery mirrors the adapter's case-insensitive substring match.
@@ -411,5 +464,127 @@ func TestAdminHTTP_ListFilters(t *testing.T) {
 	// Filtering stays admin-only.
 	if rec := do(t, srv, http.MethodGet, "/api/v2/admin/users?q=alice", cust, ""); rec.Code != http.StatusForbidden {
 		t.Errorf("customer filtering users = %d, want 403", rec.Code)
+	}
+}
+
+// Support drill-in (#119): admin opens one account / order / kitchen and gets
+// the whole context in a single call — without leaking secrets.
+func TestAdminHTTP_DetailViews(t *testing.T) {
+	srv, chefs, users := newTestServerWithRepos()
+	admin := registerCustomerToken(t, srv, "boss", "boss@example.com")
+	promoteAdmin(t, users, "boss@example.com")
+	admin = loginToken(t, srv, "boss@example.com")
+
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	_ = chefToken
+	cust := registerCustomerToken(t, srv, "cust", "cust@example.com")
+	body := `{"delivery_address":"1 St","payment_method":"cash","items":[{"menu_item_id":` + itoa(itemID) + `,"quantity":1}]}`
+	rec := do(t, srv, http.MethodPost, "/api/v2/orders", cust, body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("place order = %d (%s)", rec.Code, rec.Body)
+	}
+	var placed domain.Order
+	_ = json.Unmarshal(rec.Body.Bytes(), &placed)
+
+	// --- user detail: the customer, with the order they placed -------------
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/users/3", admin, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("user detail = %d (%s)", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "password_hash") {
+		t.Fatal("user detail leaked password_hash")
+	}
+	var ud struct {
+		User   map[string]any   `json:"user"`
+		Orders []map[string]any `json:"orders"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &ud); err != nil {
+		t.Fatalf("decode user detail: %v", err)
+	}
+	if ud.User["email"] != "cust@example.com" {
+		t.Errorf("user detail = %v, want the customer", ud.User["email"])
+	}
+	if len(ud.Orders) != 1 {
+		t.Errorf("user detail orders = %d, want 1", len(ud.Orders))
+	}
+
+	// --- order detail: the order plus its customer -------------------------
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/orders/"+itoa(placed.ID), admin, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("order detail = %d (%s)", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "password_hash") {
+		t.Fatal("order detail leaked password_hash")
+	}
+	var od struct {
+		Order    map[string]any   `json:"order"`
+		Customer map[string]any   `json:"customer"`
+		Payments []map[string]any `json:"payments"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &od)
+	if od.Order["order_code"] != placed.OrderCode {
+		t.Errorf("order detail code = %v, want %s", od.Order["order_code"], placed.OrderCode)
+	}
+	if od.Customer["email"] != "cust@example.com" {
+		t.Errorf("order detail customer = %v", od.Customer["email"])
+	}
+	// Gateway secrets are json:"-" on PaymentSession and must never surface.
+	for _, p := range od.Payments {
+		for _, secret := range []string{"token", "payment_id"} {
+			if _, leaked := p[secret]; leaked {
+				t.Errorf("order detail leaked payment %s", secret)
+			}
+		}
+	}
+
+	// --- chef detail: resolves a DEACTIVATED kitchen ------------------------
+	var chefID int
+	for id := range chefs.chefs {
+		chefID = id
+	}
+	if rec := do(t, srv, http.MethodPatch, "/api/v2/admin/chefs/"+itoa(chefID)+"/active", admin, `{"active":false}`); rec.Code != http.StatusOK {
+		t.Fatalf("deactivate chef = %d", rec.Code)
+	}
+	// The public endpoint hides it...
+	if rec := do(t, srv, http.MethodGet, "/api/v2/chefs/"+itoa(chefID), "", ""); rec.Code == http.StatusOK {
+		t.Errorf("public chef endpoint still resolves a deactivated kitchen (%d)", rec.Code)
+	}
+	// ...but support must still be able to open it.
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/chefs/"+itoa(chefID), admin, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin chef detail on deactivated kitchen = %d (%s)", rec.Code, rec.Body)
+	}
+	var cd struct {
+		Chef  map[string]any   `json:"chef"`
+		Owner map[string]any   `json:"owner"`
+		Items []map[string]any `json:"items"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &cd)
+	if cd.Chef["is_active"] != false {
+		t.Errorf("chef detail is_active = %v, want false", cd.Chef["is_active"])
+	}
+	if cd.Owner["email"] != "chefa@example.com" {
+		t.Errorf("chef detail owner = %v", cd.Owner["email"])
+	}
+	if len(cd.Items) != 1 {
+		t.Errorf("chef detail items = %d, want 1", len(cd.Items))
+	}
+
+	// --- errors + authorization --------------------------------------------
+	for _, path := range []string{"/api/v2/admin/users/9999", "/api/v2/admin/orders/9999", "/api/v2/admin/chefs/9999"} {
+		if rec := do(t, srv, http.MethodGet, path, admin, ""); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", path, rec.Code)
+		}
+	}
+	if rec := do(t, srv, http.MethodGet, "/api/v2/admin/users/abc", admin, ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("non-numeric id = %d, want 400", rec.Code)
+	}
+	for _, path := range []string{"/api/v2/admin/users/3", "/api/v2/admin/orders/" + itoa(placed.ID)} {
+		if rec := do(t, srv, http.MethodGet, path, cust, ""); rec.Code != http.StatusForbidden {
+			t.Errorf("customer GET %s = %d, want 403", path, rec.Code)
+		}
+		if rec := do(t, srv, http.MethodGet, path, "", ""); rec.Code != http.StatusUnauthorized {
+			t.Errorf("anon GET %s = %d, want 401", path, rec.Code)
+		}
 	}
 }
