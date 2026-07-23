@@ -397,5 +397,7 @@ export default {
     send: 'Gönder',
     pick: 'Sohbete başlamak için bir konuşma seçin',
     customerNum: '🧑 Müşteri #{id}',
+    support: 'Destek',
+    contactSupport: 'Destekle iletişime geç',
   },
 }

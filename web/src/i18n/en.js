@@ -398,5 +398,7 @@ export default {
     send: 'Send',
     pick: 'Pick a conversation to start chatting',
     customerNum: '🧑 Customer #{id}',
+    support: 'Support',
+    contactSupport: 'Contact support',
   },
 }

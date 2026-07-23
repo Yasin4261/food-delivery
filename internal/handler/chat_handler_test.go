@@ -32,12 +32,35 @@ func (f *fakeChatRepo) FindConversation(_ context.Context, userID, chefID int) (
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, c := range f.convs {
-		if c.UserID == userID && c.ChefID == chefID {
+		if !c.IsSupport() && c.UserID == userID && c.ChefID == chefID {
 			cp := *c
 			return &cp, nil
 		}
 	}
 	return nil, domain.ErrConversationNotFound
+}
+func (f *fakeChatRepo) FindSupportConversation(_ context.Context, userID int) (*domain.Conversation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, c := range f.convs {
+		if c.IsSupport() && c.UserID == userID {
+			cp := *c
+			return &cp, nil
+		}
+	}
+	return nil, domain.ErrConversationNotFound
+}
+func (f *fakeChatRepo) ListSupportConversations(_ context.Context) ([]*domain.Conversation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]*domain.Conversation, 0)
+	for _, c := range f.convs {
+		if c.IsSupport() {
+			cp := *c
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
 }
 func (f *fakeChatRepo) FindConversationByID(_ context.Context, id int) (*domain.Conversation, error) {
 	f.mu.Lock()
@@ -344,5 +367,88 @@ func TestChat_ReadReceiptBroadcast(t *testing.T) {
 	}
 	if frame.Type != "read" || frame.Read == nil || frame.Read.ConversationID != convID || frame.Read.ReaderID == 0 {
 		t.Errorf("expected a read frame for conv %d, got %s", convID, data)
+	}
+}
+
+// Support messaging (#120): a user contacts support, an admin sees it in the
+// inbox and replies, both over the existing chat endpoints — and an admin can
+// NEVER reach a customer<->chef thread through this.
+func TestChat_SupportMessaging(t *testing.T) {
+	srv, _, users := newTestServerWithRepos()
+	chefToken, _ := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	_ = chefToken
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+
+	admin := registerCustomerToken(t, srv, "boss", "boss@example.com")
+	promoteAdmin(t, users, "boss@example.com")
+	admin = loginToken(t, srv, "boss@example.com")
+
+	// The customer opens their own support thread ("Contact support").
+	rec := do(t, srv, http.MethodPost, "/api/v2/support/conversations", customer, "")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("contact support = %d (%s)", rec.Code, rec.Body)
+	}
+	var conv domain.Conversation
+	_ = json.Unmarshal(rec.Body.Bytes(), &conv)
+	if conv.Kind != domain.ConversationKindSupport {
+		t.Fatalf("kind = %q, want support", conv.Kind)
+	}
+	// Idempotent.
+	rec = do(t, srv, http.MethodPost, "/api/v2/support/conversations", customer, "")
+	var again domain.Conversation
+	_ = json.Unmarshal(rec.Body.Bytes(), &again)
+	if again.ID != conv.ID {
+		t.Errorf("support thread not idempotent: %d vs %d", again.ID, conv.ID)
+	}
+
+	// The customer posts to it via the shared chat endpoint.
+	sid := itoa(conv.ID)
+	if rec := do(t, srv, http.MethodPost, "/api/v2/chat/conversations/"+sid+"/messages", customer, `{"body":"my order never arrived"}`); rec.Code != http.StatusCreated {
+		t.Fatalf("customer support msg = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// The admin sees the thread in the support inbox.
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/support/conversations", admin, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("admin inbox = %d (%s)", rec.Code, rec.Body)
+	}
+	inbox := decodePage[domain.Conversation](t, rec.Body.Bytes())
+	if inbox.Total != 1 || inbox.Data[0].ID != conv.ID {
+		t.Fatalf("inbox = %+v, want the one support thread", inbox)
+	}
+
+	// The admin reads and replies over the shared endpoints (participant by role).
+	if rec := do(t, srv, http.MethodGet, "/api/v2/chat/conversations/"+sid+"/messages", admin, ""); rec.Code != http.StatusOK {
+		t.Errorf("admin read support = %d", rec.Code)
+	}
+	if rec := do(t, srv, http.MethodPost, "/api/v2/chat/conversations/"+sid+"/messages", admin, `{"body":"we are refunding you now"}`); rec.Code != http.StatusCreated {
+		t.Errorf("admin reply = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// An admin can also open a thread with a target user by id.
+	rec = do(t, srv, http.MethodPost, "/api/v2/admin/support/conversations", admin, `{"user_id":2}`)
+	if rec.Code != http.StatusCreated {
+		t.Errorf("admin start support = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// A non-admin cannot reach the admin support endpoints.
+	if rec := do(t, srv, http.MethodGet, "/api/v2/admin/support/conversations", customer, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("customer hitting admin inbox = %d, want 403", rec.Code)
+	}
+
+	// THE privacy guarantee: a customer<->chef thread is invisible to admin
+	// through the chat door (#120).
+	chefConvID := startConversation(t, srv, customer) // customer <-> chef 1
+	if rec := do(t, srv, http.MethodGet, "/api/v2/chat/conversations/"+itoa(chefConvID)+"/messages", admin, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("admin reading a chef thread = %d, want 403", rec.Code)
+	}
+	if rec := do(t, srv, http.MethodPost, "/api/v2/chat/conversations/"+itoa(chefConvID)+"/messages", admin, `{"body":"spying"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("admin writing a chef thread = %d, want 403", rec.Code)
+	}
+
+	// And a stranger cannot touch the support thread.
+	stranger := registerCustomerToken(t, srv, "nosy", "nosy@example.com")
+	if rec := do(t, srv, http.MethodGet, "/api/v2/chat/conversations/"+sid+"/messages", stranger, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("stranger reading support = %d, want 403", rec.Code)
 	}
 }

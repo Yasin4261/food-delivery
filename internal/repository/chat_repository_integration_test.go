@@ -108,3 +108,87 @@ func TestChatRepository_UnreadAndMarkRead(t *testing.T) {
 		t.Errorf("customer unread after chef read = %d, want 1 (unaffected)", custList[0].UnreadCount)
 	}
 }
+
+// Support threads (#120) against real Postgres: the migration relaxes chef_id
+// and the partial unique indexes must hold — one support thread per user, chef
+// threads unaffected — and the kind-shape CHECK must reject malformed rows.
+func TestChatRepository_SupportConversations(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewChatRepository(testDB)
+	user := seedUser(t, "cust@example.com")
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+
+	// A support thread stores chef_id NULL and reads back as ChefID 0.
+	sup := &domain.Conversation{Kind: domain.ConversationKindSupport, UserID: user.ID}
+	if err := repo.CreateConversation(ctx(), sup); err != nil {
+		t.Fatalf("create support: %v", err)
+	}
+	got, err := repo.FindSupportConversation(ctx(), user.ID)
+	if err != nil {
+		t.Fatalf("find support: %v", err)
+	}
+	if !got.IsSupport() || got.ChefID != 0 || got.ID != sup.ID {
+		t.Fatalf("support round-trip wrong: %+v", got)
+	}
+
+	// One support thread per user (partial unique index).
+	dup := &domain.Conversation{Kind: domain.ConversationKindSupport, UserID: user.ID}
+	if err := repo.CreateConversation(ctx(), dup); err == nil {
+		t.Error("a second support thread for the same user should violate the unique index")
+	}
+
+	// A chef thread for the same user coexists (different partial index).
+	chefConv := &domain.Conversation{Kind: domain.ConversationKindChef, UserID: user.ID, ChefID: chef.ID}
+	if err := repo.CreateConversation(ctx(), chefConv); err != nil {
+		t.Fatalf("create chef thread alongside support: %v", err)
+	}
+
+	// FindConversation returns only the chef thread; the support thread is not
+	// a (user, chef) match.
+	if c, err := repo.FindConversation(ctx(), user.ID, chef.ID); err != nil || c.ID != chefConv.ID {
+		t.Errorf("find chef thread = %+v, %v", c, err)
+	}
+
+	// The support inbox lists the support thread with an admin-side unread
+	// count (messages from the target user).
+	if err := repo.CreateMessage(ctx(), &domain.Message{ConversationID: sup.ID, SenderID: user.ID, Body: "help"}); err != nil {
+		t.Fatalf("seed support message: %v", err)
+	}
+	inbox, err := repo.ListSupportConversations(ctx())
+	if err != nil || len(inbox) != 1 || inbox[0].ID != sup.ID {
+		t.Fatalf("inbox = %+v, %v, want the one support thread", inbox, err)
+	}
+	if inbox[0].UnreadCount != 1 {
+		t.Errorf("admin-side unread = %d, want 1 (the user's message)", inbox[0].UnreadCount)
+	}
+
+	// The user sees the support thread in their own list too (customer-side
+	// unread = messages from the admin; none yet).
+	byUser, err := repo.ListConversationsByUser(ctx(), user.ID)
+	if err != nil {
+		t.Fatalf("list by user: %v", err)
+	}
+	var sawSupport bool
+	for _, c := range byUser {
+		if c.ID == sup.ID {
+			sawSupport = true
+			if c.UnreadCount != 0 {
+				t.Errorf("user-side unread = %d, want 0", c.UnreadCount)
+			}
+		}
+	}
+	if !sawSupport {
+		t.Error("the user should see their support thread in ListConversationsByUser")
+	}
+
+	// The kind-shape CHECK rejects a support row that names a kitchen, and a
+	// chef row with no kitchen.
+	if _, err := testDB.Exec(
+		`INSERT INTO chat_conversations (kind, user_id, chef_id) VALUES ('support', $1, $2)`, user.ID, chef.ID); err == nil {
+		t.Error("a support thread with a chef_id should violate the kind-shape check")
+	}
+	if _, err := testDB.Exec(
+		`INSERT INTO chat_conversations (kind, user_id, chef_id) VALUES ('chef', $1, NULL)`, user.ID); err == nil {
+		t.Error("a chef thread without a chef_id should violate the kind-shape check")
+	}
+}

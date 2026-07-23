@@ -24,12 +24,28 @@ const myId = auth.user?.id
 const mine = (m) => m.sender_id === myId
 const when = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
+const isAdmin = auth.user?.role === 'admin'
+
 async function loadConversations() {
   const items = page(await api.get('/chat/conversations')).items
+  // Admins also handle the support inbox (every support thread). It reuses the
+  // same messaging UI — the shared chat endpoints admit an admin as a
+  // participant of a support thread (#120).
+  if (isAdmin) {
+    const support = page(await api.get('/admin/support/conversations')).items
+    const seen = new Set(items.map((c) => c.id))
+    for (const c of support) if (!seen.has(c.id)) items.push(c)
+  }
   // Label each thread from the *other* participant's perspective.
   await Promise.all(
     items.map(async (c) => {
-      if (c.user_id === myId) {
+      if (c.kind === 'support') {
+        // For the target user this is "Support"; for an admin it's the customer.
+        c._label =
+          c.user_id === myId
+            ? `🛟 ${i18n.global.t('chat.support')}`
+            : `🛟 ${i18n.global.t('chat.customerNum', { id: c.user_id })}`
+      } else if (c.user_id === myId) {
         try {
           c._label = `👨‍🍳 ${(await api.get(`/chefs/${c.chef_id}`)).business_name}`
         } catch {
@@ -41,6 +57,18 @@ async function loadConversations() {
     }),
   )
   conversations.value = items
+}
+
+// A regular user opens (or reuses) their own support thread and selects it.
+async function contactSupport() {
+  try {
+    const conv = await api.post('/support/conversations')
+    await loadConversations()
+    const opened = conversations.value.find((c) => c.id === conv.id)
+    if (opened) open(opened)
+  } catch (e) {
+    error.value = e.message
+  }
 }
 
 function appendUnique(msg) {
@@ -156,9 +184,12 @@ onBeforeUnmount(disconnect)
 
 <template>
   <div class="space-y-4">
-    <div>
-      <h1 class="page-title">{{ $t('chat.title') }}</h1>
-      <p class="page-subtitle">{{ auth.isChef ? $t('chat.subtitleChef') : $t('chat.subtitleCustomer') }}</p>
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h1 class="page-title">{{ $t('chat.title') }}</h1>
+        <p class="page-subtitle">{{ auth.isChef ? $t('chat.subtitleChef') : $t('chat.subtitleCustomer') }}</p>
+      </div>
+      <button v-if="!isAdmin" class="btn-ghost shrink-0" @click="contactSupport">🛟 {{ $t('chat.contactSupport') }}</button>
     </div>
 
     <p v-if="error" class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</p>
