@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
@@ -22,13 +23,38 @@ func newFakeAdminRepo(u *fakeUserRepo, c *fakeChefRepo, o *fakeOrderRepo) *fakeA
 	return &fakeAdminRepo{users: u, chefs: c, orders: o}
 }
 
-func (f *fakeAdminRepo) ListUsers(_ context.Context, limit, offset int) ([]*domain.User, int, error) {
+// matchesQuery mirrors the adapter's case-insensitive substring match.
+func matchesQuery(q string, fields ...string) bool {
+	if q == "" {
+		return true
+	}
+	q = strings.ToLower(q)
+	for _, f := range fields {
+		if strings.Contains(strings.ToLower(f), q) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *fakeAdminRepo) ListUsers(_ context.Context, filters domain.AdminUserFilters, limit, offset int) ([]*domain.User, int, error) {
 	all := make([]*domain.User, 0, len(f.users.users))
 	for _, u := range f.users.users {
+		if !matchesQuery(filters.Query, u.Email, u.Username) {
+			continue
+		}
+		if filters.Role != "" && u.Role != filters.Role {
+			continue
+		}
+		if filters.Active != nil && u.IsActive != *filters.Active {
+			continue
+		}
 		cp := *u
 		all = append(all, &cp)
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
+	// total is the count of MATCHING rows, not the table size — the page
+	// envelope must agree with the filter.
 	total := len(all)
 	if offset > total {
 		offset = total
@@ -49,9 +75,15 @@ func (f *fakeAdminRepo) SetUserActive(_ context.Context, userID int, active bool
 	return nil
 }
 
-func (f *fakeAdminRepo) ListChefs(_ context.Context, limit, offset int) ([]*domain.Chef, int, error) {
+func (f *fakeAdminRepo) ListChefs(_ context.Context, filters domain.AdminChefFilters, limit, offset int) ([]*domain.Chef, int, error) {
 	all := make([]*domain.Chef, 0, len(f.chefs.chefs))
 	for _, c := range f.chefs.chefs {
+		if !matchesQuery(filters.Query, c.BusinessName) {
+			continue
+		}
+		if filters.Active != nil && c.IsActive != *filters.Active {
+			continue
+		}
 		cp := *c
 		all = append(all, &cp)
 	}
@@ -68,9 +100,18 @@ func (f *fakeAdminRepo) SetChefActive(_ context.Context, chefID int, active bool
 	return nil
 }
 
-func (f *fakeAdminRepo) ListOrders(_ context.Context, limit, offset int) ([]*domain.Order, int, error) {
+func (f *fakeAdminRepo) ListOrders(_ context.Context, filters domain.AdminOrderFilters, limit, offset int) ([]*domain.Order, int, error) {
 	all := make([]*domain.Order, 0, len(f.orders.orders))
 	for _, o := range f.orders.orders {
+		if filters.Status != "" && o.Status != filters.Status {
+			continue
+		}
+		if filters.PaymentStatus != "" && o.PaymentStatus != filters.PaymentStatus {
+			continue
+		}
+		if filters.UserID != 0 && o.UserID != filters.UserID {
+			continue
+		}
 		all = append(all, cloneOrder(o, 0))
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ID > all[j].ID })
@@ -265,5 +306,110 @@ func TestAdminHTTP_PromoCodesAndCheckout(t *testing.T) {
 	}
 	if rec := do(t, srv, http.MethodPost, "/api/v2/orders", cust, body); rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("order with deactivated promo = %d, want 422", rec.Code)
+	}
+}
+
+// Search/filter/pagination on the admin lists (#118): the support console must
+// be able to find one person or one class of order, and the page envelope's
+// total must reflect the FILTER, not the table size.
+func TestAdminHTTP_ListFilters(t *testing.T) {
+	srv, _, users := newTestServerWithRepos()
+	admin := registerCustomerToken(t, srv, "boss", "boss@example.com")
+	promoteAdmin(t, users, "boss@example.com")
+	admin = loginToken(t, srv, "boss@example.com")
+
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	_ = chefToken
+	cust := registerCustomerToken(t, srv, "alice", "alice@example.com")
+	registerCustomerToken(t, srv, "bob", "bob@example.com")
+
+	listUsers := func(qs string) pageResp[map[string]any] {
+		t.Helper()
+		rec := do(t, srv, http.MethodGet, "/api/v2/admin/users"+qs, admin, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET users%s = %d (%s)", qs, rec.Code, rec.Body)
+		}
+		return decodePage[map[string]any](t, rec.Body.Bytes())
+	}
+
+	// Free-text over email/username, case-insensitively.
+	if p := listUsers("?q=alice"); p.Total != 1 || p.Data[0]["username"] != "alice" {
+		t.Errorf("q=alice -> total=%d data=%v, want exactly alice", p.Total, p.Data)
+	}
+	if p := listUsers("?q=ALICE"); p.Total != 1 {
+		t.Errorf("q=ALICE -> total=%d, want case-insensitive match", p.Total)
+	}
+	// Role filter.
+	if p := listUsers("?role=chef"); p.Total != 1 || p.Data[0]["role"] != "chef" {
+		t.Errorf("role=chef -> total=%d, want only the chef", p.Total)
+	}
+	// A filter that matches nothing yields an empty page, not everything.
+	if p := listUsers("?q=nobody-here"); p.Total != 0 || len(p.Data) != 0 {
+		t.Errorf("q=nobody-here -> total=%d len=%d, want 0/0", p.Total, len(p.Data))
+	}
+	// Unknown role is rejected rather than silently ignored.
+	if rec := do(t, srv, http.MethodGet, "/api/v2/admin/users?role=wizard", admin, ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("role=wizard = %d, want 400", rec.Code)
+	}
+
+	// active= is tri-state: absent means both.
+	both := listUsers("").Total
+	if p := listUsers("?active=true"); p.Total != both {
+		t.Errorf("active=true total=%d, want %d (all seeded users are active)", p.Total, both)
+	}
+	if p := listUsers("?active=false"); p.Total != 0 {
+		t.Errorf("active=false total=%d, want 0", p.Total)
+	}
+
+	// Pagination reports the full matching total, not the page size.
+	p := listUsers("?limit=1")
+	if len(p.Data) != 1 || p.Total != both {
+		t.Errorf("limit=1 -> len=%d total=%d, want 1/%d", len(p.Data), p.Total, both)
+	}
+
+	// Orders: filter by status, payment status and customer.
+	body := `{"delivery_address":"1 St","payment_method":"cash","items":[{"menu_item_id":` + itoa(itemID) + `,"quantity":1}]}`
+	if rec := do(t, srv, http.MethodPost, "/api/v2/orders", cust, body); rec.Code != http.StatusCreated {
+		t.Fatalf("place order = %d (%s)", rec.Code, rec.Body)
+	}
+	listOrders := func(qs string) pageResp[map[string]any] {
+		t.Helper()
+		rec := do(t, srv, http.MethodGet, "/api/v2/admin/orders"+qs, admin, "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET orders%s = %d (%s)", qs, rec.Code, rec.Body)
+		}
+		return decodePage[map[string]any](t, rec.Body.Bytes())
+	}
+	if p := listOrders("?status=pending"); p.Total != 1 {
+		t.Errorf("status=pending total=%d, want 1", p.Total)
+	}
+	if p := listOrders("?status=delivered"); p.Total != 0 {
+		t.Errorf("status=delivered total=%d, want 0", p.Total)
+	}
+	if p := listOrders("?payment_status=paid"); p.Total != 0 {
+		t.Errorf("payment_status=paid total=%d, want 0 (cash order is pending)", p.Total)
+	}
+	if p := listOrders("?user_id=9999"); p.Total != 0 {
+		t.Errorf("user_id=9999 total=%d, want 0", p.Total)
+	}
+	// Unknown lifecycle values are rejected.
+	for _, qs := range []string{"?status=teleported", "?payment_status=maybe"} {
+		if rec := do(t, srv, http.MethodGet, "/api/v2/admin/orders"+qs, admin, ""); rec.Code != http.StatusBadRequest {
+			t.Errorf("orders%s = %d, want 400", qs, rec.Code)
+		}
+	}
+
+	// Chefs: free-text over the business name.
+	rec := do(t, srv, http.MethodGet, "/api/v2/admin/chefs?q=zzz-no-such-kitchen", admin, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET chefs = %d", rec.Code)
+	}
+	if p := decodePage[map[string]any](t, rec.Body.Bytes()); p.Total != 0 {
+		t.Errorf("chef q=zzz total=%d, want 0", p.Total)
+	}
+
+	// Filtering stays admin-only.
+	if rec := do(t, srv, http.MethodGet, "/api/v2/admin/users?q=alice", cust, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("customer filtering users = %d, want 403", rec.Code)
 	}
 }

@@ -20,10 +20,21 @@ func NewAdminRepository(db *sql.DB) *AdminRepository {
 	return &AdminRepository{db: db}
 }
 
-// ListUsers returns a page of all users (including inactive), newest first.
-func (r *AdminRepository) ListUsers(ctx context.Context, limit, offset int) ([]*domain.User, int, error) {
+// userFilterWhere matches the admin user filters with bound placeholders only
+// (no interpolation): $1 free-text over email/username, $2 role, $3 active
+// tri-state (NULL = both).
+const userFilterWhere = `
+	WHERE ($1 = '' OR email ILIKE '%' || $1 || '%' OR username ILIKE '%' || $1 || '%')
+	  AND ($2 = '' OR role = $2)
+	  AND ($3::boolean IS NULL OR is_active = $3)`
+
+// ListUsers returns a page of all users (including inactive) matching f,
+// newest first.
+func (r *AdminRepository) ListUsers(ctx context.Context, f domain.AdminUserFilters, limit, offset int) ([]*domain.User, int, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT`+userColumns+` FROM users ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`, limit, offset)
+		`SELECT`+userColumns+` FROM users`+userFilterWhere+`
+		ORDER BY created_at DESC, id DESC LIMIT $4 OFFSET $5`,
+		f.Query, f.Role, f.Active, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("admin list users: %w", err)
 	}
@@ -42,7 +53,8 @@ func (r *AdminRepository) ListUsers(ctx context.Context, limit, offset int) ([]*
 	}
 
 	var total int
-	if err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM users`).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM users`+userFilterWhere, f.Query, f.Role, f.Active).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count users: %w", err)
 	}
 	return users, total, nil
@@ -61,10 +73,19 @@ func (r *AdminRepository) SetUserActive(ctx context.Context, userID int, active 
 	return nil
 }
 
-// ListChefs returns a page of all chefs (including inactive), newest first.
-func (r *AdminRepository) ListChefs(ctx context.Context, limit, offset int) ([]*domain.Chef, int, error) {
+// chefFilterWhere matches the admin chef filters with bound placeholders only:
+// $1 free-text over the business name, $2 active tri-state (NULL = both).
+const chefFilterWhere = `
+	WHERE ($1 = '' OR business_name ILIKE '%' || $1 || '%')
+	  AND ($2::boolean IS NULL OR is_active = $2)`
+
+// ListChefs returns a page of all chefs (including inactive) matching f,
+// newest first.
+func (r *AdminRepository) ListChefs(ctx context.Context, f domain.AdminChefFilters, limit, offset int) ([]*domain.Chef, int, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT`+chefColumns+` FROM chefs ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`, limit, offset)
+		`SELECT`+chefColumns+` FROM chefs`+chefFilterWhere+`
+		ORDER BY created_at DESC, id DESC LIMIT $3 OFFSET $4`,
+		f.Query, f.Active, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("admin list chefs: %w", err)
 	}
@@ -74,7 +95,8 @@ func (r *AdminRepository) ListChefs(ctx context.Context, limit, offset int) ([]*
 		return nil, 0, err
 	}
 	var total int
-	if err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM chefs`).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM chefs`+chefFilterWhere, f.Query, f.Active).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count chefs: %w", err)
 	}
 	return chefs, total, nil
@@ -93,11 +115,20 @@ func (r *AdminRepository) SetChefActive(ctx context.Context, chefID int, active 
 	return nil
 }
 
-// ListOrders returns a page of all orders (with items + sub-orders), newest
-// first — the platform-wide overview.
-func (r *AdminRepository) ListOrders(ctx context.Context, limit, offset int) ([]*domain.Order, int, error) {
+// orderFilterWhere matches the admin order filters with bound placeholders
+// only: $1 status, $2 payment status, $3 customer id (0 = any).
+const orderFilterWhere = `
+	WHERE ($1 = '' OR status = $1)
+	  AND ($2 = '' OR payment_status = $2)
+	  AND ($3 = 0 OR user_id = $3)`
+
+// ListOrders returns a page of all orders (with items + sub-orders) matching
+// f, newest first — the platform-wide overview.
+func (r *AdminRepository) ListOrders(ctx context.Context, f domain.AdminOrderFilters, limit, offset int) ([]*domain.Order, int, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT`+orderColumns+` FROM orders ORDER BY created_at DESC, id DESC LIMIT $1 OFFSET $2`, limit, offset)
+		`SELECT`+orderColumns+` FROM orders`+orderFilterWhere+`
+		ORDER BY created_at DESC, id DESC LIMIT $4 OFFSET $5`,
+		f.Status, f.PaymentStatus, f.UserID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("admin list orders: %w", err)
 	}
@@ -116,7 +147,9 @@ func (r *AdminRepository) ListOrders(ctx context.Context, limit, offset int) ([]
 	}
 
 	var total int
-	if err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM orders`).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM orders`+orderFilterWhere,
+		f.Status, f.PaymentStatus, f.UserID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count orders: %w", err)
 	}
 	return orders, total, nil
