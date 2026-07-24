@@ -1,5 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { formatMoney as money } from '@/lib/money'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, page } from '@/api/client'
@@ -154,15 +155,15 @@ onBeforeUnmount(() => clearInterval(poll))
           </span>
         </div>
         <span class="text-right">
-          <span class="font-semibold">${{ order.total_price?.toFixed(2) }}</span>
+          <span class="font-semibold">{{ money(order.total_price) }}</span>
           <span v-if="order.delivery_fee > 0" class="block text-xs text-gray-400">
-            {{ $t('orders.inclDelivery', { fee: `$${order.delivery_fee.toFixed(2)}` }) }}
+            {{ $t('orders.inclDelivery', { fee: money(order.delivery_fee) }) }}
           </span>
           <span v-if="order.tip > 0" class="block text-xs text-gray-400">
-            {{ $t('orders.inclTip', { tip: `$${order.tip.toFixed(2)}` }) }}
+            {{ $t('orders.inclTip', { tip: money(order.tip) }) }}
           </span>
           <span v-if="order.discount > 0" class="block text-xs text-green-600">
-            {{ $t('orders.discount', { amount: `$${order.discount.toFixed(2)}`, code: order.promo_code }) }}
+            {{ $t('orders.discount', { amount: money(order.discount), code: order.promo_code }) }}
           </span>
         </span>
       </div>

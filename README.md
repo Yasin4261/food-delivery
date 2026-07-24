@@ -124,6 +124,7 @@ if present). See [`.env.example`](./.env.example).
 | `APP_BASE_URL` | `http://localhost:8080` | public base URL for email links and payment callbacks |
 | `IYZICO_API_KEY` / `IYZICO_SECRET_KEY` | — | iyzico credentials; empty ⇒ dev mock gateway (**required** outside dev) |
 | `IYZICO_BASE_URL` | sandbox | `https://sandbox-api.iyzipay.com` or the production API |
+| `CURRENCY` | `TRY` | ISO-4217 code every amount is denominated in — what the gateway charges and what emails/UI show. Keep `VITE_CURRENCY` in `web/` in sync. |
 
 **JWT secret:** generate a strong one and never commit it:
 

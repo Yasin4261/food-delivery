@@ -1,5 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { formatMoney as money } from '@/lib/money'
 import { RouterLink } from 'vue-router'
 import { api, page, ApiError } from '@/api/client'
 import { statusClass, nextAction, canDecline } from '@/lib/status'
@@ -132,16 +133,16 @@ onBeforeUnmount(() => clearInterval(poll))
     <div v-if="earnings" class="grid gap-4 sm:grid-cols-3">
       <div class="card">
         <p class="text-sm text-gray-500">{{ $t('dashboard.netEarnings') }}</p>
-        <p class="text-2xl font-bold">${{ (earnings.net_earnings ?? earnings.total_earnings)?.toFixed(2) }}</p>
+        <p class="text-2xl font-bold">{{ money(earnings.net_earnings ?? earnings.total_earnings) }}</p>
         <p v-if="earnings.commission > 0 || earnings.delivery_fees > 0" class="mt-1 text-xs text-gray-400">
           {{ $t('dashboard.earningsBreakdown', {
-            gross: `$${earnings.total_earnings?.toFixed(2)}`,
-            delivery: `$${earnings.delivery_fees?.toFixed(2)}`,
-            commission: `$${earnings.commission?.toFixed(2)}`,
+            gross: money(earnings.total_earnings),
+            delivery: money(earnings.delivery_fees),
+            commission: money(earnings.commission),
           }) }}
         </p>
         <p v-if="earnings.tips > 0" class="text-xs text-gray-400">
-          {{ $t('dashboard.earningsTips', { tips: `$${earnings.tips?.toFixed(2)}` }) }}
+          {{ $t('dashboard.earningsTips', { tips: money(earnings.tips) }) }}
         </p>
       </div>
       <div class="card">
@@ -169,7 +170,7 @@ onBeforeUnmount(() => clearInterval(poll))
           <span class="badge ml-2" :class="statusClass(myStatus(order))">{{ $t(`status.${myStatus(order)}`) }}</span>
           <span v-if="order.sub_orders?.length > 1" class="ml-2 text-xs text-gray-400">{{ $t('dashboard.multiChef') }}</span>
         </div>
-        <span class="font-semibold">${{ order.total_price?.toFixed(2) }}</span>
+        <span class="font-semibold">{{ money(order.total_price) }}</span>
       </div>
       <ul class="text-sm text-gray-600">
         <li v-for="it in order.items" :key="it.id">{{ it.quantity }}× {{ it.item_name }}</li>

@@ -22,7 +22,7 @@ func newTestGateway(t *testing.T, handler http.HandlerFunc) (*Iyzico, *httptest.
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	g := NewIyzico("api-key", "secret-key", srv.URL)
+	g := NewIyzico("api-key", "secret-key", srv.URL, "TRY")
 	g.randomKey = func() string { return "fixed-random" }
 	return g, srv
 }
