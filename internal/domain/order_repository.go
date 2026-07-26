@@ -20,10 +20,17 @@ type OrderRepository interface {
 	// order after a transition, together with the statuses of its loaded
 	// sub-orders (a customer cancel touches all of them), atomically.
 	UpdateStatus(ctx context.Context, order *Order) error
+	// UpdateStatusAudited is UpdateStatus that also records an admin audit entry
+	// in the same transaction (#124), so an admin order operation and its trail
+	// commit together.
+	UpdateStatusAudited(ctx context.Context, order *Order, e *AuditEntry) error
 	// UpdateSubOrder persists one sub-order's transition and the parent's
 	// re-derived status/payment fields in a single transaction, locking the
 	// order row so two chefs advancing concurrently serialise.
 	UpdateSubOrder(ctx context.Context, order *Order, sub *SubOrder) error
+	// UpdateSubOrderAudited is UpdateSubOrder that also records an audit entry
+	// in the same transaction (#124).
+	UpdateSubOrderAudited(ctx context.Context, order *Order, sub *SubOrder, e *AuditEntry) error
 	// CountActiveByUser counts a customer's in-flight orders (anything not yet
 	// delivered or cancelled) — powers the SPA's notification badge.
 	CountActiveByUser(ctx context.Context, userID int) (int, error)

@@ -176,6 +176,27 @@ func (o *Order) IsCardPaid() bool {
 		o.PaymentMethod != nil && *o.PaymentMethod == PaymentMethodCard
 }
 
+// IsEditableDelivery reports whether the delivery snapshot may still be
+// changed — only before the food is on its way or the order is settled. Admin
+// support edits the address/notes for a customer, but never after delivery
+// started (#124).
+func (o *Order) IsEditableDelivery() bool {
+	switch o.Status {
+	case OrderStatusPending, OrderStatusConfirmed, OrderStatusPreparing, OrderStatusReady:
+		return true
+	}
+	return false
+}
+
+// SetDeliveryDetails updates the delivery snapshot (admin support edit). The
+// caller must first check IsEditableDelivery.
+func (o *Order) SetDeliveryDetails(address string, city, notes *string) {
+	o.DeliveryAddress = address
+	o.DeliveryCity = city
+	o.CustomerNotes = notes
+	o.UpdatedAt = time.Now()
+}
+
 // Cancel cancels an order — and every still-active sub-order with it (a
 // customer changing their mind before any preparation starts). Only pending or
 // confirmed orders may be cancelled.

@@ -396,3 +396,96 @@ func TestOrderService_CancelRefundsPaidCardOrders(t *testing.T) {
 		t.Error("order must stay uncancelled when the refund fails")
 	}
 }
+
+// Admin order support operations (#124): cancel+refund (refund-abort), force a
+// stuck slice, and edit the delivery snapshot pre-delivery — each audited.
+func TestOrderService_AdminOperations(t *testing.T) {
+	ctx := context.Background()
+	chefRepo := newFakeChefRepo()
+	_ = chefRepo.Create(ctx, &domain.Chef{UserID: 1, IsActive: true})
+	items := newFakeMenuItemRepo()
+	item := seedItem(t, items, 1, 5, 10)
+	orders := newFakeOrderRepo()
+	refunder := &recordingRefunder{}
+	svc := service.NewOrderService(orders, items, chefRepo, nil, nil, nil, domain.FeePolicy{}, refunder, nil)
+
+	place := func() *domain.Order {
+		o, err := svc.PlaceOrder(ctx, 100, service.PlaceOrderInput{
+			DeliveryAddress: "x", PaymentMethod: domain.PaymentMethodCard,
+			Lines: []service.OrderLineInput{{MenuItemID: item.ID, Quantity: 1}},
+		})
+		if err != nil {
+			t.Fatalf("place: %v", err)
+		}
+		return o
+	}
+	const admin = 500
+
+	// --- cancel + refund: refund failure ABORTS the cancel -----------------
+	paid := place()
+	stored, _ := orders.FindByID(ctx, paid.ID)
+	_ = stored.MarkPaid()
+	_ = orders.UpdateStatus(ctx, stored)
+
+	refunder.err = errors.New("gateway down")
+	if _, err := svc.AdminCancelOrder(ctx, admin, paid.ID, "customer request"); err == nil {
+		t.Fatal("admin cancel should fail when the refund fails")
+	}
+	after, _ := orders.FindByID(ctx, paid.ID)
+	if after.Status == domain.OrderStatusCancelled {
+		t.Error("order must stay uncancelled when the refund fails (money/state divergence)")
+	}
+	// Refund recovers -> cancel + refund succeed, and it's audited.
+	refunder.err = nil
+	auditsBefore := len(orders.audits)
+	cancelled, err := svc.AdminCancelOrder(ctx, admin, paid.ID, "customer request")
+	if err != nil {
+		t.Fatalf("admin cancel: %v", err)
+	}
+	if cancelled.Status != domain.OrderStatusCancelled || cancelled.PaymentStatus != domain.PaymentStatusRefunded {
+		t.Errorf("after cancel: %q/%q, want cancelled/refunded", cancelled.Status, cancelled.PaymentStatus)
+	}
+	if len(orders.audits) != auditsBefore+1 || orders.audits[len(orders.audits)-1].Action != domain.AuditOrderCancel {
+		t.Error("admin cancel was not audited")
+	}
+
+	// --- force a slice through a transition; illegal move -> 422 -----------
+	o2 := place()
+	if _, err := svc.AdminForceSubOrder(ctx, admin, o2.ID, 1, service.OrderActionConfirm, "unstick"); err != nil {
+		t.Fatalf("force confirm: %v", err)
+	}
+	got, _ := orders.FindByID(ctx, o2.ID)
+	if got.Status != domain.OrderStatusConfirmed {
+		t.Errorf("order status = %q, want confirmed", got.Status)
+	}
+	// delivered directly from confirmed is an illegal jump.
+	if _, err := svc.AdminForceSubOrder(ctx, admin, o2.ID, 1, service.OrderActionDelivered, "skip"); !errors.Is(err, domain.ErrInvalidStatusTransition) {
+		t.Errorf("illegal force = %v, want ErrInvalidStatusTransition", err)
+	}
+	// unknown chef slice -> not found.
+	if _, err := svc.AdminForceSubOrder(ctx, admin, o2.ID, 999, service.OrderActionConfirm, "x"); !errors.Is(err, domain.ErrOrderNotFound) {
+		t.Errorf("force unknown slice = %v, want ErrOrderNotFound", err)
+	}
+
+	// --- edit delivery snapshot: pre-delivery only -------------------------
+	o3 := place()
+	city := "Izmir"
+	edited, err := svc.AdminEditDelivery(ctx, admin, o3.ID, "42 Fixed St", &city, nil, "typo")
+	if err != nil {
+		t.Fatalf("edit delivery: %v", err)
+	}
+	if edited.DeliveryAddress != "42 Fixed St" || edited.DeliveryCity == nil || *edited.DeliveryCity != "Izmir" {
+		t.Errorf("delivery not edited: %+v", edited)
+	}
+	// Empty address is rejected.
+	if _, err := svc.AdminEditDelivery(ctx, admin, o3.ID, "  ", nil, nil, "x"); !isValidation(err) {
+		t.Errorf("blank address = %v, want ValidationError", err)
+	}
+	// Once delivered, the snapshot is frozen.
+	del, _ := orders.FindByID(ctx, o3.ID)
+	del.Status = domain.OrderStatusDelivered
+	_ = orders.UpdateStatus(ctx, del)
+	if _, err := svc.AdminEditDelivery(ctx, admin, o3.ID, "late change", nil, nil, "x"); !errors.Is(err, domain.ErrInvalidStatusTransition) {
+		t.Errorf("edit after delivery = %v, want ErrInvalidStatusTransition", err)
+	}
+}
