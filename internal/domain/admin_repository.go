@@ -16,6 +16,15 @@ type AdminRepository interface {
 	// ListChefs returns a page of ALL chefs (including inactive/hidden)
 	// matching f, newest first, plus the total matching count.
 	ListChefs(ctx context.Context, f AdminChefFilters, limit, offset int) ([]*Chef, int, error)
+	// UpdateUserProfile edits a customer's contact/location fields on their
+	// behalf (#123), atomic with its audit entry. Identity (email/username/role)
+	// and the password are never touched. Returns the updated user (hash
+	// cleared by the service) or ErrUserNotFound.
+	UpdateUserProfile(ctx context.Context, e *AuditEntry, userID int, in AdminUserProfileInput) (*User, error)
+	// UpdateChefProfile edits a chef's kitchen fields on their behalf, atomic
+	// with audit. Status/verification/ratings are never touched here. Returns
+	// the updated chef or ErrChefNotFound.
+	UpdateChefProfile(ctx context.Context, e *AuditEntry, chefID int, in AdminChefProfileInput) (*Chef, error)
 	// SetChefActive toggles a chef's active flag (deactivation hides them from
 	// browse/search and blocks new orders). Atomic with its audit entry.
 	// Returns ErrChefNotFound.

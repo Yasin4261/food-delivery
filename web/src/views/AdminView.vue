@@ -91,9 +91,12 @@ const detail = ref(null)
 const detailKind = ref('')
 const detailLoading = ref(false)
 
+const editing = ref(null) // a mutable copy of the profile being edited (#123)
+
 async function openDetail(kind, id) {
   detailKind.value = kind
   detail.value = null
+  editing.value = null
   detailLoading.value = true
   error.value = ''
   try {
@@ -103,6 +106,51 @@ async function openDetail(kind, id) {
     detailKind.value = ''
   } finally {
     detailLoading.value = false
+  }
+}
+
+// Edit a customer's contact/location or a chef's kitchen on their behalf.
+function startEditUser() {
+  const u = detail.value.user
+  editing.value = {
+    phone_number: u.phone_number || '', address: u.address || '', city: u.city || '',
+    latitude: u.latitude ?? '', longitude: u.longitude ?? '', email_notifications: u.email_notifications,
+  }
+}
+function startEditChef() {
+  const c = detail.value.chef
+  editing.value = {
+    business_name: c.business_name, kitchen_address: c.kitchen_address || '',
+    kitchen_city: c.kitchen_city || '', delivery_radius: c.delivery_radius ?? 0,
+  }
+}
+async function saveUserProfile() {
+  error.value = ''
+  try {
+    const e = editing.value
+    const body = {
+      phone_number: e.phone_number, address: e.address, city: e.city,
+      email_notifications: e.email_notifications,
+    }
+    if (e.latitude !== '') body.latitude = Number(e.latitude)
+    if (e.longitude !== '') body.longitude = Number(e.longitude)
+    detail.value.user = await api.put(`/admin/users/${detail.value.user.id}`, body)
+    editing.value = null
+  } catch (err) {
+    error.value = err.message
+  }
+}
+async function saveChefProfile() {
+  error.value = ''
+  try {
+    const e = editing.value
+    detail.value.chef = await api.put(`/admin/chefs/${detail.value.chef.id}`, {
+      business_name: e.business_name, kitchen_address: e.kitchen_address,
+      kitchen_city: e.kitchen_city, delivery_radius: Number(e.delivery_radius) || 0,
+    })
+    editing.value = null
+  } catch (err) {
+    error.value = err.message
   }
 }
 const closeDetail = () => {
@@ -276,7 +324,24 @@ onMounted(loadStats)
           </span>
         </p>
         <p v-if="detail.user.phone_number" class="text-gray-500">📞 {{ detail.user.phone_number }}</p>
+        <p v-if="detail.user.city" class="text-gray-500">📍 {{ detail.user.city }}</p>
         <p v-if="detail.chef" class="text-gray-600">🍲 {{ detail.chef.business_name }}</p>
+
+        <!-- Edit contact/location (#123) -->
+        <button v-if="!editing" class="text-brand-600 hover:underline" @click="startEditUser">✏️ {{ $t('admin.editProfile') }}</button>
+        <form v-else class="grid gap-2 rounded-lg bg-white p-3 sm:grid-cols-2" @submit.prevent="saveUserProfile">
+          <input v-model="editing.phone_number" class="input" :placeholder="$t('profile.phone')" />
+          <input v-model="editing.city" class="input" :placeholder="$t('profile.city')" />
+          <input v-model="editing.address" class="input sm:col-span-2" :placeholder="$t('profile.address')" />
+          <input v-model="editing.latitude" class="input" :placeholder="$t('browse.lat')" />
+          <input v-model="editing.longitude" class="input" :placeholder="$t('browse.lng')" />
+          <label class="flex items-center gap-2 text-gray-600"><input v-model="editing.email_notifications" type="checkbox" /> {{ $t('profile.emailNotifications') }}</label>
+          <div class="flex gap-2 sm:col-span-2">
+            <button class="btn-primary">{{ $t('admin.save') }}</button>
+            <button type="button" class="btn-ghost" @click="editing = null">{{ $t('admin.cancel') }}</button>
+          </div>
+        </form>
+
         <p class="font-medium">{{ $t('admin.recentOrders') }} ({{ detail.orders.length }})</p>
         <ul class="space-y-1">
           <li v-for="o in detail.orders" :key="o.id" class="flex justify-between">
@@ -323,6 +388,21 @@ onMounted(loadStats)
           </span>
         </p>
         <p v-if="detail.owner" class="text-gray-600">👤 {{ detail.owner.username }} · {{ detail.owner.email }}</p>
+        <p v-if="detail.chef.kitchen_address" class="text-gray-500">📍 {{ detail.chef.kitchen_address }}<template v-if="detail.chef.kitchen_city">, {{ detail.chef.kitchen_city }}</template></p>
+
+        <!-- Edit kitchen (#123) -->
+        <button v-if="!editing" class="text-brand-600 hover:underline" @click="startEditChef">✏️ {{ $t('admin.editKitchen') }}</button>
+        <form v-else class="grid gap-2 rounded-lg bg-white p-3 sm:grid-cols-2" @submit.prevent="saveChefProfile">
+          <input v-model="editing.business_name" class="input sm:col-span-2" :placeholder="$t('onboarding.businessName')" required />
+          <input v-model="editing.kitchen_address" class="input sm:col-span-2" :placeholder="$t('profile.address')" />
+          <input v-model="editing.kitchen_city" class="input" :placeholder="$t('profile.city')" />
+          <input v-model.number="editing.delivery_radius" type="number" min="0" class="input" :placeholder="$t('onboarding.radius')" />
+          <div class="flex gap-2 sm:col-span-2">
+            <button class="btn-primary">{{ $t('admin.save') }}</button>
+            <button type="button" class="btn-ghost" @click="editing = null">{{ $t('admin.cancel') }}</button>
+          </div>
+        </form>
+
         <p class="font-medium">{{ $t('admin.dishes') }} ({{ detail.items.length }})</p>
         <ul class="space-y-1">
           <li v-for="it in detail.items" :key="it.id" class="text-gray-600">{{ it.name }}</li>

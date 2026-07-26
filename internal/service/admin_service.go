@@ -146,6 +146,22 @@ func (s *AdminService) SetChefAcceptingOrders(ctx context.Context, actorID, chef
 	return s.admin.SetChefAcceptingOrders(ctx, audit(actorID, domain.AuditChefSetAccepting, domain.AuditTargetChef, chefID, reason), chefID, accepting)
 }
 
+// UpdateUserProfile edits a customer's contact/location on their behalf (#123)
+// and returns the updated user with its hash cleared.
+func (s *AdminService) UpdateUserProfile(ctx context.Context, actorID, userID int, in domain.AdminUserProfileInput) (*domain.User, error) {
+	u, err := s.admin.UpdateUserProfile(ctx, audit(actorID, domain.AuditUserUpdate, domain.AuditTargetUser, userID, ""), userID, in)
+	if err != nil {
+		return nil, err
+	}
+	u.PasswordHash = ""
+	return u, nil
+}
+
+// UpdateChefProfile edits a chef's kitchen fields on their behalf.
+func (s *AdminService) UpdateChefProfile(ctx context.Context, actorID, chefID int, in domain.AdminChefProfileInput) (*domain.Chef, error) {
+	return s.admin.UpdateChefProfile(ctx, audit(actorID, domain.AuditChefUpdate, domain.AuditTargetChef, chefID, ""), chefID, in)
+}
+
 // ListAudit returns a page of the admin audit log matching f, newest first.
 func (s *AdminService) ListAudit(ctx context.Context, f domain.AuditFilters, limit, offset int) ([]*domain.AuditEntry, int, error) {
 	limit, offset = normalisePaging(limit, offset)

@@ -9,7 +9,9 @@ import (
 // the concrete values that changed.
 const (
 	AuditUserSetActive    = "user.set_active"
+	AuditUserUpdate       = "user.update_profile"
 	AuditChefSetActive    = "chef.set_active"
+	AuditChefUpdate       = "chef.update_profile"
 	AuditChefSetOnline    = "chef.set_online"
 	AuditChefSetAccepting = "chef.set_accepting"
 	AuditPromoCreate      = "promo.create"

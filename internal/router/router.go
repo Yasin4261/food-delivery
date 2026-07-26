@@ -203,6 +203,10 @@ func (r *Router) Setup() http.Handler {
 	r.handleAdmin("GET /api/v2/admin/stats", r.adminHandler.Stats)
 	r.handleAdmin("GET /api/v2/admin/users", r.adminHandler.ListUsers)
 	r.handleAdmin("PATCH /api/v2/admin/users/{id}/active", r.adminHandler.SetUserActive)
+	// Profile editing (#123): edit a customer/chef's contact/kitchen on their
+	// behalf. Identity (email/username/role) and password are immutable here.
+	r.handleAdmin("PUT /api/v2/admin/users/{id}", r.adminHandler.UpdateUserProfile)
+	r.handleAdmin("PUT /api/v2/admin/chefs/{id}", r.adminHandler.UpdateChefProfile)
 	r.handleAdmin("GET /api/v2/admin/orders", r.adminHandler.ListOrders)
 	r.handleAdmin("GET /api/v2/admin/chefs", r.adminHandler.ListChefs)
 	r.handleAdmin("PATCH /api/v2/admin/chefs/{id}/active", r.adminHandler.SetChefActive)
