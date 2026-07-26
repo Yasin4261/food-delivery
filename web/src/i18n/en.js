@@ -199,6 +199,8 @@ export default {
     commentPlaceholder: 'Say a few words (optional)',
     yourRating: '✓ your rating',
     nothingDeliveredYet: 'Nothing delivered yet — you can rate each chef as soon as their part arrives.',
+    loadFailed: "Couldn't load your ratings.",
+    retry: 'Retry',
   },
   dashboard: {
     subtitle: 'Chef dashboard',
