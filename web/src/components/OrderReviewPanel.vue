@@ -12,6 +12,9 @@ const props = defineProps({ order: { type: Object, required: true } })
 
 const targets = ref([])
 const loading = ref(true)
+// When the history load fails we must NOT silently show empty forms — that
+// makes a saved rating look like it vanished (#135). Surface it for retry.
+const historyError = ref(false)
 
 // Chefs whose slice arrived. Orders predating sub-orders fall back to the
 // order-level status (their backfilled sub-orders carry it anyway).
@@ -25,12 +28,18 @@ function chefName(id) {
   return props.order.sub_orders?.find((s) => s.chef_id === id)?.chef_name || `Chef #${id}`
 }
 
-onMounted(async () => {
-  let existing = []
+async function load() {
+  loading.value = true
+  historyError.value = false
+  let existing
   try {
     existing = await api.get(`/orders/${props.order.id}/reviews`)
   } catch {
-    /* history unavailable -> plain forms */
+    // Do NOT fall back to empty forms — that hides ratings the customer
+    // already gave (#135). Show a retry affordance instead.
+    historyError.value = true
+    loading.value = false
+    return
   }
   const byChef = new Map(existing.filter((r) => r.chef_id).map((r) => [r.chef_id, r]))
   const byItem = new Map(existing.filter((r) => r.menu_item_id).map((r) => [r.menu_item_id, r]))
@@ -70,7 +79,9 @@ onMounted(async () => {
   }
   targets.value = out
   loading.value = false
-})
+}
+
+onMounted(load)
 
 async function submit(t) {
   if (!t.rating) {
@@ -83,8 +94,17 @@ async function submit(t) {
     await api.post('/reviews', { order_id: props.order.id, [t.field]: t.id, rating: t.rating, comment: t.comment })
     t.state = 'done'
   } catch (e) {
-    t.state = 'idle'
-    t.error = e.status === 409 ? i18n.global.t('review.alreadyReviewed') : e.message
+    // A 409 means the review already exists server-side — so this target IS
+    // rated. Flip it to the read-only "your rating" state rather than leaving a
+    // dead-end error, self-healing the case where the history load had failed
+    // (#135).
+    if (e.status === 409) {
+      t.state = 'done'
+      t.error = ''
+    } else {
+      t.state = 'idle'
+      t.error = e.message
+    }
   }
 }
 </script>
@@ -93,9 +113,13 @@ async function submit(t) {
   <div class="space-y-3 rounded-lg bg-gray-50 p-4">
     <p class="text-sm font-medium text-gray-700">{{ $t('review.prompt') }}</p>
     <p v-if="loading" class="text-sm text-gray-400">…</p>
+    <p v-else-if="historyError" class="text-sm text-red-600">
+      {{ $t('review.loadFailed') }}
+      <button class="ml-1 text-brand-600 hover:underline" @click="load">{{ $t('review.retry') }}</button>
+    </p>
     <p v-else-if="!targets.length" class="text-sm text-gray-500">{{ $t('review.nothingDeliveredYet') }}</p>
     <div
-      v-for="t in targets"
+      v-for="t in (historyError ? [] : targets)"
       :key="t.key"
       class="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2"
     >

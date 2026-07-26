@@ -198,6 +198,8 @@ export default {
     commentPlaceholder: 'Birkaç kelime yazın (isteğe bağlı)',
     yourRating: '✓ puanınız',
     nothingDeliveredYet: 'Henüz teslim edilen bir şey yok — her şefin payı ulaştığında puanlayabilirsiniz.',
+    loadFailed: 'Puanlarınız yüklenemedi.',
+    retry: 'Tekrar dene',
   },
   dashboard: {
     subtitle: 'Şef paneli',
