@@ -427,3 +427,112 @@ func (h *AdminHandler) ChefDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	respondJSON(w, http.StatusOK, detail)
 }
+
+// adminUserProfileRequest is the editable customer profile. The identity fields
+// (email/username/role) are present only so a request that tries to change them
+// can be rejected explicitly (#123) — they are never applied.
+type adminUserProfileRequest struct {
+	PhoneNumber        *string  `json:"phone_number"`
+	Address            *string  `json:"address"`
+	City               *string  `json:"city"`
+	State              *string  `json:"state"`
+	ZipCode            *string  `json:"zip_code"`
+	Latitude           *float64 `json:"latitude"`
+	Longitude          *float64 `json:"longitude"`
+	EmailNotifications bool     `json:"email_notifications"`
+
+	// Immutable — rejected if present.
+	Email    *string `json:"email"`
+	Username *string `json:"username"`
+	Role     *string `json:"role"`
+	Password *string `json:"password"`
+}
+
+// UpdateUserProfile handles PUT /api/v2/admin/users/{id} (admin) — edit a
+// customer's contact/location on their behalf.
+func (h *AdminHandler) UpdateUserProfile(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "user")
+	if !ok {
+		return
+	}
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req adminUserProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	// Identity and password are immutable through the profile editor.
+	if req.Email != nil || req.Username != nil || req.Role != nil || req.Password != nil {
+		respondError(w, http.StatusBadRequest, "email, username, role and password cannot be changed here")
+		return
+	}
+	user, err := h.admin.UpdateUserProfile(r.Context(), actor, id, domain.AdminUserProfileInput{
+		PhoneNumber:        req.PhoneNumber,
+		Address:            req.Address,
+		City:               req.City,
+		State:              req.State,
+		ZipCode:            req.ZipCode,
+		Latitude:           req.Latitude,
+		Longitude:          req.Longitude,
+		EmailNotifications: req.EmailNotifications,
+	})
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, user)
+}
+
+// adminChefProfileRequest is the editable kitchen profile.
+type adminChefProfileRequest struct {
+	BusinessName     string   `json:"business_name"`
+	Bio              *string  `json:"bio"`
+	Specialty        *string  `json:"specialty"`
+	KitchenAddress   string   `json:"kitchen_address"`
+	KitchenCity      *string  `json:"kitchen_city"`
+	KitchenLatitude  *float64 `json:"kitchen_latitude"`
+	KitchenLongitude *float64 `json:"kitchen_longitude"`
+	DeliveryRadius   int      `json:"delivery_radius"`
+}
+
+// UpdateChefProfile handles PUT /api/v2/admin/chefs/{id} (admin) — edit a
+// chef's kitchen fields on their behalf.
+func (h *AdminHandler) UpdateChefProfile(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "chef")
+	if !ok {
+		return
+	}
+	actor, ok := actorID(r)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	var req adminChefProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.BusinessName == "" {
+		respondError(w, http.StatusBadRequest, "business_name is required")
+		return
+	}
+	chef, err := h.admin.UpdateChefProfile(r.Context(), actor, id, domain.AdminChefProfileInput{
+		BusinessName:     req.BusinessName,
+		Bio:              req.Bio,
+		Specialty:        req.Specialty,
+		KitchenAddress:   req.KitchenAddress,
+		KitchenCity:      req.KitchenCity,
+		KitchenLatitude:  req.KitchenLatitude,
+		KitchenLongitude: req.KitchenLongitude,
+		DeliveryRadius:   req.DeliveryRadius,
+	})
+	if err != nil {
+		respondDomainError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, chef)
+}

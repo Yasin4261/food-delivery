@@ -177,6 +177,31 @@ func (f *fakeAdminRepo) SetChefActive(_ context.Context, e *domain.AuditEntry, c
 	f.record(e, map[string]bool{"is_active": before}, map[string]bool{"is_active": active})
 	return nil
 }
+func (f *fakeAdminRepo) UpdateUserProfile(_ context.Context, e *domain.AuditEntry, userID int, in domain.AdminUserProfileInput) (*domain.User, error) {
+	u, ok := f.users.users[userID]
+	if !ok {
+		return nil, domain.ErrUserNotFound
+	}
+	before := map[string]any{"city": u.City}
+	u.PhoneNumber, u.Address, u.City, u.State, u.ZipCode = in.PhoneNumber, in.Address, in.City, in.State, in.ZipCode
+	u.Latitude, u.Longitude, u.EmailNotifications = in.Latitude, in.Longitude, in.EmailNotifications
+	f.record(e, before, map[string]any{"city": in.City})
+	cp := *u
+	return &cp, nil
+}
+func (f *fakeAdminRepo) UpdateChefProfile(_ context.Context, e *domain.AuditEntry, chefID int, in domain.AdminChefProfileInput) (*domain.Chef, error) {
+	c, ok := f.chefs.chefs[chefID]
+	if !ok {
+		return nil, domain.ErrChefNotFound
+	}
+	before := map[string]any{"business_name": c.BusinessName}
+	c.BusinessName, c.Bio, c.Specialty = in.BusinessName, in.Bio, in.Specialty
+	c.KitchenAddress, c.KitchenCity = in.KitchenAddress, in.KitchenCity
+	c.KitchenLatitude, c.KitchenLongitude, c.DeliveryRadius = in.KitchenLatitude, in.KitchenLongitude, in.DeliveryRadius
+	f.record(e, before, map[string]any{"business_name": in.BusinessName})
+	cp := *c
+	return &cp, nil
+}
 func (f *fakeAdminRepo) SetChefOnline(_ context.Context, e *domain.AuditEntry, chefID int, online bool) error {
 	c, ok := f.chefs.chefs[chefID]
 	if !ok {
@@ -802,5 +827,83 @@ func TestAdminHTTP_AuditAndWrites(t *testing.T) {
 	// The audit log is read-only and admin-only.
 	if rec := do(t, srv, http.MethodGet, "/api/v2/admin/audit", chefToken, ""); rec.Code != http.StatusForbidden {
 		t.Errorf("chef reading audit = %d, want 403", rec.Code)
+	}
+}
+
+// Profile editing (#123): admin edits a customer/chef on their behalf; identity
+// and password are immutable; every edit is audited.
+func TestAdminHTTP_ProfileEditing(t *testing.T) {
+	srv, _, users := newTestServerWithRepos()
+	admin := registerCustomerToken(t, srv, "boss", "boss@example.com")
+	promoteAdmin(t, users, "boss@example.com")
+	admin = loginToken(t, srv, "boss@example.com")
+
+	chefToken, _ := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	_ = chefToken
+	registerCustomerToken(t, srv, "cust", "cust@example.com") // user 3
+
+	// Edit the customer's contact + location.
+	rec := do(t, srv, http.MethodPut, "/api/v2/admin/users/3", admin,
+		`{"phone_number":"+90 555 111 22 33","city":"Izmir","email_notifications":false}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("edit user = %d (%s)", rec.Code, rec.Body)
+	}
+	var user domain.User
+	_ = json.Unmarshal(rec.Body.Bytes(), &user)
+	if user.City == nil || *user.City != "Izmir" || user.PhoneNumber == nil || *user.PhoneNumber != "+90 555 111 22 33" {
+		t.Errorf("user not updated: %+v", user)
+	}
+	if user.PasswordHash != "" {
+		t.Error("edit response leaked password_hash")
+	}
+
+	// Immutable fields are rejected — one explicit case per field.
+	for _, body := range []string{
+		`{"email":"hacked@example.com"}`,
+		`{"username":"hacked"}`,
+		`{"role":"admin"}`,
+		`{"password":"newpass"}`,
+	} {
+		if rec := do(t, srv, http.MethodPut, "/api/v2/admin/users/3", admin, body); rec.Code != http.StatusBadRequest {
+			t.Errorf("editing immutable field %s = %d, want 400", body, rec.Code)
+		}
+	}
+
+	// Edit the chef's kitchen.
+	rec = do(t, srv, http.MethodPut, "/api/v2/admin/chefs/1", admin,
+		`{"business_name":"New Kitchen Name","kitchen_address":"12 New St","delivery_radius":8}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("edit chef = %d (%s)", rec.Code, rec.Body)
+	}
+	var chef domain.Chef
+	_ = json.Unmarshal(rec.Body.Bytes(), &chef)
+	if chef.BusinessName != "New Kitchen Name" || chef.DeliveryRadius != 8 {
+		t.Errorf("chef not updated: %+v", chef)
+	}
+	// A blank business name is rejected.
+	if rec := do(t, srv, http.MethodPut, "/api/v2/admin/chefs/1", admin, `{"business_name":"","kitchen_address":"x"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("blank business name = %d, want 400", rec.Code)
+	}
+	// Unknown targets -> 404.
+	if rec := do(t, srv, http.MethodPut, "/api/v2/admin/users/9999", admin, `{"city":"x"}`); rec.Code != http.StatusNotFound {
+		t.Errorf("edit unknown user = %d, want 404", rec.Code)
+	}
+	if rec := do(t, srv, http.MethodPut, "/api/v2/admin/chefs/9999", admin, `{"business_name":"x","kitchen_address":"y"}`); rec.Code != http.StatusNotFound {
+		t.Errorf("edit unknown chef = %d, want 404", rec.Code)
+	}
+
+	// Non-admins cannot edit.
+	if rec := do(t, srv, http.MethodPut, "/api/v2/admin/users/3", chefToken, `{"city":"x"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("chef editing user = %d, want 403", rec.Code)
+	}
+
+	// Both edits were audited.
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/audit?action=user.update_profile", admin, "")
+	if p := decodePage[domain.AuditEntry](t, rec.Body.Bytes()); p.Total != 1 {
+		t.Errorf("user.update_profile audit = %d, want 1", p.Total)
+	}
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/audit?action=chef.update_profile", admin, "")
+	if p := decodePage[domain.AuditEntry](t, rec.Body.Bytes()); p.Total != 1 {
+		t.Errorf("chef.update_profile audit = %d, want 1", p.Total)
 	}
 }

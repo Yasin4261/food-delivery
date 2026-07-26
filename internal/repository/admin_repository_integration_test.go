@@ -440,3 +440,64 @@ func TestAdminRepository_AuditAtomicity(t *testing.T) {
 		t.Error("unknown actor filter should return nothing")
 	}
 }
+
+// Profile editing (#123) against real Postgres: the UPDATE touches only
+// editable columns, so identity/password are provably unchanged, and the edit
+// is audited with before/after.
+func TestAdminRepository_ProfileEditing(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewAdminRepository(testDB)
+	admin := seedUser(t, "admin@example.com")
+	user := seedUser(t, "cust@example.com")
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+
+	// Capture identity before the edit.
+	beforeEmail, beforeUsername, beforeRole, beforeHash := user.Email, user.Username, user.Role, ""
+	_ = testDB.QueryRow(`SELECT password_hash FROM users WHERE id = $1`, user.ID).Scan(&beforeHash)
+
+	city := "Izmir"
+	phone := "+90 555 000 11 22"
+	updated, err := repo.UpdateUserProfile(ctx(),
+		auditFor(admin.ID, domain.AuditUserUpdate, domain.AuditTargetUser, user.ID),
+		user.ID, domain.AdminUserProfileInput{City: &city, PhoneNumber: &phone, EmailNotifications: false})
+	if err != nil {
+		t.Fatalf("update user profile: %v", err)
+	}
+	if updated.City == nil || *updated.City != "Izmir" {
+		t.Errorf("city not updated: %+v", updated.City)
+	}
+
+	// Identity + password are untouched in the database.
+	var email, username, role, hash string
+	if err := testDB.QueryRow(`SELECT email, username, role, password_hash FROM users WHERE id = $1`, user.ID).
+		Scan(&email, &username, &role, &hash); err != nil {
+		t.Fatalf("re-read user: %v", err)
+	}
+	if email != beforeEmail || username != beforeUsername || role != beforeRole || hash != beforeHash {
+		t.Errorf("immutable identity/password changed: email %q role %q hash-changed=%v", email, role, hash != beforeHash)
+	}
+
+	// The edit is audited with a before/after snapshot.
+	log, _, _ := repo.ListAudit(ctx(), domain.AuditFilters{Action: domain.AuditUserUpdate}, 5, 0)
+	if len(log) != 1 || len(log[0].Before) == 0 || len(log[0].After) == 0 {
+		t.Errorf("user profile edit not audited with before/after: %+v", log)
+	}
+
+	// Chef edit updates the kitchen and audits it; unknown ids 404.
+	radius := 9
+	uc, err := repo.UpdateChefProfile(ctx(),
+		auditFor(admin.ID, domain.AuditChefUpdate, domain.AuditTargetChef, chef.ID),
+		chef.ID, domain.AdminChefProfileInput{BusinessName: "Renamed Kitchen", KitchenAddress: "9 New Rd", DeliveryRadius: radius})
+	if err != nil {
+		t.Fatalf("update chef profile: %v", err)
+	}
+	if uc.BusinessName != "Renamed Kitchen" || uc.DeliveryRadius != 9 {
+		t.Errorf("chef not updated: %+v", uc)
+	}
+	if _, err := repo.UpdateUserProfile(ctx(), auditFor(admin.ID, domain.AuditUserUpdate, domain.AuditTargetUser, 999999), 999999, domain.AdminUserProfileInput{}); !errors.Is(err, domain.ErrUserNotFound) {
+		t.Errorf("edit unknown user = %v, want ErrUserNotFound", err)
+	}
+	if _, err := repo.UpdateChefProfile(ctx(), auditFor(admin.ID, domain.AuditChefUpdate, domain.AuditTargetChef, 999999), 999999, domain.AdminChefProfileInput{BusinessName: "x"}); !errors.Is(err, domain.ErrChefNotFound) {
+		t.Errorf("edit unknown chef = %v, want ErrChefNotFound", err)
+	}
+}

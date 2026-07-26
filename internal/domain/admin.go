@@ -54,6 +54,34 @@ type AdminChefDetail struct {
 	Orders []*Order    `json:"orders"`
 }
 
+// AdminUserProfileInput is the set of user fields an admin may edit on a
+// customer's behalf (#123). Identity (email/username/role) and the password are
+// deliberately absent — they are immutable through this path.
+type AdminUserProfileInput struct {
+	PhoneNumber        *string
+	Address            *string
+	City               *string
+	State              *string
+	ZipCode            *string
+	Latitude           *float64
+	Longitude          *float64
+	EmailNotifications bool
+}
+
+// AdminChefProfileInput is the set of kitchen fields an admin may edit on a
+// chef's behalf. Status flags (active/online/accepting) have their own
+// endpoints; verification/ratings are never edited here.
+type AdminChefProfileInput struct {
+	BusinessName     string
+	Bio              *string
+	Specialty        *string
+	KitchenAddress   string
+	KitchenCity      *string
+	KitchenLatitude  *float64
+	KitchenLongitude *float64
+	DeliveryRadius   int
+}
+
 // AdminUserFilters narrows the admin user listing. The zero value matches
 // every user (the previous unfiltered behaviour).
 type AdminUserFilters struct {

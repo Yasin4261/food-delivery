@@ -620,3 +620,109 @@ func (r *AdminRepository) ListAudit(ctx context.Context, f domain.AuditFilters, 
 	}
 	return out, total, nil
 }
+
+// --- profile editing (#123), atomic with an audit entry --------------------
+
+// userProfileSnapshot captures the editable (non-secret) user fields for the
+// audit before/after.
+func userProfileSnapshot(u *domain.User) map[string]any {
+	return map[string]any{
+		"phone_number": u.PhoneNumber, "address": u.Address, "city": u.City,
+		"state": u.State, "zip_code": u.ZipCode, "latitude": u.Latitude,
+		"longitude": u.Longitude, "email_notifications": u.EmailNotifications,
+	}
+}
+
+// UpdateUserProfile edits a customer's contact/location fields on their behalf.
+// The UPDATE touches only editable columns — email/username/role/password_hash
+// are never in the statement, so they cannot change through this path.
+func (r *AdminRepository) UpdateUserProfile(ctx context.Context, e *domain.AuditEntry, userID int, in domain.AdminUserProfileInput) (*domain.User, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	before, err := scanUser(tx.QueryRowContext(ctx, `SELECT`+userColumns+` FROM users WHERE id = $1 FOR UPDATE`, userID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read user: %w", err)
+	}
+
+	updated, err := scanUser(tx.QueryRowContext(ctx, `
+		UPDATE users
+		SET phone_number = $2, address = $3, city = $4, state = $5, zip_code = $6,
+		    latitude = $7, longitude = $8, email_notifications = $9, updated_at = now()
+		WHERE id = $1
+		RETURNING`+userColumns,
+		userID, in.PhoneNumber, in.Address, in.City, in.State, in.ZipCode,
+		in.Latitude, in.Longitude, in.EmailNotifications))
+	if err != nil {
+		return nil, fmt.Errorf("update user profile: %w", err)
+	}
+
+	e.Before = auditJSON(userProfileSnapshot(before))
+	e.After = auditJSON(userProfileSnapshot(updated))
+	if err := insertAudit(ctx, tx, e); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit user profile: %w", err)
+	}
+	return updated, nil
+}
+
+// chefProfileSnapshot captures the editable kitchen fields for the audit.
+func chefProfileSnapshot(c *domain.Chef) map[string]any {
+	return map[string]any{
+		"business_name": c.BusinessName, "bio": c.Bio, "specialty": c.Specialty,
+		"kitchen_address": c.KitchenAddress, "kitchen_city": c.KitchenCity,
+		"kitchen_latitude": c.KitchenLatitude, "kitchen_longitude": c.KitchenLongitude,
+		"delivery_radius": c.DeliveryRadius,
+	}
+}
+
+// UpdateChefProfile edits a chef's kitchen fields on their behalf. Status,
+// verification and ratings columns are never in the UPDATE.
+func (r *AdminRepository) UpdateChefProfile(ctx context.Context, e *domain.AuditEntry, chefID int, in domain.AdminChefProfileInput) (*domain.Chef, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	before, err := scanChef(tx.QueryRowContext(ctx, `SELECT`+chefColumns+` FROM chefs WHERE id = $1 FOR UPDATE`, chefID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrChefNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read chef: %w", err)
+	}
+
+	updated, err := scanChef(tx.QueryRowContext(ctx, `
+		UPDATE chefs
+		SET business_name = $2, bio = $3, specialty = $4,
+		    kitchen_address = $5, kitchen_city = $6,
+		    kitchen_latitude = $7, kitchen_longitude = $8,
+		    delivery_radius = $9, updated_at = now()
+		WHERE id = $1
+		RETURNING`+chefColumns,
+		chefID, in.BusinessName, in.Bio, in.Specialty,
+		in.KitchenAddress, in.KitchenCity, in.KitchenLatitude, in.KitchenLongitude,
+		in.DeliveryRadius))
+	if err != nil {
+		return nil, fmt.Errorf("update chef profile: %w", err)
+	}
+
+	e.Before = auditJSON(chefProfileSnapshot(before))
+	e.After = auditJSON(chefProfileSnapshot(updated))
+	if err := insertAudit(ctx, tx, e); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit chef profile: %w", err)
+	}
+	return updated, nil
+}
