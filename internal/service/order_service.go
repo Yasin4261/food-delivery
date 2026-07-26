@@ -4,12 +4,23 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/Yasin4261/food-delivery/internal/domain"
 )
+
+// mustAuditJSON marshals an audit before/after snapshot (built from known,
+// non-secret fields, so marshalling never fails in practice).
+func mustAuditJSON(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return json.RawMessage("null")
+	}
+	return b
+}
 
 // OrderService implements the ordering use cases: a customer places and tracks
 // orders (which may span several chefs), and a chef advances the status of
@@ -327,6 +338,129 @@ func (s *OrderService) CancelForCustomer(ctx context.Context, userID, orderID in
 		_ = order.Refund() // paid -> refunded; guarded by IsCardPaid above
 	}
 	if err := s.orders.UpdateStatus(ctx, order); err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+// --- admin support operations (#124), each atomic with an audit entry -------
+
+// orderAudit builds an audit entry for an admin order operation. Before/After
+// are filled by the caller; the repository writes it in the mutation's tx.
+func orderAudit(actorID int, action string, orderID int, reason string) *domain.AuditEntry {
+	return &domain.AuditEntry{
+		ActorUserID: actorID,
+		Action:      action,
+		TargetType:  domain.AuditTargetOrder,
+		TargetID:    orderID,
+		Reason:      reason,
+	}
+}
+
+// AdminCancelOrder cancels an order on the customer's behalf (support). It
+// reuses the customer cancel guarantee: a paid card order is refunded through
+// the gateway first and, if the refund fails, the order stays uncancelled so
+// money and state never diverge. Audited atomically with the persist.
+func (s *OrderService) AdminCancelOrder(ctx context.Context, actorID, orderID int, reason string) (*domain.Order, error) {
+	order, err := s.orders.FindByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if !order.CanCancel() {
+		return nil, domain.ErrInvalidStatusTransition
+	}
+
+	before := map[string]any{"status": order.Status, "payment_status": order.PaymentStatus}
+
+	refund := order.IsCardPaid() && s.refunder != nil
+	if refund {
+		if err := s.refunder.RefundOrderPayment(ctx, order); err != nil {
+			return nil, err
+		}
+	}
+	if err := order.Cancel(); err != nil {
+		return nil, err
+	}
+	if refund {
+		_ = order.Refund()
+	}
+
+	e := orderAudit(actorID, domain.AuditOrderCancel, orderID, reason)
+	e.Before = mustAuditJSON(before)
+	e.After = mustAuditJSON(map[string]any{"status": order.Status, "payment_status": order.PaymentStatus})
+	if err := s.orders.UpdateStatusAudited(ctx, order, e); err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+// AdminForceSubOrder applies a lifecycle action to one chef's slice on their
+// behalf (support: unstick an order). It mirrors AdvanceForChef — including the
+// partial refund + refund-abort on a declined card-paid slice — but targets the
+// chef by id and is audited. Illegal transitions return
+// ErrInvalidStatusTransition (→ 422).
+func (s *OrderService) AdminForceSubOrder(ctx context.Context, actorID, orderID, chefID int, action, reason string) (*domain.Order, error) {
+	order, err := s.orders.FindByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	sub := order.SubOrderFor(chefID)
+	if sub == nil {
+		return nil, domain.ErrOrderNotFound
+	}
+	before := map[string]any{"chef_id": chefID, "status": sub.Status}
+
+	if err := applyChefAction(sub, action); err != nil {
+		return nil, err
+	}
+	if action == OrderActionDecline && order.IsCardPaid() && s.refunder != nil {
+		if err := s.refunder.RefundSubOrderPayment(ctx, order, sub.Subtotal+sub.DeliveryFee+sub.Tip); err != nil {
+			return nil, err
+		}
+	}
+	if action == OrderActionConfirm {
+		order.SetEstimatedDelivery(s.etaWindow)
+	}
+	order.SyncStatusFromSubOrders()
+	if order.Status == domain.OrderStatusCancelled && order.IsCardPaid() {
+		_ = order.Refund()
+	}
+	order.SettleCashOnDelivery()
+
+	e := orderAudit(actorID, domain.AuditOrderForceStatus, orderID, reason)
+	e.Before = mustAuditJSON(before)
+	e.After = mustAuditJSON(map[string]any{"chef_id": chefID, "status": sub.Status, "order_status": order.Status})
+	if err := s.orders.UpdateSubOrderAudited(ctx, order, sub, e); err != nil {
+		return nil, err
+	}
+	if s.notifier != nil {
+		s.notifier.SubOrderAdvanced(ctx, order, sub)
+	}
+	return order, nil
+}
+
+// AdminEditDelivery edits an order's delivery snapshot (address/city/notes) on
+// the customer's behalf — pre-delivery only, so history is never rewritten
+// after the food is on its way. Audited atomically.
+func (s *OrderService) AdminEditDelivery(ctx context.Context, actorID, orderID int, address string, city, notes *string, reason string) (*domain.Order, error) {
+	order, err := s.orders.FindByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if !order.IsEditableDelivery() {
+		return nil, domain.ErrInvalidStatusTransition
+	}
+	if strings.TrimSpace(address) == "" {
+		return nil, ValidationError{Msg: "delivery address cannot be empty"}
+	}
+	before := map[string]any{"delivery_address": order.DeliveryAddress, "delivery_city": order.DeliveryCity, "customer_notes": order.CustomerNotes}
+
+	order.SetDeliveryDetails(address, city, notes)
+
+	e := orderAudit(actorID, domain.AuditOrderEditDeliver, orderID, reason)
+	e.Before = mustAuditJSON(before)
+	e.After = mustAuditJSON(map[string]any{"delivery_address": address, "delivery_city": city, "customer_notes": notes})
+	if err := s.orders.UpdateStatusAudited(ctx, order, e); err != nil {
 		return nil, err
 	}
 	return order, nil

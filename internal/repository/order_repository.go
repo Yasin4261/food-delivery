@@ -248,6 +248,16 @@ func (r *OrderRepository) countOrders(ctx context.Context, query string, arg any
 // with the statuses of the order's loaded sub-orders (a customer cancel
 // touches every one), in a single transaction.
 func (r *OrderRepository) UpdateStatus(ctx context.Context, o *domain.Order) error {
+	return r.updateStatus(ctx, o, nil)
+}
+
+// UpdateStatusAudited is UpdateStatus that also writes an admin audit row in the
+// same transaction (#124) — the order change and its trail commit together.
+func (r *OrderRepository) UpdateStatusAudited(ctx context.Context, o *domain.Order, e *domain.AuditEntry) error {
+	return r.updateStatus(ctx, o, e)
+}
+
+func (r *OrderRepository) updateStatus(ctx context.Context, o *domain.Order, e *domain.AuditEntry) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -259,6 +269,11 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, o *domain.Order) err
 	}
 	for _, s := range o.SubOrders {
 		if err := updateSubOrderRow(ctx, tx, s); err != nil {
+			return err
+		}
+	}
+	if e != nil {
+		if err := insertAudit(ctx, tx, e); err != nil {
 			return err
 		}
 	}
@@ -276,6 +291,16 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, o *domain.Order) err
 // stay in the domain (SyncStatusFromSubOrders / SettleCashOnDelivery); this
 // only refreshes their inputs.
 func (r *OrderRepository) UpdateSubOrder(ctx context.Context, o *domain.Order, sub *domain.SubOrder) error {
+	return r.updateSubOrder(ctx, o, sub, nil)
+}
+
+// UpdateSubOrderAudited is UpdateSubOrder that also writes an admin audit row in
+// the same transaction (#124).
+func (r *OrderRepository) UpdateSubOrderAudited(ctx context.Context, o *domain.Order, sub *domain.SubOrder, e *domain.AuditEntry) error {
+	return r.updateSubOrder(ctx, o, sub, e)
+}
+
+func (r *OrderRepository) updateSubOrder(ctx context.Context, o *domain.Order, sub *domain.SubOrder, e *domain.AuditEntry) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -325,6 +350,11 @@ func (r *OrderRepository) UpdateSubOrder(ctx context.Context, o *domain.Order, s
 
 	if err := updateOrderRow(ctx, tx, o); err != nil {
 		return err
+	}
+	if e != nil {
+		if err := insertAudit(ctx, tx, e); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit sub-order: %w", err)

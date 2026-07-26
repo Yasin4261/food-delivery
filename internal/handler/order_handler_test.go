@@ -13,6 +13,7 @@ import (
 type fakeOrderRepo struct {
 	orders map[int]*domain.Order
 	nextID int
+	audits []*domain.AuditEntry // order-operation audit rows (#124)
 }
 
 func newFakeOrderRepo() *fakeOrderRepo {
@@ -82,6 +83,10 @@ func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	stored.PaymentStatus = o.PaymentStatus
 	stored.ActualDeliveryTime = o.ActualDeliveryTime
 	stored.CancelledAt = o.CancelledAt
+	// Delivery snapshot edits (#124).
+	stored.DeliveryAddress = o.DeliveryAddress
+	stored.DeliveryCity = o.DeliveryCity
+	stored.CustomerNotes = o.CustomerNotes
 	for _, s := range o.SubOrders {
 		if ss := stored.SubOrderFor(s.ChefID); ss != nil {
 			ss.Status = s.Status
@@ -89,8 +94,22 @@ func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	}
 	return nil
 }
+func (f *fakeOrderRepo) UpdateStatusAudited(ctx context.Context, o *domain.Order, e *domain.AuditEntry) error {
+	if err := f.UpdateStatus(ctx, o); err != nil {
+		return err
+	}
+	f.audits = append(f.audits, e)
+	return nil
+}
 func (f *fakeOrderRepo) UpdateSubOrder(ctx context.Context, o *domain.Order, _ *domain.SubOrder) error {
 	return f.UpdateStatus(ctx, o)
+}
+func (f *fakeOrderRepo) UpdateSubOrderAudited(ctx context.Context, o *domain.Order, sub *domain.SubOrder, e *domain.AuditEntry) error {
+	if err := f.UpdateSubOrder(ctx, o, sub); err != nil {
+		return err
+	}
+	f.audits = append(f.audits, e)
+	return nil
 }
 func (f *fakeOrderRepo) CountActiveByUser(_ context.Context, userID int) (int, error) {
 	n := 0
@@ -374,4 +393,78 @@ func itoa(n int) string {
 		b = append([]byte{'-'}, b...)
 	}
 	return string(b)
+}
+
+// Admin order support operations (#124) over the real router: force a slice,
+// edit the delivery snapshot, cancel, each admin-only and audited; illegal
+// moves are 422.
+func TestAdminHTTP_OrderOperations(t *testing.T) {
+	srv, _, users := newTestServerWithRepos()
+	chefToken, itemID := seedChefWithItem(t, srv, "chefa", "chefa@example.com")
+	_ = chefToken
+	admin := registerCustomerToken(t, srv, "boss", "boss@example.com")
+	promoteAdmin(t, users, "boss@example.com")
+	admin = loginToken(t, srv, "boss@example.com")
+	customer := registerCustomerToken(t, srv, "cust", "cust@example.com")
+
+	place := func() int {
+		body := `{"delivery_address":"1 St","payment_method":"cash","items":[{"menu_item_id":` + itoa(itemID) + `,"quantity":1}]}`
+		rec := do(t, srv, http.MethodPost, "/api/v2/orders", customer, body)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("place = %d (%s)", rec.Code, rec.Body)
+		}
+		var o domain.Order
+		_ = json.Unmarshal(rec.Body.Bytes(), &o)
+		return o.ID
+	}
+
+	// Force the chef's slice to confirmed (chef 1).
+	oid := place()
+	body := `{"chef_id":1,"action":"confirm","reason":"unstick"}`
+	rec := do(t, srv, http.MethodPost, "/api/v2/admin/orders/"+itoa(oid)+"/status", admin, body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("force status = %d (%s)", rec.Code, rec.Body)
+	}
+	var forced domain.Order
+	_ = json.Unmarshal(rec.Body.Bytes(), &forced)
+	if forced.Status != "confirmed" {
+		t.Errorf("order status = %q, want confirmed", forced.Status)
+	}
+	// Illegal jump -> 422.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/admin/orders/"+itoa(oid)+"/status", admin, `{"chef_id":1,"action":"delivered","reason":"x"}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("illegal force = %d, want 422", rec.Code)
+	}
+
+	// Edit the delivery snapshot (pre-delivery).
+	if rec := do(t, srv, http.MethodPut, "/api/v2/admin/orders/"+itoa(oid)+"/delivery", admin, `{"delivery_address":"9 Corrected Ave","delivery_city":"Izmir","reason":"typo"}`); rec.Code != http.StatusOK {
+		t.Errorf("edit delivery = %d (%s)", rec.Code, rec.Body)
+	}
+
+	// Cancel a fresh order (pending -> cancelled).
+	oid2 := place()
+	if rec := do(t, srv, http.MethodPost, "/api/v2/admin/orders/"+itoa(oid2)+"/cancel", admin, `{"reason":"customer request"}`); rec.Code != http.StatusOK {
+		t.Fatalf("cancel = %d (%s)", rec.Code, rec.Body)
+	}
+	rec = do(t, srv, http.MethodGet, "/api/v2/orders/"+itoa(oid2), customer, "")
+	var cancelled domain.Order
+	_ = json.Unmarshal(rec.Body.Bytes(), &cancelled)
+	if cancelled.Status != "cancelled" {
+		t.Errorf("order not cancelled: %q", cancelled.Status)
+	}
+
+	// Every operation is in the audit log (force + edit + cancel = 3 order rows).
+	rec = do(t, srv, http.MethodGet, "/api/v2/admin/audit?target_type=order", admin, "")
+	log := decodePage[domain.AuditEntry](t, rec.Body.Bytes())
+	if log.Total != 3 {
+		t.Errorf("order audit entries = %d, want 3 (%+v)", log.Total, log.Data)
+	}
+
+	// Admin-only.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/admin/orders/"+itoa(place())+"/cancel", customer, `{"reason":"x"}`); rec.Code != http.StatusForbidden {
+		t.Errorf("customer cancel = %d, want 403", rec.Code)
+	}
+	// Unknown order -> 404.
+	if rec := do(t, srv, http.MethodPost, "/api/v2/admin/orders/99999/cancel", admin, `{"reason":"x"}`); rec.Code != http.StatusNotFound {
+		t.Errorf("cancel unknown = %d, want 404", rec.Code)
+	}
 }

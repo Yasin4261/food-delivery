@@ -14,6 +14,7 @@ import (
 type fakeOrderRepo struct {
 	orders map[int]*domain.Order
 	nextID int
+	audits []*domain.AuditEntry
 }
 
 func newFakeOrderRepo() *fakeOrderRepo {
@@ -71,8 +72,22 @@ func (f *fakeOrderRepo) UpdateStatus(_ context.Context, o *domain.Order) error {
 	f.orders[o.ID] = copyOrder(o)
 	return nil
 }
+func (f *fakeOrderRepo) UpdateStatusAudited(ctx context.Context, o *domain.Order, e *domain.AuditEntry) error {
+	if err := f.UpdateStatus(ctx, o); err != nil {
+		return err
+	}
+	f.audits = append(f.audits, e)
+	return nil
+}
 func (f *fakeOrderRepo) UpdateSubOrder(ctx context.Context, o *domain.Order, _ *domain.SubOrder) error {
 	return f.UpdateStatus(ctx, o)
+}
+func (f *fakeOrderRepo) UpdateSubOrderAudited(ctx context.Context, o *domain.Order, sub *domain.SubOrder, e *domain.AuditEntry) error {
+	if err := f.UpdateSubOrder(ctx, o, sub); err != nil {
+		return err
+	}
+	f.audits = append(f.audits, e)
+	return nil
 }
 func (f *fakeOrderRepo) CountActiveByUser(_ context.Context, userID int) (int, error) {
 	n := 0

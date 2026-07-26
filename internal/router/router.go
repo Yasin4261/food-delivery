@@ -208,6 +208,12 @@ func (r *Router) Setup() http.Handler {
 	r.handleAdmin("PUT /api/v2/admin/users/{id}", r.adminHandler.UpdateUserProfile)
 	r.handleAdmin("PUT /api/v2/admin/chefs/{id}", r.adminHandler.UpdateChefProfile)
 	r.handleAdmin("GET /api/v2/admin/orders", r.adminHandler.ListOrders)
+	// Order support operations (#124): named, audited actions — never a generic
+	// field editor. Cancel refunds a paid card order (refund failure aborts);
+	// force-status unsticks one chef's slice; delivery edit is pre-delivery only.
+	r.handleAdmin("POST /api/v2/admin/orders/{id}/cancel", r.orderHandler.AdminCancel)
+	r.handleAdmin("POST /api/v2/admin/orders/{id}/status", r.orderHandler.AdminForceStatus)
+	r.handleAdmin("PUT /api/v2/admin/orders/{id}/delivery", r.orderHandler.AdminEditDelivery)
 	r.handleAdmin("GET /api/v2/admin/chefs", r.adminHandler.ListChefs)
 	r.handleAdmin("PATCH /api/v2/admin/chefs/{id}/active", r.adminHandler.SetChefActive)
 	// Support drill-in (#119): read-only detail for one account / order /

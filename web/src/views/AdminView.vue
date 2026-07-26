@@ -109,6 +109,48 @@ async function openDetail(kind, id) {
   }
 }
 
+// --- order support operations (#124) ---
+async function reloadOrderDetail() {
+  detail.value = await api.get(`/admin/orders/${detail.value.order.id}`)
+}
+async function cancelOrder() {
+  const reason = window.prompt(i18n.global.t('admin.reasonPrompt'))
+  if (reason === null) return
+  error.value = ''
+  try {
+    await api.post(`/admin/orders/${detail.value.order.id}/cancel`, { reason })
+    await reloadOrderDetail()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+async function forceStatus(chefId, action) {
+  error.value = ''
+  try {
+    await api.post(`/admin/orders/${detail.value.order.id}/status`, { chef_id: chefId, action, reason: 'admin support' })
+    await reloadOrderDetail()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+const editingDelivery = ref(null)
+function startEditDelivery() {
+  const o = detail.value.order
+  editingDelivery.value = { delivery_address: o.delivery_address, delivery_city: o.delivery_city || '' }
+}
+async function saveDelivery() {
+  error.value = ''
+  try {
+    await api.put(`/admin/orders/${detail.value.order.id}/delivery`, {
+      ...editingDelivery.value, reason: 'admin support',
+    })
+    editingDelivery.value = null
+    await reloadOrderDetail()
+  } catch (e) {
+    error.value = e.message
+  }
+}
+
 // Edit a customer's contact/location or a chef's kitchen on their behalf.
 function startEditUser() {
   const u = detail.value.user
@@ -362,14 +404,32 @@ onMounted(loadStats)
         <p v-if="detail.customer" class="text-gray-600">
           👤 {{ detail.customer.username }} · {{ detail.customer.email }}
         </p>
-        <p class="text-gray-500">📍 {{ detail.order.delivery_address }}</p>
+        <p class="text-gray-500">📍 {{ detail.order.delivery_address }}<template v-if="detail.order.delivery_city">, {{ detail.order.delivery_city }}</template></p>
+
+        <!-- Order support operations (#124) -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button class="text-brand-600 hover:underline" @click="startEditDelivery">✏️ {{ $t('admin.editDelivery') }}</button>
+          <button class="text-red-600 hover:underline" @click="cancelOrder">{{ $t('admin.cancelOrder') }}</button>
+        </div>
+        <form v-if="editingDelivery" class="grid gap-2 rounded-lg bg-white p-3 sm:grid-cols-2" @submit.prevent="saveDelivery">
+          <input v-model="editingDelivery.delivery_address" class="input sm:col-span-2" :placeholder="$t('profile.address')" required />
+          <input v-model="editingDelivery.delivery_city" class="input" :placeholder="$t('profile.city')" />
+          <div class="flex gap-2 sm:col-span-2">
+            <button class="btn-primary">{{ $t('admin.save') }}</button>
+            <button type="button" class="btn-ghost" @click="editingDelivery = null">{{ $t('admin.cancel') }}</button>
+          </div>
+        </form>
+
         <ul class="space-y-1">
           <li v-for="it in detail.order.items" :key="it.id">{{ it.quantity }}× {{ it.item_name }}</li>
         </ul>
-        <div v-if="detail.order.sub_orders?.length" class="flex flex-wrap gap-2">
-          <span v-for="s in detail.order.sub_orders" :key="s.id" class="badge" :class="statusClass(s.status)">
-            {{ s.chef_name }}: {{ $t(`status.${s.status}`) }}
-          </span>
+        <!-- Per-chef slice: force a lifecycle transition to unstick it. -->
+        <div v-for="s in detail.order.sub_orders" :key="s.id" class="flex flex-wrap items-center gap-2">
+          <span class="badge" :class="statusClass(s.status)">{{ s.chef_name }}: {{ $t(`status.${s.status}`) }}</span>
+          <select class="input h-7 max-w-40 py-0 text-xs" @change="forceStatus(s.chef_id, $event.target.value); $event.target.value = ''">
+            <option value="">{{ $t('admin.forceStatus') }}…</option>
+            <option v-for="a in ['confirm','preparing','ready','delivering','delivered','decline']" :key="a" :value="a">{{ a }}</option>
+          </select>
         </div>
         <p class="font-medium">{{ $t('admin.paymentAttempts') }} ({{ detail.payments.length }})</p>
         <ul class="space-y-1">

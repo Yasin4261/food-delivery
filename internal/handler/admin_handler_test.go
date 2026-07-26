@@ -278,11 +278,14 @@ func (f *fakeAdminRepo) SetPromoActive(ctx context.Context, e *domain.AuditEntry
 	return nil
 }
 
-// ListAudit returns recorded audit entries matching f, newest first.
+// ListAudit returns recorded audit entries matching f, newest first. Order
+// operations record onto the shared order fake (mirroring the single
+// admin_audit_log table in production), so they are merged in here.
 func (f *fakeAdminRepo) ListAudit(_ context.Context, filters domain.AuditFilters, limit, offset int) ([]*domain.AuditEntry, int, error) {
+	all := append(append([]*domain.AuditEntry{}, f.audits...), f.orders.audits...)
 	var matched []*domain.AuditEntry
-	for i := len(f.audits) - 1; i >= 0; i-- {
-		e := f.audits[i]
+	for i := len(all) - 1; i >= 0; i-- {
+		e := all[i]
 		if filters.Action != "" && e.Action != filters.Action {
 			continue
 		}

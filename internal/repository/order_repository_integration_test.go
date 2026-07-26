@@ -306,3 +306,79 @@ func TestOrderRepository_UpdateSubOrder_StaleSnapshot(t *testing.T) {
 		t.Errorf("order status = %q, want confirmed (re-derived under lock)", got.Status)
 	}
 }
+
+// Admin order operations (#124) write their audit row in the SAME transaction
+// as the order change (via UpdateStatusAudited / UpdateSubOrderAudited), so the
+// admin_audit_log grows exactly in step with the persisted change.
+func TestOrderRepository_AuditedUpdates(t *testing.T) {
+	resetDB(t)
+	repo := repository.NewOrderRepository(testDB)
+	admin := seedUser(t, "admin@example.com")
+	customer := seedUser(t, "cust@example.com")
+	chef := seedChef(t, seedUser(t, "chef@example.com").ID)
+	item := seedItem(t, seedMenu(t, chef.ID).ID, chef.ID, 5, 10)
+
+	order := buildOrder(customer.ID, "ORD-OPS-1", domain.NewOrderItem(item.ID, chef.ID, item.Name, 1, item.Price))
+	if err := repo.Create(ctx(), order); err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+
+	auditCount := func() int {
+		var n int
+		_ = testDB.QueryRow(`SELECT count(*) FROM admin_audit_log WHERE target_type = 'order'`).Scan(&n)
+		return n
+	}
+	if auditCount() != 0 {
+		t.Fatal("expected no order audit rows yet")
+	}
+
+	// A status update WITHOUT an audit entry writes no audit row.
+	_ = order.Confirm()
+	if err := repo.UpdateStatus(ctx(), order); err != nil {
+		t.Fatalf("plain update: %v", err)
+	}
+	if auditCount() != 0 {
+		t.Errorf("plain UpdateStatus wrote an audit row")
+	}
+
+	// An audited sub-order advance writes exactly one, atomically.
+	fetched, _ := repo.FindByID(ctx(), order.ID)
+	sub := fetched.SubOrderFor(chef.ID)
+	_ = sub.StartPreparing()
+	e := &domain.AuditEntry{
+		ActorUserID: admin.ID, Action: domain.AuditOrderForceStatus,
+		TargetType: domain.AuditTargetOrder, TargetID: order.ID, Reason: "unstick",
+		Before: []byte(`{"status":"confirmed"}`), After: []byte(`{"status":"preparing"}`),
+	}
+	if err := repo.UpdateSubOrderAudited(ctx(), fetched, sub, e); err != nil {
+		t.Fatalf("audited sub-order update: %v", err)
+	}
+	if auditCount() != 1 {
+		t.Errorf("audited update wrote %d order audit rows, want 1", auditCount())
+	}
+
+	// An audited full-status update (e.g. admin cancel) also records one.
+	fetched2, _ := repo.FindByID(ctx(), order.ID)
+	e2 := &domain.AuditEntry{
+		ActorUserID: admin.ID, Action: domain.AuditOrderCancel,
+		TargetType: domain.AuditTargetOrder, TargetID: order.ID, Reason: "customer request",
+	}
+	if err := repo.UpdateStatusAudited(ctx(), fetched2, e2); err != nil {
+		t.Fatalf("audited status update: %v", err)
+	}
+	if auditCount() != 2 {
+		t.Errorf("order audit rows = %d, want 2", auditCount())
+	}
+
+	// The rows carry the actor, action and reason.
+	var actor int
+	var action, reason string
+	if err := testDB.QueryRow(
+		`SELECT actor_user_id, action, reason FROM admin_audit_log WHERE action = $1`, domain.AuditOrderCancel).
+		Scan(&actor, &action, &reason); err != nil {
+		t.Fatalf("read audit row: %v", err)
+	}
+	if actor != admin.ID || reason != "customer request" {
+		t.Errorf("audit row = actor %d reason %q, want %d/customer request", actor, reason, admin.ID)
+	}
+}

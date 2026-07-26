@@ -225,3 +225,102 @@ func respondOrderError(w http.ResponseWriter, err error) {
 	}
 	respondDomainError(w, err)
 }
+
+// --- admin support operations (#124) ---------------------------------------
+
+type adminCancelRequest struct {
+	Reason string `json:"reason"`
+}
+
+// AdminCancel handles POST /api/v2/admin/orders/{id}/cancel (admin) — cancel an
+// order on the customer's behalf, refunding a paid card order (refund failure
+// aborts the cancel).
+func (h *OrderHandler) AdminCancel(w http.ResponseWriter, r *http.Request) {
+	actor, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid order id")
+		return
+	}
+	var req adminCancelRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	order, err := h.orders.AdminCancelOrder(r.Context(), actor.UserID, id, req.Reason)
+	if err != nil {
+		respondOrderError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, order)
+}
+
+type adminForceStatusRequest struct {
+	ChefID int    `json:"chef_id"`
+	Action string `json:"action"`
+	Reason string `json:"reason"`
+}
+
+// AdminForceStatus handles POST /api/v2/admin/orders/{id}/status (admin) —
+// force one chef's slice through a lifecycle transition (unstick an order).
+func (h *OrderHandler) AdminForceStatus(w http.ResponseWriter, r *http.Request) {
+	actor, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid order id")
+		return
+	}
+	var req adminForceStatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.ChefID == 0 || req.Action == "" {
+		respondError(w, http.StatusBadRequest, "chef_id and action are required")
+		return
+	}
+	order, err := h.orders.AdminForceSubOrder(r.Context(), actor.UserID, id, req.ChefID, req.Action, req.Reason)
+	if err != nil {
+		respondOrderError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, order)
+}
+
+type adminEditDeliveryRequest struct {
+	DeliveryAddress string  `json:"delivery_address"`
+	DeliveryCity    *string `json:"delivery_city"`
+	CustomerNotes   *string `json:"customer_notes"`
+	Reason          string  `json:"reason"`
+}
+
+// AdminEditDelivery handles PUT /api/v2/admin/orders/{id}/delivery (admin) —
+// fix an order's delivery address/notes on the customer's behalf (pre-delivery).
+func (h *OrderHandler) AdminEditDelivery(w http.ResponseWriter, r *http.Request) {
+	actor, ok := middleware.ClaimsFromContext(r.Context())
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthenticated")
+		return
+	}
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "invalid order id")
+		return
+	}
+	var req adminEditDeliveryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	order, err := h.orders.AdminEditDelivery(r.Context(), actor.UserID, id, req.DeliveryAddress, req.DeliveryCity, req.CustomerNotes, req.Reason)
+	if err != nil {
+		respondOrderError(w, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, order)
+}
