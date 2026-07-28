@@ -324,6 +324,7 @@ Tag history:
 | `v4.19.1` | security fix: anonymised delete identity now carries a random suffix so a pre-registered `deleted-<id>` sentinel can't block a user's deletion (#113, PR #114) |
 | `v4.19.2` | security hardening: per-IP rate limiting extended to the password-bearing authenticated endpoints (change-password, delete-account) so a stolen session can't brute-force the account password (#115, PR #116) |
 | `v4.20.0` | saved cards — opt-in iyzico card storage (`cardUserKey`/`cardToken` + masked digits only, never a PAN/CVC), pay-with-stored-card, owner-scoped list/delete; plus a credential-gated iyzico sandbox smoke-test scaffold (#67, PR #117; #51 scaffold) |
+| `v4.21.0` | admin **support console** — search/filters/pagination (#118), user/order/chef detail drill-in (#119), admin↔customer/chef support messaging over the chat stack (#120), immutable audit log written atomically with every admin mutation + chef status control + coupon edit/delete (#121/#122), on-behalf profile editing with immutable identity (#123), named+audited order operations (force status, cancel+refund, edit delivery) (#124); currency fix — charge and display the same ISO-4217 code (#125); review-panel resilience so submitted ratings never appear to vanish (#135) |
 
 Cutting a release (annotated tag on a clean, green `main`):
 
