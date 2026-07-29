@@ -8,6 +8,10 @@ WORKDIR /app
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ .
+# Currency is baked in at build time (Vite inlines VITE_* env). Kept in sync
+# with the API's CURRENCY by passing the same value as a build arg (#137).
+ARG VITE_CURRENCY=TRY
+ENV VITE_CURRENCY=$VITE_CURRENCY
 RUN npm run build
 
 # ---- Runtime stage ----

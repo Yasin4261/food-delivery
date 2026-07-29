@@ -60,6 +60,7 @@ services:
       AUTO_MIGRATE: "true"
       UPLOAD_DIR: "/app/uploads"
       TIMEZONE: ${TIMEZONE:-Europe/Istanbul}
+      CURRENCY: ${CURRENCY:-TRY}
       DELIVERY_BASE_FEE: ${DELIVERY_BASE_FEE:-0}
       DELIVERY_FEE_PER_KM: ${DELIVERY_FEE_PER_KM:-0}
       COMMISSION_PERCENT: ${COMMISSION_PERCENT:-0}
@@ -79,6 +80,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      # Same CURRENCY as the API below, so the SPA displays what the gateway
+      # charges (#125/#137). Note: the pushed GHCR image bakes the default;
+      # a non-TRY prod must `make prod` (build locally) to re-bake the SPA.
+      args:
+        VITE_CURRENCY: ${CURRENCY:-TRY}
     container_name: food_delivery_web_prod
     restart: unless-stopped
     ports:
