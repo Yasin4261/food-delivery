@@ -50,6 +50,7 @@ services:
       DELIVERY_FEE_PER_KM: "${DELIVERY_FEE_PER_KM:-0}"
       COMMISSION_PERCENT: "${COMMISSION_PERCENT:-0}"
       ETA_MINUTES: "${ETA_MINUTES:-45}"
+      CURRENCY: "${CURRENCY:-TRY}"
     volumes:
       - uploads_data:/app/uploads
     networks:

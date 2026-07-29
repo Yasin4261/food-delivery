@@ -62,6 +62,7 @@ services:
       AUTO_MIGRATE: "true"
       UPLOAD_DIR: "/app/uploads"
       TIMEZONE: ${TIMEZONE:-Europe/Istanbul}
+      CURRENCY: ${CURRENCY:-TRY}
       DELIVERY_BASE_FEE: ${DELIVERY_BASE_FEE:-10}
       DELIVERY_FEE_PER_KM: ${DELIVERY_FEE_PER_KM:-2}
       COMMISSION_PERCENT: ${COMMISSION_PERCENT:-10}
@@ -80,6 +81,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        VITE_CURRENCY: ${CURRENCY:-TRY}
     container_name: food_delivery_web_staging
     restart: unless-stopped
     ports:
